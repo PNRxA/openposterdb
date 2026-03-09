@@ -9,6 +9,8 @@ use crate::services::tmdb::TmdbClient;
 
 const BADGE_SPACING: u32 = 6;
 const BADGE_BOTTOM_MARGIN: u32 = 12;
+const BADGE_ROW_SPACING: u32 = 4;
+const MAX_BADGES_PER_ROW: usize = 5;
 
 pub async fn generate_poster(
     poster_path: &str,
@@ -48,19 +50,29 @@ pub async fn generate_poster(
             .map(|b| badge::render_badge(b, font))
             .collect();
 
-        // Calculate total width of all badges
-        let total_width: u32 = badge_images.iter().map(|b| b.width()).sum::<u32>()
-            + BADGE_SPACING * (badge_images.len() as u32).saturating_sub(1);
+        // Split into rows of MAX_BADGES_PER_ROW
+        let rows: Vec<&[RgbaImage]> = badge_images
+            .chunks(MAX_BADGES_PER_ROW)
+            .collect();
 
-        // Center badges at the bottom
-        let start_x = (canvas.width().saturating_sub(total_width)) / 2;
-        let y = canvas.height() - BADGE_BOTTOM_MARGIN - badge_images[0].height();
+        let badge_height = badge_images[0].height();
+        let total_height = badge_height * rows.len() as u32
+            + BADGE_ROW_SPACING * (rows.len() as u32).saturating_sub(1);
 
-        let mut x = start_x;
-        for badge_img in &badge_images {
-            // Draw a semi-transparent backdrop behind the badge for readability
-            imageops::overlay(&mut canvas, badge_img, x as i64, y as i64);
-            x += badge_img.width() + BADGE_SPACING;
+        let base_y = canvas.height() - BADGE_BOTTOM_MARGIN - total_height;
+
+        for (row_idx, row) in rows.iter().enumerate() {
+            let row_width: u32 = row.iter().map(|b| b.width()).sum::<u32>()
+                + BADGE_SPACING * (row.len() as u32).saturating_sub(1);
+
+            let start_x = (canvas.width().saturating_sub(row_width)) / 2;
+            let y = base_y + row_idx as u32 * (badge_height + BADGE_ROW_SPACING);
+
+            let mut x = start_x;
+            for badge_img in *row {
+                imageops::overlay(&mut canvas, badge_img, x as i64, y as i64);
+                x += badge_img.width() + BADGE_SPACING;
+            }
         }
     }
 

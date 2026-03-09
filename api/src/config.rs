@@ -9,6 +9,7 @@ pub struct Config {
     pub ratings_stale_secs: u64,
     pub poster_stale_secs: u64,
     pub poster_quality: u8,
+    pub mdblist_api_key: Option<String>,
 }
 
 impl Config {
@@ -30,6 +31,7 @@ impl Config {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(85),
+            mdblist_api_key: env::var("MDBLIST_API_KEY").ok(),
         }
     }
 }

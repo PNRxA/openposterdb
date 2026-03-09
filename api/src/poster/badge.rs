@@ -17,12 +17,12 @@ pub fn render_badge(badge: &RatingBadge, font: &FontArc) -> RgbaImage {
     let scaled_font = font.as_scaled(scale);
     let label_scaled_font = font.as_scaled(label_scale);
 
-    let label = &badge.source;
+    let label = badge.source.label();
     let value = &badge.value;
 
     let label_width = text_width(label, &label_scaled_font);
     let value_width = text_width(value, &scaled_font);
-    let total_width = label_width + value_width + BADGE_PADDING_H * 3 + 2; // 2 for separator
+    let total_width = label_width + value_width + BADGE_PADDING_H * 3 + BADGE_PADDING_H / 2 + 2; // extra half-padding on right
 
     let mut img = RgbaImage::new(total_width, BADGE_HEIGHT);
 
@@ -32,7 +32,7 @@ pub fn render_badge(badge: &RatingBadge, font: &FontArc) -> RgbaImage {
 
     // Draw value background (colored)
     let value_x = label_width + BADGE_PADDING_H * 2;
-    draw_rounded_rect(&mut img, value_x, 0, total_width - value_x, BADGE_HEIGHT, BADGE_RADIUS, badge.color);
+    draw_rounded_rect(&mut img, value_x, 0, total_width - value_x, BADGE_HEIGHT, BADGE_RADIUS, badge.source.color());
 
     // Overdraw the inner corners to make a clean join
     // Right side of label section
@@ -45,7 +45,7 @@ pub fn render_badge(badge: &RatingBadge, font: &FontArc) -> RgbaImage {
     draw_filled_rect_mut(
         &mut img,
         Rect::at(value_x as i32, 0).of_size(BADGE_PADDING_H, BADGE_HEIGHT),
-        badge.color,
+        badge.source.color(),
     );
 
     // Draw label text

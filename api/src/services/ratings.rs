@@ -1,59 +1,102 @@
 use crate::id::{MediaType, ResolvedId};
+use crate::services::mdblist::MdblistClient;
 use crate::services::omdb::OmdbClient;
 use crate::services::tmdb::TmdbClient;
 use image::Rgba;
 use serde::Deserialize;
 
-#[derive(Debug, Clone)]
-pub struct RatingBadge {
-    pub source: String,
-    pub value: String,
-    pub color: Rgba<u8>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RatingSource {
+    Imdb,
+    Tmdb,
+    Rt,
+    RtAudience,
+    Metacritic,
+    Trakt,
+    Letterboxd,
 }
 
-// Colors for each source
-const IMDB_COLOR: Rgba<u8> = Rgba([245, 197, 24, 255]); // gold
-const TMDB_COLOR: Rgba<u8> = Rgba([1, 210, 119, 255]); // green
-const RT_COLOR: Rgba<u8> = Rgba([250, 50, 10, 255]); // red
-const MC_COLOR: Rgba<u8> = Rgba([102, 204, 51, 255]); // metacritic green
+impl RatingSource {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Imdb => "IMDb",
+            Self::Tmdb => "TMDB",
+            Self::Rt => "RTC",
+            Self::RtAudience => "RTA",
+            Self::Metacritic => "MC",
+            Self::Trakt => "Trakt",
+            Self::Letterboxd => "LB",
+        }
+    }
+
+    pub fn color(&self) -> Rgba<u8> {
+        match self {
+            Self::Imdb => Rgba([245, 197, 24, 255]),       // gold
+            Self::Tmdb => Rgba([1, 210, 119, 255]),        // green
+            Self::Rt => Rgba([250, 50, 10, 255]),          // red
+            Self::RtAudience => Rgba([250, 50, 10, 255]),  // same RT red
+            Self::Metacritic => Rgba([102, 204, 51, 255]), // metacritic green
+            Self::Trakt => Rgba([237, 20, 61, 255]),       // trakt red
+            Self::Letterboxd => Rgba([0, 210, 120, 255]),  // letterboxd green
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RatingBadge {
+    pub source: RatingSource,
+    pub value: String,
+}
 
 pub async fn fetch_ratings(
     resolved: &ResolvedId,
     tmdb: &TmdbClient,
     omdb: &OmdbClient,
+    mdblist: Option<&MdblistClient>,
 ) -> Vec<RatingBadge> {
     let tmdb_fut = fetch_tmdb_rating(resolved, tmdb);
     let omdb_fut = fetch_omdb_ratings(resolved.imdb_id.as_deref(), omdb);
+    let mdblist_fut = fetch_mdblist_ratings(resolved, mdblist);
 
-    let (tmdb_badges, omdb_badges) = tokio::join!(tmdb_fut, omdb_fut);
+    let (tmdb_badges, omdb_badges, mdblist_badges) =
+        tokio::join!(tmdb_fut, omdb_fut, mdblist_fut);
 
-    let mut badges = Vec::new();
+    // Collect which sources OMDb already provided
+    let omdb_has = |src: RatingSource| -> bool {
+        omdb_badges
+            .as_ref()
+            .map_or(false, |list| list.iter().any(|b| b.source == src))
+    };
+    let has_rt = omdb_has(RatingSource::Rt);
+    let has_mc = omdb_has(RatingSource::Metacritic);
 
-    // IMDb first (from OMDb), then TMDB, then RT, then MC
-    if let Some(omdb_list) = omdb_badges {
-        // Extract IMDb rating first
-        for b in &omdb_list {
-            if b.source == "IMDb" {
-                badges.push(b.clone());
-            }
-        }
-        // Add TMDB rating
-        if let Some(tmdb_badge) = tmdb_badges {
-            badges.push(tmdb_badge);
-        }
-        // Then RT and MC
-        for b in omdb_list {
-            if b.source != "IMDb" {
-                badges.push(b);
-            }
-        }
-    } else {
-        if let Some(tmdb_badge) = tmdb_badges {
-            badges.push(tmdb_badge);
-        }
-    }
+    let find_omdb = |src: RatingSource| -> Option<RatingBadge> {
+        omdb_badges
+            .as_ref()?
+            .iter()
+            .find(|b| b.source == src)
+            .cloned()
+    };
+    let find_mdb = |src: RatingSource| -> Option<RatingBadge> {
+        mdblist_badges
+            .as_ref()?
+            .iter()
+            .find(|b| b.source == src)
+            .cloned()
+    };
 
-    badges
+    // Badge order: IMDb, TMDB, RT, RT Audience, MC, Trakt, Letterboxd
+    let ordered: Vec<Option<RatingBadge>> = vec![
+        find_omdb(RatingSource::Imdb),
+        tmdb_badges,
+        find_omdb(RatingSource::Rt).or_else(|| if !has_rt { find_mdb(RatingSource::Rt) } else { None }),
+        find_mdb(RatingSource::RtAudience),
+        find_omdb(RatingSource::Metacritic).or_else(|| if !has_mc { find_mdb(RatingSource::Metacritic) } else { None }),
+        find_mdb(RatingSource::Trakt),
+        find_mdb(RatingSource::Letterboxd),
+    ];
+
+    ordered.into_iter().flatten().collect()
 }
 
 async fn fetch_tmdb_rating(resolved: &ResolvedId, tmdb: &TmdbClient) -> Option<RatingBadge> {
@@ -74,9 +117,8 @@ async fn fetch_tmdb_rating(resolved: &ResolvedId, tmdb: &TmdbClient) -> Option<R
     }
 
     Some(RatingBadge {
-        source: "TMDB".to_string(),
+        source: RatingSource::Tmdb,
         value: format!("{:.0}%", score * 10.0),
-        color: TMDB_COLOR,
     })
 }
 
@@ -89,9 +131,8 @@ async fn fetch_omdb_ratings(imdb_id: Option<&str>, omdb: &OmdbClient) -> Option<
     if let Some(ref rating) = resp.imdb_rating {
         if rating != "N/A" {
             badges.push(RatingBadge {
-                source: "IMDb".to_string(),
+                source: RatingSource::Imdb,
                 value: rating.clone(),
-                color: IMDB_COLOR,
             });
         }
     }
@@ -100,9 +141,8 @@ async fn fetch_omdb_ratings(imdb_id: Option<&str>, omdb: &OmdbClient) -> Option<
     for r in &resp.ratings {
         if r.source == "Rotten Tomatoes" && r.value != "N/A" {
             badges.push(RatingBadge {
-                source: "RT".to_string(),
+                source: RatingSource::Rt,
                 value: r.value.clone(),
-                color: RT_COLOR,
             });
         }
     }
@@ -111,10 +151,56 @@ async fn fetch_omdb_ratings(imdb_id: Option<&str>, omdb: &OmdbClient) -> Option<
     if let Some(ref mc) = resp.metascore {
         if mc != "N/A" {
             badges.push(RatingBadge {
-                source: "MC".to_string(),
+                source: RatingSource::Metacritic,
                 value: mc.clone(),
-                color: MC_COLOR,
             });
+        }
+    }
+
+    Some(badges)
+}
+
+async fn fetch_mdblist_ratings(
+    resolved: &ResolvedId,
+    mdblist: Option<&MdblistClient>,
+) -> Option<Vec<RatingBadge>> {
+    let client = mdblist?;
+    let imdb_id = resolved.imdb_id.as_deref()?;
+
+    let resp = client
+        .get_ratings(imdb_id, &resolved.media_type)
+        .await
+        .ok()?;
+
+    let mut badges = Vec::new();
+
+    for r in &resp.ratings {
+        let badge = match r.source.as_str() {
+            "trakt" => r.score.map(|s| RatingBadge {
+                source: RatingSource::Trakt,
+                value: format!("{s}%"),
+            }),
+            "letterboxd" => r.value.map(|v| RatingBadge {
+                source: RatingSource::Letterboxd,
+                value: format!("{v:.1}"),
+            }),
+            "popcorn" => r.score.map(|s| RatingBadge {
+                source: RatingSource::RtAudience,
+                value: format!("{s}%"),
+            }),
+            "tomatoes" => r.score.map(|s| RatingBadge {
+                source: RatingSource::Rt,
+                value: format!("{s}%"),
+            }),
+            "metacritic" => r.score.map(|s| RatingBadge {
+                source: RatingSource::Metacritic,
+                value: s.to_string(),
+            }),
+            _ => None,
+        };
+
+        if let Some(b) = badge {
+            badges.push(b);
         }
     }
 
