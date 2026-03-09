@@ -46,10 +46,10 @@ async fn handle_inner(
     let id_value = id_value_jpg.strip_suffix(".jpg").unwrap_or(id_value_jpg);
 
     let cache_path = cache::cache_path(&state.config.cache_dir, id_type_str, id_value);
-    let meta_path = cache::meta_path(&state.config.cache_dir, id_type_str, id_value);
+    let cache_key = format!("{id_type_str}/{id_value}");
 
-    // Read release date sidecar for dynamic staleness
-    let release_date = cache::read_meta(&meta_path).await;
+    // Read release date from DB for dynamic staleness
+    let release_date = cache::read_meta_db(&state.db, &cache_key).await;
     let stale_secs = cache::compute_stale_secs(
         release_date.as_deref(),
         state.config.ratings_min_stale_secs,
@@ -60,29 +60,30 @@ async fn handle_inner(
     if let Some(entry) = cache::read(&cache_path, stale_secs).await {
         if entry.is_stale {
             // Spawn background refresh if not already in progress
-            let key = format!("{id_type_str}/{id_value}");
-            if state.refresh_locks.get(&key).is_none() {
-                state.refresh_locks.insert(key.clone(), ());
+            if state.refresh_locks.get(&cache_key).is_none() {
+                state.refresh_locks.insert(cache_key.clone(), ());
                 let state = state.clone();
                 let id_value = id_value.to_string();
                 let cache_path = cache_path.clone();
-                let meta_path = meta_path.clone();
+                let cache_key = cache_key.clone();
                 tokio::spawn(async move {
-                    tracing::info!(%key, "background refresh started");
+                    tracing::info!(key = %cache_key, "background refresh started");
                     match generate_poster(&state, id_type, &id_value).await {
                         Ok((bytes, rd)) => {
                             if let Err(e) = cache::write(&cache_path, &bytes).await {
                                 tracing::error!(error = %e, "failed to write cache");
                             }
-                            if let Err(e) = cache::write_meta(&meta_path, rd.as_deref()).await {
-                                tracing::error!(error = %e, "failed to write meta sidecar");
+                            if let Err(e) =
+                                cache::upsert_meta_db(&state.db, &cache_key, rd.as_deref()).await
+                            {
+                                tracing::error!(error = %e, "failed to write meta to db");
                             }
                         }
                         Err(e) => {
                             tracing::error!(error = %e, "background refresh failed");
                         }
                     }
-                    state.refresh_locks.remove(&key);
+                    state.refresh_locks.remove(&cache_key);
                 });
             }
         }
@@ -92,7 +93,7 @@ async fn handle_inner(
     // Generate fresh
     let (bytes, rd) = generate_poster(state, id_type, id_value).await?;
     cache::write(&cache_path, &bytes).await?;
-    cache::write_meta(&meta_path, rd.as_deref()).await?;
+    cache::upsert_meta_db(&state.db, &cache_key, rd.as_deref()).await?;
     Ok(bytes)
 }
 

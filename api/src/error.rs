@@ -18,6 +18,9 @@ pub enum AppError {
     #[error("image error: {0}")]
     Image(#[from] image::ImageError),
 
+    #[error("database error: {0}")]
+    Db(#[from] sea_orm::DbErr),
+
     #[error("{0}")]
     Other(String),
 }

@@ -1,7 +1,10 @@
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
+
+use sea_orm::*;
 use tokio::fs;
 
+use crate::entity;
 use crate::error::AppError;
 
 pub struct CacheEntry {
@@ -43,28 +46,41 @@ pub async fn write(path: &Path, bytes: &[u8]) -> Result<(), AppError> {
     Ok(())
 }
 
-pub fn meta_path(cache_dir: &str, id_type: &str, id_value: &str) -> PathBuf {
-    Path::new(cache_dir)
-        .join(id_type)
-        .join(format!("{id_value}.meta"))
+pub async fn read_meta_db(db: &DatabaseConnection, cache_key: &str) -> Option<String> {
+    entity::Entity::find_by_id(cache_key)
+        .one(db)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|m| m.release_date)
 }
 
-pub async fn read_meta(path: &Path) -> Option<String> {
-    let contents = fs::read_to_string(path).await.ok()?;
-    let trimmed = contents.trim().to_string();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed)
-    }
-}
+pub async fn upsert_meta_db(
+    db: &DatabaseConnection,
+    cache_key: &str,
+    release_date: Option<&str>,
+) -> Result<(), AppError> {
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
 
-pub async fn write_meta(path: &Path, release_date: Option<&str>) -> Result<(), AppError> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).await?;
-    }
-    let content = release_date.unwrap_or("");
-    fs::write(path, content).await?;
+    let model = entity::ActiveModel {
+        cache_key: Set(cache_key.to_string()),
+        release_date: Set(release_date.map(|s| s.to_string())),
+        created_at: Set(now),
+        updated_at: Set(now),
+    };
+
+    entity::Entity::insert(model)
+        .on_conflict(
+            sea_orm::sea_query::OnConflict::column(entity::Column::CacheKey)
+                .update_columns([entity::Column::ReleaseDate, entity::Column::UpdatedAt])
+                .to_owned(),
+        )
+        .exec(db)
+        .await?;
+
     Ok(())
 }
 
