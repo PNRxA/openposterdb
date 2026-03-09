@@ -6,20 +6,6 @@ use http_body_util::BodyExt;
 use tower::ServiceExt;
 
 #[tokio::test]
-async fn origin_validation_get_without_origin_allowed() {
-    let (app, _state) = common::setup_test_app().await;
-
-    let req = Request::builder()
-        .uri("/api/auth/status")
-        .body(Body::empty())
-        .unwrap();
-
-    let res = app.oneshot(req).await.unwrap();
-    // GET without origin should pass (no CORS_ORIGIN env set in tests)
-    assert_eq!(res.status(), StatusCode::OK);
-}
-
-#[tokio::test]
 async fn auth_middleware_missing_header() {
     let (app, _state) = common::setup_test_app().await;
 

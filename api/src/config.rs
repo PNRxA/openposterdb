@@ -13,6 +13,7 @@ pub struct Config {
     pub mdblist_api_key: Option<String>,
     pub poster_mem_cache_mb: u64,
     pub static_dir: Option<String>,
+    pub cors_origin: Option<String>,
 }
 
 impl Config {
@@ -44,6 +45,7 @@ impl Config {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(512),
             static_dir: env::var("STATIC_DIR").ok(),
+            cors_origin: env::var("CORS_ORIGIN").ok(),
         };
 
         if config.omdb_api_key.is_none() && config.mdblist_api_key.is_none() {

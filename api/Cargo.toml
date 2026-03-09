@@ -15,7 +15,7 @@ ab_glyph = "0.2.32"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 thiserror = "2.0.18"
-tower-http = { version = "0.6.8", features = ["trace", "cors", "compression-gzip", "fs"] }
+tower-http = { version = "0.6.8", features = ["trace", "cors", "compression-gzip", "fs", "set-header"] }
 dashmap = "6.1.0"
 moka = { version = "0.12.14", features = ["future", "sync"] }
 dotenvy = "0.15.7"

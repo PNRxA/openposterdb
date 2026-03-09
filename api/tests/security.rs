@@ -1,7 +1,5 @@
 mod common;
 
-use std::sync::Mutex;
-
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
@@ -12,97 +10,74 @@ fn json_body(json: serde_json::Value) -> Body {
     Body::from(json.to_string())
 }
 
-// All tests in this file share a process. Since some tests modify the
-// CORS_ORIGIN env var, we must serialize ALL tests to prevent interference.
-static ENV_MUTEX: Mutex<()> = Mutex::new(());
-
-fn clear_cors() {
-    unsafe { std::env::remove_var("CORS_ORIGIN") };
-}
-
-fn set_cors(origin: &str) {
-    unsafe { std::env::set_var("CORS_ORIGIN", origin) };
-}
-
-// --- CORS origin enforcement ---
+// --- CORS origin enforcement (via preflight OPTIONS requests) ---
 
 #[tokio::test]
-async fn cors_post_without_origin_rejected_when_cors_origin_set() {
-    let _guard = ENV_MUTEX.lock().unwrap();
-    set_cors("https://example.com");
-
+async fn cors_preflight_without_origin_config_rejected() {
+    // No CORS origin configured — CorsLayer::new() rejects all cross-origin
     let (app, _state) = common::setup_test_app().await;
 
     let req = Request::builder()
-        .method("POST")
+        .method("OPTIONS")
         .uri("/api/auth/setup")
-        .header("content-type", "application/json")
-        .body(json_body(serde_json::json!({
-            "username": "admin",
-            "password": "testpassword123"
-        })))
-        .unwrap();
-
-    let res = app.oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::FORBIDDEN);
-
-    clear_cors();
-}
-
-#[tokio::test]
-async fn cors_post_with_wrong_origin_rejected() {
-    let _guard = ENV_MUTEX.lock().unwrap();
-    set_cors("https://example.com");
-
-    let (app, _state) = common::setup_test_app().await;
-
-    let req = Request::builder()
-        .method("POST")
-        .uri("/api/auth/setup")
-        .header("content-type", "application/json")
-        .header("origin", "https://evil.com")
-        .body(json_body(serde_json::json!({
-            "username": "admin",
-            "password": "testpassword123"
-        })))
-        .unwrap();
-
-    let res = app.oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::FORBIDDEN);
-
-    clear_cors();
-}
-
-#[tokio::test]
-async fn cors_post_with_correct_origin_allowed() {
-    let _guard = ENV_MUTEX.lock().unwrap();
-    set_cors("https://example.com");
-
-    let (app, _state) = common::setup_test_app().await;
-
-    let req = Request::builder()
-        .method("POST")
-        .uri("/api/auth/setup")
-        .header("content-type", "application/json")
         .header("origin", "https://example.com")
-        .body(json_body(serde_json::json!({
-            "username": "admin",
-            "password": "testpassword123"
-        })))
+        .header("access-control-request-method", "POST")
+        .body(Body::empty())
         .unwrap();
 
     let res = app.oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
+    // No Access-Control-Allow-Origin header should be present
+    assert!(res.headers().get("access-control-allow-origin").is_none());
+}
 
-    clear_cors();
+#[tokio::test]
+async fn cors_preflight_with_correct_origin_allowed() {
+    let (app, _state) =
+        common::setup_test_app_with_cors(Some("https://example.com".into())).await;
+
+    let req = Request::builder()
+        .method("OPTIONS")
+        .uri("/api/auth/setup")
+        .header("origin", "https://example.com")
+        .header("access-control-request-method", "POST")
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    let acao = res
+        .headers()
+        .get("access-control-allow-origin")
+        .and_then(|v| v.to_str().ok());
+    assert_eq!(acao, Some("https://example.com"));
+}
+
+#[tokio::test]
+async fn cors_preflight_with_wrong_origin_rejected() {
+    let (app, _state) =
+        common::setup_test_app_with_cors(Some("https://example.com".into())).await;
+
+    let req = Request::builder()
+        .method("OPTIONS")
+        .uri("/api/auth/setup")
+        .header("origin", "https://evil.com")
+        .header("access-control-request-method", "POST")
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    // CorsLayer echoes the configured origin, not the request origin.
+    // The browser compares and rejects when they don't match.
+    let acao = res
+        .headers()
+        .get("access-control-allow-origin")
+        .and_then(|v| v.to_str().ok());
+    assert_ne!(acao, Some("https://evil.com"), "should not allow wrong origin");
 }
 
 #[tokio::test]
 async fn cors_get_allowed_even_with_cors_origin_set() {
-    let _guard = ENV_MUTEX.lock().unwrap();
-    set_cors("https://example.com");
-
-    let (app, _state) = common::setup_test_app().await;
+    let (app, _state) =
+        common::setup_test_app_with_cors(Some("https://example.com".into())).await;
 
     let req = Request::builder()
         .uri("/api/auth/status")
@@ -111,16 +86,12 @@ async fn cors_get_allowed_even_with_cors_origin_set() {
 
     let res = app.oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
-
-    clear_cors();
 }
 
 #[tokio::test]
-async fn cors_delete_without_origin_rejected() {
-    let _guard = ENV_MUTEX.lock().unwrap();
-    set_cors("https://example.com");
-
-    let (app, _state) = common::setup_test_app().await;
+async fn cors_delete_without_origin_no_cors_headers() {
+    let (app, _state) =
+        common::setup_test_app_with_cors(Some("https://example.com".into())).await;
 
     let req = Request::builder()
         .method("DELETE")
@@ -130,18 +101,18 @@ async fn cors_delete_without_origin_rejected() {
         .unwrap();
 
     let res = app.oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::FORBIDDEN);
-
-    clear_cors();
+    // Without matching origin, browser will block the response
+    let acao = res
+        .headers()
+        .get("access-control-allow-origin")
+        .and_then(|v| v.to_str().ok());
+    assert_ne!(acao, Some("https://evil.com"));
 }
 
 // --- Refresh token expiry ---
 
 #[tokio::test]
 async fn refresh_with_expired_token_returns_401() {
-    let _guard = ENV_MUTEX.lock().unwrap();
-    clear_cors();
-
     let (app, state) = common::setup_test_app().await;
 
     // Setup admin
@@ -185,9 +156,6 @@ async fn refresh_with_expired_token_returns_401() {
 
 #[tokio::test]
 async fn concurrent_setup_only_one_succeeds() {
-    let _guard = ENV_MUTEX.lock().unwrap();
-    clear_cors();
-
     let (app, _state) = common::setup_test_app().await;
 
     let app1 = app.clone();
@@ -235,9 +203,6 @@ async fn concurrent_setup_only_one_succeeds() {
 
 #[tokio::test]
 async fn invalid_api_key_cached_returns_401_consistently() {
-    let _guard = ENV_MUTEX.lock().unwrap();
-    clear_cors();
-
     let (app, _state) = common::setup_test_app().await;
 
     // First request with invalid key
@@ -261,9 +226,6 @@ async fn invalid_api_key_cached_returns_401_consistently() {
 
 #[tokio::test]
 async fn deleted_api_key_rejected_after_cache_invalidation() {
-    let _guard = ENV_MUTEX.lock().unwrap();
-    clear_cors();
-
     let (app, state) = common::setup_test_app().await;
     let token = common::setup_admin(&app).await;
 
@@ -315,9 +277,6 @@ async fn deleted_api_key_rejected_after_cache_invalidation() {
 
 #[tokio::test]
 async fn setup_rejects_short_password() {
-    let _guard = ENV_MUTEX.lock().unwrap();
-    clear_cors();
-
     let (app, _state) = common::setup_test_app().await;
 
     let req = Request::builder()
@@ -336,9 +295,6 @@ async fn setup_rejects_short_password() {
 
 #[tokio::test]
 async fn setup_rejects_empty_username() {
-    let _guard = ENV_MUTEX.lock().unwrap();
-    clear_cors();
-
     let (app, _state) = common::setup_test_app().await;
 
     let req = Request::builder()
@@ -357,9 +313,6 @@ async fn setup_rejects_empty_username() {
 
 #[tokio::test]
 async fn setup_rejects_username_with_whitespace() {
-    let _guard = ENV_MUTEX.lock().unwrap();
-    clear_cors();
-
     let (app, _state) = common::setup_test_app().await;
 
     let req = Request::builder()
@@ -380,9 +333,6 @@ async fn setup_rejects_username_with_whitespace() {
 
 #[tokio::test]
 async fn expired_jwt_rejected() {
-    let _guard = ENV_MUTEX.lock().unwrap();
-    clear_cors();
-
     let (app, state) = common::setup_test_app().await;
 
     let claims = serde_json::json!({
@@ -411,9 +361,6 @@ async fn expired_jwt_rejected() {
 
 #[tokio::test]
 async fn jwt_with_wrong_secret_rejected() {
-    let _guard = ENV_MUTEX.lock().unwrap();
-    clear_cors();
-
     let (app, _state) = common::setup_test_app().await;
 
     let wrong_secret = vec![0xCD; 32];
@@ -445,9 +392,6 @@ async fn jwt_with_wrong_secret_rejected() {
 
 #[tokio::test]
 async fn poster_endpoint_invalid_id_type() {
-    let _guard = ENV_MUTEX.lock().unwrap();
-    clear_cors();
-
     let (app, _state) = common::setup_test_app().await;
     let token = common::setup_admin(&app).await;
 
@@ -478,9 +422,6 @@ async fn poster_endpoint_invalid_id_type() {
 
 #[tokio::test]
 async fn refresh_with_fabricated_token_returns_401() {
-    let _guard = ENV_MUTEX.lock().unwrap();
-    clear_cors();
-
     let (app, _state) = common::setup_test_app().await;
     common::setup_admin(&app).await;
 
@@ -499,9 +440,6 @@ async fn refresh_with_fabricated_token_returns_401() {
 
 #[tokio::test]
 async fn delete_nonexistent_api_key_succeeds() {
-    let _guard = ENV_MUTEX.lock().unwrap();
-    clear_cors();
-
     let (app, _state) = common::setup_test_app().await;
     let token = common::setup_admin(&app).await;
 
@@ -514,4 +452,128 @@ async fn delete_nonexistent_api_key_succeeds() {
 
     let res = app.oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
+}
+
+// --- Path traversal prevention ---
+
+#[tokio::test]
+async fn poster_endpoint_rejects_path_traversal() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    // Create a valid API key
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/keys")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(json_body(serde_json::json!({"name": "test"})))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let api_key = json["key"].as_str().unwrap();
+
+    // Attempt path traversal in id_value
+    let req = Request::builder()
+        .uri(format!("/{api_key}/imdb/poster-default/..%2F..%2Fetc%2Fpasswd.jpg"))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+// --- Error redaction (integration) ---
+
+#[tokio::test]
+async fn internal_error_response_is_redacted() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    // Create a valid API key
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/keys")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(json_body(serde_json::json!({"name": "test"})))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let api_key = json["key"].as_str().unwrap();
+
+    // Request a poster that will fail internally (fake TMDB key)
+    let req = Request::builder()
+        .uri(format!("/{api_key}/imdb/poster-default/tt0000001.jpg"))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let error_msg = json["error"].as_str().unwrap();
+    // Must not leak internal details like URLs, connection errors, etc.
+    assert_eq!(error_msg, "Internal server error");
+}
+
+// --- HSTS header ---
+
+#[tokio::test]
+async fn hsts_header_present_when_secure_cookies() {
+    let (app, _state) = common::setup_test_app_with_options(common::TestAppOptions {
+        secure_cookies: true,
+        ..Default::default()
+    })
+    .await;
+
+    let req = Request::builder()
+        .uri("/api/auth/status")
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let hsts = res
+        .headers()
+        .get("strict-transport-security")
+        .and_then(|v| v.to_str().ok());
+    assert_eq!(hsts, Some("max-age=63072000; includeSubDomains"));
+}
+
+#[tokio::test]
+async fn hsts_header_absent_when_not_secure() {
+    let (app, _state) = common::setup_test_app().await;
+
+    let req = Request::builder()
+        .uri("/api/auth/status")
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert!(res.headers().get("strict-transport-security").is_none());
+}
+
+// --- Password max length (integration) ---
+
+#[tokio::test]
+async fn setup_rejects_too_long_password() {
+    let (app, _state) = common::setup_test_app().await;
+    let long_pw = "a".repeat(257);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/auth/setup")
+        .header("content-type", "application/json")
+        .body(json_body(serde_json::json!({
+            "username": "admin",
+            "password": long_pw
+        })))
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
 }

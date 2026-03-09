@@ -14,6 +14,10 @@ use crate::services::db;
 use crate::services::validation;
 use crate::AppState;
 
+static DUMMY_HASH: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+    hash_password("openposterdb-dummy-timing-pad").expect("failed to create dummy hash")
+});
+
 const ACCESS_TOKEN_EXPIRY_MINUTES: i64 = 15;
 const REFRESH_TOKEN_EXPIRY_DAYS: i64 = 7;
 const REFRESH_TOKEN_MAX_AGE_SECS: i64 = REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
@@ -196,6 +200,8 @@ pub async fn login(
     let user = match db::find_admin_user_by_username(&state.db, &req.username).await? {
         Some(user) => user,
         None => {
+            // Perform a dummy password verification to prevent timing side-channel
+            let _ = verify_password(&req.password, &DUMMY_HASH);
             tracing::warn!("Login failed: unknown username");
             return Err(AppError::Unauthorized);
         }

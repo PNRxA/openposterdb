@@ -80,7 +80,7 @@ async fn handle_inner(
     let id_type = IdType::parse(id_type_str)?;
     let id_value = id_value_jpg.strip_suffix(".jpg").unwrap_or(id_value_jpg);
 
-    let cache_path = cache::cache_path(&state.config.cache_dir, id_type_str, id_value);
+    let cache_path = cache::cache_path(&state.config.cache_dir, id_type_str, id_value)?;
     let cache_key = format!("{id_type_str}/{id_value}");
 
     // Check in-memory poster cache first

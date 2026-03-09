@@ -18,14 +18,24 @@ pub struct MemCacheEntry {
     pub last_checked: Instant,
 }
 
-pub fn cache_path(cache_dir: &str, id_type: &str, id_value: &str) -> PathBuf {
-    Path::new(cache_dir).join(id_type).join(format!("{id_value}.jpg"))
+fn is_safe_path_component(s: &str) -> bool {
+    !s.is_empty() && s != "." && s != ".." && !s.contains('/') && !s.contains('\\') && !s.contains('\0')
 }
 
-pub fn poster_cache_path(cache_dir: &str, poster_path: &str) -> PathBuf {
+pub fn cache_path(cache_dir: &str, id_type: &str, id_value: &str) -> Result<PathBuf, AppError> {
+    if !is_safe_path_component(id_value) {
+        return Err(AppError::BadRequest("invalid id value".into()));
+    }
+    Ok(Path::new(cache_dir).join(id_type).join(format!("{id_value}.jpg")))
+}
+
+pub fn poster_cache_path(cache_dir: &str, poster_path: &str) -> Result<PathBuf, AppError> {
     // poster_path is like "/abc123.jpg" from TMDB
     let filename = poster_path.trim_start_matches('/');
-    Path::new(cache_dir).join("posters").join(filename)
+    if !is_safe_path_component(filename) {
+        return Err(AppError::BadRequest("invalid poster path".into()));
+    }
+    Ok(Path::new(cache_dir).join("posters").join(filename))
 }
 
 /// Read a cached file. `stale_secs = 0` means never stale.
@@ -213,20 +223,37 @@ mod tests {
 
     #[test]
     fn cache_path_construction() {
-        let p = cache_path("/tmp/cache", "imdb", "tt1234567");
+        let p = cache_path("/tmp/cache", "imdb", "tt1234567").unwrap();
         assert_eq!(p, PathBuf::from("/tmp/cache/imdb/tt1234567.jpg"));
     }
 
     #[test]
     fn poster_cache_path_strips_leading_slash() {
-        let p = poster_cache_path("/tmp/cache", "/abc123.jpg");
+        let p = poster_cache_path("/tmp/cache", "/abc123.jpg").unwrap();
         assert_eq!(p, PathBuf::from("/tmp/cache/posters/abc123.jpg"));
     }
 
     #[test]
     fn poster_cache_path_no_leading_slash() {
-        let p = poster_cache_path("/tmp/cache", "abc123.jpg");
+        let p = poster_cache_path("/tmp/cache", "abc123.jpg").unwrap();
         assert_eq!(p, PathBuf::from("/tmp/cache/posters/abc123.jpg"));
+    }
+
+    #[test]
+    fn cache_path_rejects_traversal() {
+        assert!(cache_path("/tmp/cache", "imdb", "../../etc/passwd").is_err());
+        assert!(cache_path("/tmp/cache", "imdb", "..").is_err());
+        assert!(cache_path("/tmp/cache", "imdb", ".").is_err());
+        assert!(cache_path("/tmp/cache", "imdb", "").is_err());
+        assert!(cache_path("/tmp/cache", "imdb", "foo/bar").is_err());
+        assert!(cache_path("/tmp/cache", "imdb", "foo\\bar").is_err());
+    }
+
+    #[test]
+    fn poster_cache_path_rejects_traversal() {
+        assert!(poster_cache_path("/tmp/cache", "/../etc/passwd").is_err());
+        assert!(poster_cache_path("/tmp/cache", "..").is_err());
+        assert!(poster_cache_path("/tmp/cache", "").is_err());
     }
 
     #[test]

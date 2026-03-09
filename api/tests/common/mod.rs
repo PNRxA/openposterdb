@@ -10,7 +10,31 @@ use openposterdb_api::config::Config;
 use openposterdb_api::services::tmdb::TmdbClient;
 use openposterdb_api::{build_app, AppState, FONT_BYTES, SCHEMA_SQL};
 
-pub async fn setup_test_app() -> (axum::Router, Arc<AppState>) {
+pub struct TestAppOptions {
+    pub cors_origin: Option<String>,
+    pub secure_cookies: bool,
+}
+
+impl Default for TestAppOptions {
+    fn default() -> Self {
+        Self {
+            cors_origin: None,
+            secure_cookies: false,
+        }
+    }
+}
+
+pub async fn setup_test_app_with_options(opts: TestAppOptions) -> (axum::Router, Arc<AppState>) {
+    let cors_origin = opts.cors_origin;
+    let secure_cookies = opts.secure_cookies;
+    _setup_test_app(cors_origin, secure_cookies).await
+}
+
+pub async fn setup_test_app_with_cors(cors_origin: Option<String>) -> (axum::Router, Arc<AppState>) {
+    _setup_test_app(cors_origin, false).await
+}
+
+async fn _setup_test_app(cors_origin: Option<String>, secure_cookies: bool) -> (axum::Router, Arc<AppState>) {
     let sqlite_opts = sqlx::sqlite::SqliteConnectOptions::new()
         .filename(":memory:")
         .create_if_missing(true);
@@ -67,6 +91,7 @@ pub async fn setup_test_app() -> (axum::Router, Arc<AppState>) {
             mdblist_api_key: None,
             poster_mem_cache_mb: 1,
             static_dir: None,
+            cors_origin,
         },
         tmdb: TmdbClient::new("test".into(), http.clone()),
         omdb: None,
@@ -76,7 +101,7 @@ pub async fn setup_test_app() -> (axum::Router, Arc<AppState>) {
         refresh_locks,
         db,
         jwt_secret,
-        secure_cookies: false,
+        secure_cookies,
         api_key_cache,
         poster_inflight,
         id_cache,
@@ -87,6 +112,10 @@ pub async fn setup_test_app() -> (axum::Router, Arc<AppState>) {
 
     let app = build_app(state.clone());
     (app, state)
+}
+
+pub async fn setup_test_app() -> (axum::Router, Arc<AppState>) {
+    setup_test_app_with_cors(None).await
 }
 
 /// Helper to perform setup and get back an access token.

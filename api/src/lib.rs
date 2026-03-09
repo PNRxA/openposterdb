@@ -11,13 +11,16 @@ pub mod services;
 use std::sync::Arc;
 
 use ab_glyph::FontArc;
+use axum::http::header::{self, HeaderValue};
+use axum::http::Request;
 use axum::middleware;
 use axum::Router;
 use dashmap::DashMap;
 use sea_orm::DatabaseConnection;
 use tower_http::compression::CompressionLayer;
-use tower_http::cors::CorsLayer;
-use tower_http::trace::TraceLayer;
+use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
+use tower_http::set_header::SetResponseHeaderLayer;
+use tower_http::trace::{MakeSpan, TraceLayer};
 use zeroize::Zeroizing;
 
 use cache::MemCacheEntry;
@@ -81,6 +84,83 @@ pub const SCHEMA_SQL: &[&str] = &[
     )",
 ];
 
+fn build_cors_layer(config: &Config) -> CorsLayer {
+    match config.cors_origin {
+        Some(ref origin) => CorsLayer::new()
+            .allow_origin(AllowOrigin::exact(
+                HeaderValue::from_str(origin).expect("valid CORS_ORIGIN"),
+            ))
+            .allow_methods(AllowMethods::list([
+                axum::http::Method::GET,
+                axum::http::Method::POST,
+                axum::http::Method::DELETE,
+            ]))
+            .allow_headers(AllowHeaders::list([
+                header::CONTENT_TYPE,
+                header::AUTHORIZATION,
+            ]))
+            .allow_credentials(true),
+        None => CorsLayer::new(),
+    }
+}
+
+fn redact_path(path: &str) -> String {
+    if !path.starts_with("/api/") {
+        // Poster route: /{api_key}/... -> /[REDACTED]/...
+        match path[1..].find('/') {
+            Some(pos) => format!("/[REDACTED]{}", &path[1 + pos..]),
+            None => "/[REDACTED]".into(),
+        }
+    } else {
+        path.to_string()
+    }
+}
+
+#[derive(Clone)]
+struct RedactedMakeSpan;
+
+impl<B> MakeSpan<B> for RedactedMakeSpan {
+    fn make_span(&mut self, req: &Request<B>) -> tracing::Span {
+        let redacted_uri = redact_path(req.uri().path());
+        tracing::info_span!("request", method = %req.method(), uri = %redacted_uri, version = ?req.version())
+    }
+}
+
+#[cfg(not(any(test, feature = "test-support")))]
+#[derive(Debug, Clone)]
+struct PosterKeyExtractor;
+
+#[cfg(not(any(test, feature = "test-support")))]
+impl tower_governor::key_extractor::KeyExtractor for PosterKeyExtractor {
+    type Key = String;
+
+    fn extract<T>(
+        &self,
+        req: &Request<T>,
+    ) -> Result<Self::Key, tower_governor::GovernorError> {
+        let path = req.uri().path();
+        let api_key = path.split('/').nth(1).unwrap_or("unknown");
+        let key_prefix = &api_key[..api_key.len().min(16)];
+
+        // Extract IP from headers or connection info
+        let ip = req
+            .headers()
+            .get("x-forwarded-for")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.split(',').next())
+            .map(|s| s.trim().to_string())
+            .or_else(|| {
+                req.headers()
+                    .get("x-real-ip")
+                    .and_then(|v| v.to_str().ok())
+                    .map(|s| s.to_string())
+            })
+            .unwrap_or_else(|| "unknown".to_string());
+
+        Ok(format!("{key_prefix}:{ip}"))
+    }
+}
+
 pub fn build_app(state: Arc<AppState>) -> Router {
     let admin_routes = routes::api_keys::api_key_routes()
         .merge(routes::admin::admin_routes())
@@ -98,12 +178,30 @@ pub fn build_app(state: Arc<AppState>) -> Router {
         .merge(admin_routes)
         .layer(CompressionLayer::new());
 
-    let mut app = Router::new()
-        .route(
+    let poster_route = {
+        let router = Router::new().route(
             "/{api_key}/{id_type}/poster-default/{id_value}",
             axum::routing::get(routes::poster::handler),
-        )
-        .merge(compressed_routes);
+        );
+
+        #[cfg(not(any(test, feature = "test-support")))]
+        let router = {
+            use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
+
+            let governor_conf = GovernorConfigBuilder::default()
+                .per_second(1)
+                .burst_size(120)
+                .key_extractor(PosterKeyExtractor)
+                .finish()
+                .expect("valid governor config");
+
+            router.layer(GovernorLayer::new(governor_conf))
+        };
+
+        router
+    };
+
+    let mut app = Router::new().merge(poster_route).merge(compressed_routes);
 
     // Serve static frontend files when STATIC_DIR is set.
     // Falls back to index.html for SPA client-side routing.
@@ -113,10 +211,46 @@ pub fn build_app(state: Arc<AppState>) -> Router {
         app = app.fallback_service(ServeDir::new(dir).fallback(ServeFile::new(index)));
     }
 
-    app.layer(middleware::from_fn(
-            handlers::middleware::validate_origin,
-        ))
-        .layer(TraceLayer::new_for_http())
-        .layer(CorsLayer::permissive())
-        .with_state(state)
+    let cors_layer = build_cors_layer(&state.config);
+
+    app = app.layer(TraceLayer::new_for_http().make_span_with(RedactedMakeSpan));
+
+    if state.secure_cookies {
+        app = app.layer(SetResponseHeaderLayer::if_not_present(
+            header::STRICT_TRANSPORT_SECURITY,
+            HeaderValue::from_static("max-age=63072000; includeSubDomains"),
+        ));
+    }
+
+    app.layer(cors_layer).with_state(state)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn redact_path_api_route_unchanged() {
+        assert_eq!(redact_path("/api/auth/status"), "/api/auth/status");
+        assert_eq!(redact_path("/api/keys"), "/api/keys");
+    }
+
+    #[test]
+    fn redact_path_poster_route_hides_key() {
+        assert_eq!(
+            redact_path("/abc123def456/imdb/poster-default/tt1234567.jpg"),
+            "/[REDACTED]/imdb/poster-default/tt1234567.jpg"
+        );
+    }
+
+    #[test]
+    fn redact_path_single_segment() {
+        assert_eq!(redact_path("/abc123def456"), "/[REDACTED]");
+    }
+
+    #[test]
+    fn redact_path_root() {
+        // "/" — path[1..] is empty, find('/') returns None
+        assert_eq!(redact_path("/"), "/[REDACTED]");
+    }
 }

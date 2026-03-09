@@ -15,11 +15,11 @@ pub fn validate_username(username: &str) -> Result<(), AppError> {
 pub fn validate_password(password: &str) -> Result<(), AppError> {
     if password.is_empty()
         || password.len() < 8
+        || password.len() > 256
         || password.chars().any(char::is_control)
     {
         return Err(AppError::BadRequest(
-            "Invalid password: must be at least 8 characters and not contain control characters"
-                .into(),
+            "Invalid password: must be 8-256 characters and not contain control characters".into(),
         ));
     }
     Ok(())
@@ -87,5 +87,17 @@ mod tests {
     #[test]
     fn validate_password_exactly_8_chars() {
         assert!(validate_password("12345678").is_ok());
+    }
+
+    #[test]
+    fn validate_password_exactly_256_chars() {
+        let pw = "a".repeat(256);
+        assert!(validate_password(&pw).is_ok());
+    }
+
+    #[test]
+    fn validate_password_257_chars_rejected() {
+        let pw = "a".repeat(257);
+        assert!(validate_password(&pw).is_err());
     }
 }

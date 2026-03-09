@@ -35,7 +35,7 @@ pub async fn generate_poster(params: PosterParams<'_>) -> Result<Vec<u8>, AppErr
         poster_stale_secs,
     } = params;
     // Fetch base poster, using cache
-    let poster_cache = cache::poster_cache_path(cache_dir, poster_path);
+    let poster_cache = cache::poster_cache_path(cache_dir, poster_path)?;
     let poster_bytes = if let Some(entry) = cache::read(&poster_cache, poster_stale_secs).await {
         if entry.is_stale {
             // Stale — refetch in foreground (rare with default 0 = never stale)

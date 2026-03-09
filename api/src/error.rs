@@ -46,7 +46,7 @@ impl IntoResponse for AppError {
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized".into()),
             AppError::Forbidden(msg) => (StatusCode::FORBIDDEN, msg.clone()),
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
-            _ => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
+            _ => (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".into()),
         };
         tracing::error!(%status, error = %self);
         (status, axum::Json(json!({ "error": message }))).into_response()
@@ -58,8 +58,16 @@ mod tests {
     use super::*;
     use axum::http::StatusCode;
 
+    use http_body_util::BodyExt;
+
     fn status_of(err: AppError) -> StatusCode {
         err.into_response().status()
+    }
+
+    async fn body_of(err: AppError) -> serde_json::Value {
+        let resp = err.into_response();
+        let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+        serde_json::from_slice(&bytes).unwrap()
     }
 
     #[test]
@@ -113,5 +121,23 @@ mod tests {
             status_of(AppError::Other("x".into())),
             StatusCode::INTERNAL_SERVER_ERROR
         );
+    }
+
+    #[tokio::test]
+    async fn internal_errors_redact_details() {
+        let body = body_of(AppError::DbError("connection refused to 10.0.0.5:5432".into())).await;
+        assert_eq!(body["error"], "Internal server error");
+    }
+
+    #[tokio::test]
+    async fn internal_error_other_redacts_details() {
+        let body = body_of(AppError::Other("secret internal info".into())).await;
+        assert_eq!(body["error"], "Internal server error");
+    }
+
+    #[tokio::test]
+    async fn client_errors_preserve_message() {
+        let body = body_of(AppError::BadRequest("missing field".into())).await;
+        assert_eq!(body["error"], "missing field");
     }
 }

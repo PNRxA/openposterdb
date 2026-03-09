@@ -104,7 +104,7 @@ pub async fn poster_image(
     // Validate id_type is one of the known variants (imdb, tmdb, tvdb)
     crate::id::IdType::parse(&id_type)?;
 
-    let path = cache::cache_path(&state.config.cache_dir, &id_type, &id_value);
+    let path = cache::cache_path(&state.config.cache_dir, &id_type, &id_value)?;
 
     // Canonicalize and verify the resolved path is within cache_dir to prevent traversal
     let canonical_path = tokio::fs::canonicalize(&path).await.map_err(|e| {
