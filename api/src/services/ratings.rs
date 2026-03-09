@@ -33,14 +33,14 @@ impl RatingSource {
 
     pub fn color(&self) -> Rgba<u8> {
         match self {
-            Self::Imdb => Rgba([245, 197, 24, 255]),       // gold
-            Self::Tmdb => Rgba([1, 210, 119, 255]),        // green
-            Self::Rt => Rgba([250, 50, 10, 255]),          // red
-            Self::RtAudience => Rgba([250, 50, 10, 255]),  // same RT red
-            Self::Metacritic => Rgba([102, 204, 51, 255]), // metacritic green
-            Self::Trakt => Rgba([237, 20, 61, 255]),       // trakt red
-            Self::Letterboxd => Rgba([0, 210, 120, 255]),  // letterboxd green
-            Self::Mal => Rgba([46, 81, 162, 255]),           // MAL blue
+            Self::Imdb => Rgba([180, 145, 15, 255]),       // gold
+            Self::Tmdb => Rgba([1, 155, 88, 255]),         // green
+            Self::Rt => Rgba([185, 35, 8, 255]),           // red
+            Self::RtAudience => Rgba([185, 35, 8, 255]),   // same RT red
+            Self::Metacritic => Rgba([75, 150, 38, 255]),  // metacritic green
+            Self::Trakt => Rgba([175, 15, 45, 255]),       // trakt red
+            Self::Letterboxd => Rgba([0, 155, 88, 255]),   // letterboxd green
+            Self::Mal => Rgba([34, 60, 120, 255]),         // MAL blue
         }
     }
 }
@@ -205,7 +205,7 @@ async fn fetch_mdblist_ratings(
                 source: RatingSource::Metacritic,
                 value: s.to_string(),
             }),
-            "mal" => r.score.map(|s| RatingBadge {
+            "myanimelist" => r.score.map(|s| RatingBadge {
                 source: RatingSource::Mal,
                 value: format!("{:.2}", s as f64 / 10.0),
             }),

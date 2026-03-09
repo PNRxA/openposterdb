@@ -7,10 +7,10 @@ use crate::poster::badge;
 use crate::services::ratings::RatingBadge;
 use crate::services::tmdb::TmdbClient;
 
-const BADGE_SPACING: u32 = 6;
-const BADGE_BOTTOM_MARGIN: u32 = 12;
-const BADGE_ROW_SPACING: u32 = 4;
-const MAX_BADGES_PER_ROW: usize = 5;
+const BADGE_SPACING: u32 = 10;
+const BADGE_BOTTOM_MARGIN: u32 = 20;
+const BADGE_ROW_SPACING: u32 = 7;
+const MAX_BADGES_PER_ROW: usize = 3;
 
 pub struct PosterParams<'a> {
     pub poster_path: &'a str,

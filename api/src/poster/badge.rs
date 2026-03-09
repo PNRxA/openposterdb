@@ -5,11 +5,11 @@ use imageproc::rect::Rect;
 
 use crate::services::ratings::RatingBadge;
 
-const BADGE_HEIGHT: u32 = 28;
-const BADGE_PADDING_H: u32 = 8;
-const BADGE_RADIUS: u32 = 6;
-const FONT_SIZE: f32 = 16.0;
-const LABEL_FONT_SIZE: f32 = 12.0;
+const BADGE_HEIGHT: u32 = 50;
+const BADGE_PADDING_H: u32 = 14;
+const BADGE_RADIUS: u32 = 10;
+const FONT_SIZE: f32 = 28.0;
+const LABEL_FONT_SIZE: f32 = 21.0;
 
 pub fn render_badge(badge: &RatingBadge, font: &FontArc) -> RgbaImage {
     let scale = PxScale::from(FONT_SIZE);
@@ -26,26 +26,26 @@ pub fn render_badge(badge: &RatingBadge, font: &FontArc) -> RgbaImage {
 
     let mut img = RgbaImage::new(total_width, BADGE_HEIGHT);
 
-    // Draw label background (darker)
+    // Draw label background (colored)
     let dark_bg = Rgba([0, 0, 0, 200]);
-    draw_rounded_rect(&mut img, 0, 0, label_width + BADGE_PADDING_H * 2, BADGE_HEIGHT, BADGE_RADIUS, dark_bg);
+    draw_rounded_rect(&mut img, 0, 0, label_width + BADGE_PADDING_H * 2, BADGE_HEIGHT, BADGE_RADIUS, badge.source.color());
 
-    // Draw value background (colored)
+    // Draw value background (dark)
     let value_x = label_width + BADGE_PADDING_H * 2;
-    draw_rounded_rect(&mut img, value_x, 0, total_width - value_x, BADGE_HEIGHT, BADGE_RADIUS, badge.source.color());
+    draw_rounded_rect(&mut img, value_x, 0, total_width - value_x, BADGE_HEIGHT, BADGE_RADIUS, dark_bg);
 
     // Overdraw the inner corners to make a clean join
     // Right side of label section
     draw_filled_rect_mut(
         &mut img,
         Rect::at((label_width + BADGE_PADDING_H) as i32, 0).of_size(BADGE_PADDING_H, BADGE_HEIGHT),
-        dark_bg,
+        badge.source.color(),
     );
     // Left side of value section
     draw_filled_rect_mut(
         &mut img,
         Rect::at(value_x as i32, 0).of_size(BADGE_PADDING_H, BADGE_HEIGHT),
-        badge.source.color(),
+        dark_bg,
     );
 
     // Draw label text
