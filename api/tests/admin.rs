@@ -132,3 +132,16 @@ async fn stats_reflects_api_key_count() {
 
     assert_eq!(json["total_api_keys"], 1);
 }
+
+#[tokio::test]
+async fn poster_image_requires_auth() {
+    let (app, _state) = common::setup_test_app().await;
+
+    let req = Request::builder()
+        .uri("/api/admin/posters/imdb/tt0111161/image")
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+}
