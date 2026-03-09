@@ -31,15 +31,17 @@ router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
   // Check if setup is needed
-  if (to.name !== 'setup') {
-    try {
-      const setupRequired = await auth.checkSetupRequired()
-      if (setupRequired) {
-        return { name: 'setup' }
-      }
-    } catch {
-      // If we can't check, continue
+  try {
+    const setupRequired = await auth.checkSetupRequired()
+    if (setupRequired && to.name !== 'setup') {
+      auth.logout()
+      return { name: 'setup' }
     }
+    if (!setupRequired && to.name === 'setup') {
+      return { name: 'login' }
+    }
+  } catch {
+    // If we can't check, continue
   }
 
   // Auth guard

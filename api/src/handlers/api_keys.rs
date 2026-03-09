@@ -87,5 +87,6 @@ pub async fn delete(
     Path(id): Path<i32>,
 ) -> Result<Json<Value>, AppError> {
     db::delete_api_key(&state.db, id).await?;
+    state.api_key_cache.invalidate_all();
     Ok(Json(json!({ "ok": true })))
 }

@@ -67,6 +67,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   function logout() {
     clearToken()
+    setupRequired.value = null
   }
 
   return { token, isAuthenticated, setupRequired, checkSetupRequired, setup, login, refresh, logout }

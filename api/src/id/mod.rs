@@ -55,12 +55,26 @@ pub async fn resolve(
     id_type: IdType,
     id_value: &str,
     tmdb: &TmdbClient,
+    cache: &moka::future::Cache<String, ResolvedId>,
 ) -> Result<ResolvedId, AppError> {
-    match id_type {
-        IdType::Imdb => resolve_imdb(id_value, tmdb).await,
-        IdType::Tmdb => resolve_tmdb(id_value, tmdb).await,
-        IdType::Tvdb => resolve_tvdb(id_value, tmdb).await,
-    }
+    let id_type_str = match id_type {
+        IdType::Imdb => "imdb",
+        IdType::Tmdb => "tmdb",
+        IdType::Tvdb => "tvdb",
+    };
+    let key = format!("{id_type_str}/{id_value}");
+    let tmdb = tmdb.clone();
+    let id_value = id_value.to_owned();
+    cache
+        .try_get_with(key, async move {
+            match id_type {
+                IdType::Imdb => resolve_imdb(&id_value, &tmdb).await,
+                IdType::Tmdb => resolve_tmdb(&id_value, &tmdb).await,
+                IdType::Tvdb => resolve_tvdb(&id_value, &tmdb).await,
+            }
+        })
+        .await
+        .map_err(|e| AppError::Other(e.to_string()))
 }
 
 async fn resolve_imdb(imdb_id: &str, tmdb: &TmdbClient) -> Result<ResolvedId, AppError> {

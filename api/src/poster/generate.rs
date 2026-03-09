@@ -51,7 +51,25 @@ pub async fn generate_poster(params: PosterParams<'_>) -> Result<Vec<u8>, AppErr
         bytes
     };
 
-    let base = image::load_from_memory(&poster_bytes)
+    // Move CPU-bound image processing to a blocking thread
+    let badges = badges.to_vec();
+    let font = font.clone();
+    let buf = tokio::task::spawn_blocking(move || {
+        render_poster_sync(&poster_bytes, &badges, &font, quality)
+    })
+    .await
+    .map_err(|e| AppError::Other(e.to_string()))??;
+
+    Ok(buf)
+}
+
+fn render_poster_sync(
+    poster_bytes: &[u8],
+    badges: &[RatingBadge],
+    font: &FontArc,
+    quality: u8,
+) -> Result<Vec<u8>, AppError> {
+    let base = image::load_from_memory(poster_bytes)
         .map_err(AppError::Image)?;
     let mut canvas: RgbaImage = base.to_rgba8();
 

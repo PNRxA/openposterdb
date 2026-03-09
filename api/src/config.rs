@@ -11,6 +11,7 @@ pub struct Config {
     pub poster_stale_secs: u64,
     pub poster_quality: u8,
     pub mdblist_api_key: Option<String>,
+    pub poster_mem_cache_mb: u64,
 }
 
 impl Config {
@@ -37,6 +38,10 @@ impl Config {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(85),
             mdblist_api_key: env::var("MDBLIST_API_KEY").ok(),
+            poster_mem_cache_mb: env::var("POSTER_MEM_CACHE_MB")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(512),
         };
 
         if config.omdb_api_key.is_none() && config.mdblist_api_key.is_none() {

@@ -24,6 +24,9 @@ async function request(path: string, options: RequestInit = {}): Promise<Respons
       return fetch(`${BASE_URL}${path}`, { ...options, headers, credentials: 'include' })
     }
     auth.logout()
+    // Lazy import to avoid fragile module initialization ordering
+    const { default: router } = await import('@/router')
+    router.push({ name: 'login' })
   }
 
   return res

@@ -1,6 +1,4 @@
-use sea_orm::{
-    ActiveModelTrait, ConnectionTrait, DatabaseConnection, EntityTrait, Set, TransactionTrait,
-};
+use sea_orm::{ConnectionTrait, DatabaseConnection, EntityTrait, Set, TransactionTrait};
 use zeroize::Zeroizing;
 
 use crate::entity::{admin_user, api_key, refresh_token};
@@ -287,25 +285,33 @@ pub async fn delete_api_key(db: &DatabaseConnection, id: i32) -> Result<(), AppE
     Ok(())
 }
 
-pub async fn update_api_key_last_used(
+pub async fn batch_update_last_used(
     db: &DatabaseConnection,
-    id: i32,
+    ids: &[i32],
 ) -> Result<(), AppError> {
-    let key = api_key::Entity::find_by_id(id)
-        .one(db)
+    if ids.is_empty() {
+        return Ok(());
+    }
+    let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    use sea_orm::Statement;
+    for chunk in ids.chunks(100) {
+        let placeholders: Vec<&str> = chunk.iter().map(|_| "?").collect();
+        let sql = format!(
+            "UPDATE api_keys SET last_used_at = ? WHERE id IN ({})",
+            placeholders.join(", ")
+        );
+        let mut values: Vec<sea_orm::Value> = vec![now.clone().into()];
+        for &id in chunk {
+            values.push(id.into());
+        }
+        db.execute(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Sqlite,
+            &sql,
+            values,
+        ))
         .await
         .map_err(|e| AppError::DbError(e.to_string()))?;
-
-    if let Some(key) = key {
-        let mut active: api_key::ActiveModel = <api_key::Model as Into<api_key::ActiveModel>>::into(key);
-        active.last_used_at = Set(Some(
-            chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
-        ));
-        active
-            .update(db)
-            .await
-            .map_err(|e| AppError::DbError(e.to_string()))?;
     }
-
     Ok(())
 }
+

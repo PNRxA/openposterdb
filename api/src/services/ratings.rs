@@ -56,6 +56,33 @@ pub async fn fetch_ratings(
     tmdb: &TmdbClient,
     omdb: Option<&OmdbClient>,
     mdblist: Option<&MdblistClient>,
+    cache: &moka::future::Cache<String, Vec<RatingBadge>>,
+) -> Vec<RatingBadge> {
+    let media_type_str = match resolved.media_type {
+        MediaType::Movie => "movie",
+        MediaType::Tv => "tv",
+    };
+    let key = format!("{}/{media_type_str}", resolved.tmdb_id);
+
+    let resolved = resolved.clone();
+    let tmdb = tmdb.clone();
+    let omdb = omdb.cloned();
+    let mdblist = mdblist.cloned();
+
+    cache
+        .try_get_with(key, async move {
+            let result = fetch_ratings_inner(&resolved, &tmdb, omdb.as_ref(), mdblist.as_ref()).await;
+            Ok::<_, std::convert::Infallible>(result)
+        })
+        .await
+        .unwrap_or_default()
+}
+
+async fn fetch_ratings_inner(
+    resolved: &ResolvedId,
+    tmdb: &TmdbClient,
+    omdb: Option<&OmdbClient>,
+    mdblist: Option<&MdblistClient>,
 ) -> Vec<RatingBadge> {
     let tmdb_fut = fetch_tmdb_rating(resolved, tmdb);
     let omdb_fut = fetch_omdb_ratings(resolved.imdb_id.as_deref(), omdb);

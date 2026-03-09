@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 
 use sea_orm::*;
 use tokio::fs;
@@ -10,6 +10,12 @@ use crate::error::AppError;
 pub struct CacheEntry {
     pub bytes: Vec<u8>,
     pub is_stale: bool,
+}
+
+#[derive(Clone)]
+pub struct MemCacheEntry {
+    pub bytes: bytes::Bytes,
+    pub last_checked: Instant,
 }
 
 pub fn cache_path(cache_dir: &str, id_type: &str, id_value: &str) -> PathBuf {
