@@ -46,24 +46,36 @@ async fn handle_inner(
     let id_value = id_value_jpg.strip_suffix(".jpg").unwrap_or(id_value_jpg);
 
     let cache_path = cache::cache_path(&state.config.cache_dir, id_type_str, id_value);
+    let meta_path = cache::meta_path(&state.config.cache_dir, id_type_str, id_value);
+
+    // Read release date sidecar for dynamic staleness
+    let release_date = cache::read_meta(&meta_path).await;
+    let stale_secs = cache::compute_stale_secs(
+        release_date.as_deref(),
+        state.config.ratings_min_stale_secs,
+        state.config.ratings_max_age_secs,
+    );
 
     // Check cache
-    if let Some(entry) = cache::read(&cache_path, state.config.ratings_stale_secs).await {
+    if let Some(entry) = cache::read(&cache_path, stale_secs).await {
         if entry.is_stale {
             // Spawn background refresh if not already in progress
             let key = format!("{id_type_str}/{id_value}");
             if state.refresh_locks.get(&key).is_none() {
                 state.refresh_locks.insert(key.clone(), ());
                 let state = state.clone();
-                let _id_type_str = id_type_str.to_string();
                 let id_value = id_value.to_string();
                 let cache_path = cache_path.clone();
+                let meta_path = meta_path.clone();
                 tokio::spawn(async move {
                     tracing::info!(%key, "background refresh started");
                     match generate_poster(&state, id_type, &id_value).await {
-                        Ok(bytes) => {
+                        Ok((bytes, rd)) => {
                             if let Err(e) = cache::write(&cache_path, &bytes).await {
                                 tracing::error!(error = %e, "failed to write cache");
+                            }
+                            if let Err(e) = cache::write_meta(&meta_path, rd.as_deref()).await {
+                                tracing::error!(error = %e, "failed to write meta sidecar");
                             }
                         }
                         Err(e) => {
@@ -78,8 +90,9 @@ async fn handle_inner(
     }
 
     // Generate fresh
-    let bytes = generate_poster(state, id_type, id_value).await?;
+    let (bytes, rd) = generate_poster(state, id_type, id_value).await?;
     cache::write(&cache_path, &bytes).await?;
+    cache::write_meta(&meta_path, rd.as_deref()).await?;
     Ok(bytes)
 }
 
@@ -87,7 +100,7 @@ async fn generate_poster(
     state: &AppState,
     id_type: IdType,
     id_value: &str,
-) -> Result<Vec<u8>, AppError> {
+) -> Result<(Vec<u8>, Option<String>), AppError> {
     let resolved = id::resolve(id_type, id_value, &state.tmdb).await?;
 
     let poster_path = resolved
@@ -98,17 +111,19 @@ async fn generate_poster(
     let badges =
         ratings::fetch_ratings(&resolved, &state.tmdb, &state.omdb, state.mdblist.as_ref()).await;
 
-    generate::generate_poster(
+    let bytes = generate::generate_poster(generate::PosterParams {
         poster_path,
-        &badges,
-        &state.tmdb,
-        &state.http,
-        &state.font,
-        state.config.poster_quality,
-        &state.config.cache_dir,
-        state.config.poster_stale_secs,
-    )
-    .await
+        badges: &badges,
+        tmdb: &state.tmdb,
+        http: &state.http,
+        font: &state.font,
+        quality: state.config.poster_quality,
+        cache_dir: &state.config.cache_dir,
+        poster_stale_secs: state.config.poster_stale_secs,
+    })
+    .await?;
+
+    Ok((bytes, resolved.release_date))
 }
 
 fn jpeg_response(bytes: Vec<u8>) -> Response {

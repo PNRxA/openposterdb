@@ -12,16 +12,28 @@ const BADGE_BOTTOM_MARGIN: u32 = 12;
 const BADGE_ROW_SPACING: u32 = 4;
 const MAX_BADGES_PER_ROW: usize = 5;
 
-pub async fn generate_poster(
-    poster_path: &str,
-    badges: &[RatingBadge],
-    tmdb: &TmdbClient,
-    http: &reqwest::Client,
-    font: &FontArc,
-    quality: u8,
-    cache_dir: &str,
-    poster_stale_secs: u64,
-) -> Result<Vec<u8>, AppError> {
+pub struct PosterParams<'a> {
+    pub poster_path: &'a str,
+    pub badges: &'a [RatingBadge],
+    pub tmdb: &'a TmdbClient,
+    pub http: &'a reqwest::Client,
+    pub font: &'a FontArc,
+    pub quality: u8,
+    pub cache_dir: &'a str,
+    pub poster_stale_secs: u64,
+}
+
+pub async fn generate_poster(params: PosterParams<'_>) -> Result<Vec<u8>, AppError> {
+    let PosterParams {
+        poster_path,
+        badges,
+        tmdb,
+        http,
+        font,
+        quality,
+        cache_dir,
+        poster_stale_secs,
+    } = params;
     // Fetch base poster, using cache
     let poster_cache = cache::poster_cache_path(cache_dir, poster_path);
     let poster_bytes = if let Some(entry) = cache::read(&poster_cache, poster_stale_secs).await {

@@ -65,7 +65,7 @@ pub async fn fetch_ratings(
     let omdb_has = |src: RatingSource| -> bool {
         omdb_badges
             .as_ref()
-            .map_or(false, |list| list.iter().any(|b| b.source == src))
+            .is_some_and(|list| list.iter().any(|b| b.source == src))
     };
     let has_rt = omdb_has(RatingSource::Rt);
     let has_mc = omdb_has(RatingSource::Metacritic);
@@ -128,13 +128,13 @@ async fn fetch_omdb_ratings(imdb_id: Option<&str>, omdb: &OmdbClient) -> Option<
     let mut badges = Vec::new();
 
     // IMDb rating
-    if let Some(ref rating) = resp.imdb_rating {
-        if rating != "N/A" {
-            badges.push(RatingBadge {
-                source: RatingSource::Imdb,
-                value: rating.clone(),
-            });
-        }
+    if let Some(ref rating) = resp.imdb_rating
+        && rating != "N/A"
+    {
+        badges.push(RatingBadge {
+            source: RatingSource::Imdb,
+            value: rating.clone(),
+        });
     }
 
     // Rotten Tomatoes from Ratings array
@@ -148,13 +148,13 @@ async fn fetch_omdb_ratings(imdb_id: Option<&str>, omdb: &OmdbClient) -> Option<
     }
 
     // Metacritic
-    if let Some(ref mc) = resp.metascore {
-        if mc != "N/A" {
-            badges.push(RatingBadge {
-                source: RatingSource::Metacritic,
-                value: mc.clone(),
-            });
-        }
+    if let Some(ref mc) = resp.metascore
+        && mc != "N/A"
+    {
+        badges.push(RatingBadge {
+            source: RatingSource::Metacritic,
+            value: mc.clone(),
+        });
     }
 
     Some(badges)
