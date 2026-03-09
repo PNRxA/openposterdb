@@ -2,13 +2,14 @@ use axum::extract::{Path, Query, State};
 use axum::http::header;
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
 use crate::cache;
 use crate::error::AppError;
 use crate::id::{self, IdType};
 use crate::poster::generate;
-use crate::services::ratings;
+use crate::services::{db, ratings};
 use crate::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -19,10 +20,33 @@ pub struct PosterQuery {
 
 pub async fn handler(
     State(state): State<Arc<AppState>>,
-    Path((_api_key, id_type_str, id_value_jpg)): Path<(String, String, String)>,
+    Path((api_key, id_type_str, id_value_jpg)): Path<(String, String, String)>,
     Query(query): Query<PosterQuery>,
 ) -> Response {
     let use_fallback = query.fallback.as_deref() == Some("true");
+
+    // Validate API key
+    let mut hasher = Sha256::new();
+    hasher.update(api_key.as_bytes());
+    let key_hash = format!("{:x}", hasher.finalize());
+
+    let api_key_model = match db::find_api_key_by_hash(&state.db, &key_hash).await {
+        Ok(Some(model)) => model,
+        Ok(None) => return AppError::Unauthorized.into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "failed to validate API key");
+            return AppError::Unauthorized.into_response();
+        }
+    };
+
+    // Update last_used_at in background
+    let db = state.db.clone();
+    let key_id = api_key_model.id;
+    tokio::spawn(async move {
+        if let Err(e) = db::update_api_key_last_used(&db, key_id).await {
+            tracing::warn!(error = %e, "failed to update API key last_used_at");
+        }
+    });
 
     match handle_inner(&state, &id_type_str, &id_value_jpg).await {
         Ok(bytes) => jpeg_response(bytes),
@@ -110,7 +134,8 @@ async fn generate_poster(
         .ok_or_else(|| AppError::Other("no poster available".into()))?;
 
     let badges =
-        ratings::fetch_ratings(&resolved, &state.tmdb, state.omdb.as_ref(), state.mdblist.as_ref()).await;
+        ratings::fetch_ratings(&resolved, &state.tmdb, state.omdb.as_ref(), state.mdblist.as_ref())
+            .await;
 
     let bytes = generate::generate_poster(generate::PosterParams {
         poster_path,
@@ -131,7 +156,10 @@ fn jpeg_response(bytes: Vec<u8>) -> Response {
     (
         [
             (header::CONTENT_TYPE, "image/jpeg"),
-            (header::CACHE_CONTROL, "public, max-age=3600, stale-while-revalidate=86400"),
+            (
+                header::CACHE_CONTROL,
+                "public, max-age=3600, stale-while-revalidate=86400",
+            ),
         ],
         bytes,
     )

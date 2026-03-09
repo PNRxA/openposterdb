@@ -4,7 +4,7 @@ use std::time::SystemTime;
 use sea_orm::*;
 use tokio::fs;
 
-use crate::entity;
+use crate::entity::poster_meta;
 use crate::error::AppError;
 
 pub struct CacheEntry {
@@ -47,7 +47,7 @@ pub async fn write(path: &Path, bytes: &[u8]) -> Result<(), AppError> {
 }
 
 pub async fn read_meta_db(db: &DatabaseConnection, cache_key: &str) -> Option<String> {
-    entity::Entity::find_by_id(cache_key)
+    poster_meta::Entity::find_by_id(cache_key)
         .one(db)
         .await
         .ok()
@@ -65,17 +65,17 @@ pub async fn upsert_meta_db(
         .unwrap_or_default()
         .as_secs() as i64;
 
-    let model = entity::ActiveModel {
+    let model = poster_meta::ActiveModel {
         cache_key: Set(cache_key.to_string()),
         release_date: Set(release_date.map(|s| s.to_string())),
         created_at: Set(now),
         updated_at: Set(now),
     };
 
-    entity::Entity::insert(model)
+    poster_meta::Entity::insert(model)
         .on_conflict(
-            sea_orm::sea_query::OnConflict::column(entity::Column::CacheKey)
-                .update_columns([entity::Column::ReleaseDate, entity::Column::UpdatedAt])
+            sea_orm::sea_query::OnConflict::column(poster_meta::Column::CacheKey)
+                .update_columns([poster_meta::Column::ReleaseDate, poster_meta::Column::UpdatedAt])
                 .to_owned(),
         )
         .exec(db)
