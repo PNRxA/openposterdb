@@ -219,7 +219,6 @@ pub fn build_app(state: Arc<AppState>) -> Router {
 
     let compressed_routes = Router::new()
         .merge(routes::auth::auth_routes())
-        .merge(routes::preview::preview_routes())
         .merge(admin_routes)
         .merge(key_self_routes)
         .layer(CompressionLayer::new());

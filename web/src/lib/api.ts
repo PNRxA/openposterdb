@@ -1,6 +1,6 @@
 import { useAuthStore } from '@/stores/auth'
 
-export const BASE_URL = import.meta.env.VITE_API_URL || ''
+const BASE_URL = import.meta.env.VITE_API_URL || ''
 
 let _onAuthFailure: (() => void) | null = null
 
@@ -82,6 +82,8 @@ export const adminApi = {
   }): Promise<Response> => put('/api/admin/settings', settings),
   fetchPoster: (idType: string, idValue: string): Promise<Response> =>
     post(`/api/admin/posters/${idType}/${idValue}/fetch`),
+  previewPoster: (ratingsLimit: number, ratingsOrder: string): Promise<Response> =>
+    get(`/api/admin/preview/poster?ratings_limit=${ratingsLimit}&ratings_order=${encodeURIComponent(ratingsOrder)}`),
 }
 
 // --- Self-service API (API key session JWT auth) ---
@@ -119,6 +121,8 @@ export const selfApi = {
     }),
   resetSettings: (): Promise<Response> =>
     keyRequest('/api/key/me/settings', { method: 'DELETE' }),
+  previewPoster: (ratingsLimit: number, ratingsOrder: string): Promise<Response> =>
+    keyRequest(`/api/key/me/preview/poster?ratings_limit=${ratingsLimit}&ratings_order=${encodeURIComponent(ratingsOrder)}`),
 }
 
 export const keysApi = {

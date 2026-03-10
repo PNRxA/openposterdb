@@ -13,9 +13,13 @@ const mockKeysApi = vi.hoisted(() => ({
   deleteSettings: vi.fn(),
 }))
 
+const mockAdminApi = vi.hoisted(() => ({
+  previewPoster: vi.fn().mockResolvedValue({ ok: true, blob: () => Promise.resolve(new Blob()) }),
+}))
+
 vi.mock('@/lib/api', () => ({
   keysApi: mockKeysApi,
-  BASE_URL: '',
+  adminApi: mockAdminApi,
 }))
 
 const sampleKeys = [

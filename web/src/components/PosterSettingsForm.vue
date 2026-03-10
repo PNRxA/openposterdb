@@ -3,7 +3,6 @@ import { ref, watch, onBeforeUnmount } from 'vue'
 import { Save, Loader2, Check } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { BASE_URL } from '@/lib/api'
 
 export interface PosterSettings {
   poster_source: string
@@ -32,6 +31,7 @@ const props = defineProps<{
   loadSettings: () => Promise<PosterSettings | null>
   saveSettings: (s: { poster_source: string; fanart_lang: string; fanart_textless: boolean; ratings_limit: number; ratings_order: string }) => Promise<string | null>
   resetSettings?: () => Promise<boolean>
+  fetchPreview: (ratingsLimit: number, ratingsOrder: string) => Promise<Response>
 }>()
 
 const editSource = ref(props.settings.poster_source)
@@ -146,6 +146,7 @@ const previewLoading = ref(false)
 const previewError = ref(false)
 const previewSize = ref<{ w: number; h: number } | null>(null)
 let previewTimer: ReturnType<typeof setTimeout> | null = null
+let previewGeneration = 0
 
 function onPreviewLoad(e: Event) {
   const img = e.target as HTMLImageElement
@@ -156,18 +157,29 @@ function onPreviewLoad(e: Event) {
   previewError.value = false
 }
 
-function buildPreviewUrl() {
-  const params = new URLSearchParams({
-    ratings_limit: String(editRatingsLimit.value),
-    ratings_order: editRatingsOrder.value.join(','),
-  })
-  return `${BASE_URL}/api/preview/poster?${params}`
-}
-
-function updatePreview() {
+async function updatePreview() {
   previewLoading.value = true
   previewError.value = false
-  previewSrc.value = buildPreviewUrl()
+  const generation = ++previewGeneration
+
+  try {
+    const res = await props.fetchPreview(editRatingsLimit.value, editRatingsOrder.value.join(','))
+    if (generation !== previewGeneration) return // stale response
+    if (!res.ok) {
+      previewError.value = true
+      previewLoading.value = false
+      return
+    }
+    const blob = await res.blob()
+    if (generation !== previewGeneration) return
+    if (previewSrc.value) URL.revokeObjectURL(previewSrc.value)
+    previewSrc.value = URL.createObjectURL(blob)
+  } catch {
+    if (generation === previewGeneration) {
+      previewError.value = true
+      previewLoading.value = false
+    }
+  }
 }
 
 // Debounced watcher on rating settings
@@ -181,6 +193,7 @@ updatePreview()
 
 onBeforeUnmount(() => {
   if (previewTimer) clearTimeout(previewTimer)
+  if (previewSrc.value) URL.revokeObjectURL(previewSrc.value)
 })
 
 const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name

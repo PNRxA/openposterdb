@@ -98,6 +98,7 @@ function handleLogout() {
           :load-settings="loadSettings"
           :save-settings="saveSettings"
           :reset-settings="resetSettings"
+          :fetch-preview="selfApi.previewPoster"
         />
       </div>
     </div>

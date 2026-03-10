@@ -59,6 +59,7 @@ async function saveSettings(s: {
           uid="global"
           :load-settings="loadSettings"
           :save-settings="saveSettings"
+          :fetch-preview="adminApi.previewPoster"
         />
       </div>
     </div>

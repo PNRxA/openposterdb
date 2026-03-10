@@ -6,30 +6,33 @@ use http_body_util::BodyExt;
 use serde_json;
 use tower::ServiceExt;
 
+fn authed_get(uri: &str, token: &str) -> Request<Body> {
+    Request::builder()
+        .uri(uri)
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap()
+}
+
 #[tokio::test]
-async fn preview_requires_no_auth() {
+async fn preview_requires_auth() {
     let (app, _state) = common::setup_test_app().await;
 
     let req = Request::builder()
-        .uri("/api/preview/poster")
+        .uri("/api/admin/preview/poster")
         .body(Body::empty())
         .unwrap();
 
     let res = app.oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-    assert_eq!(res.headers().get("content-type").unwrap(), "image/jpeg");
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]
 async fn preview_returns_jpeg_with_defaults() {
     let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
 
-    let req = Request::builder()
-        .uri("/api/preview/poster")
-        .body(Body::empty())
-        .unwrap();
-
-    let res = app.clone().oneshot(req).await.unwrap();
+    let res = app.clone().oneshot(authed_get("/api/admin/preview/poster", &token)).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
     assert_eq!(
         res.headers().get("content-type").unwrap(),
@@ -50,22 +53,15 @@ async fn preview_returns_jpeg_with_defaults() {
 #[tokio::test]
 async fn preview_respects_ratings_limit() {
     let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
 
     // Request with limit=1 — should produce a smaller image (fewer badges)
-    let req_small = Request::builder()
-        .uri("/api/preview/poster?ratings_limit=1")
-        .body(Body::empty())
-        .unwrap();
-    let res_small = app.clone().oneshot(req_small).await.unwrap();
+    let res_small = app.clone().oneshot(authed_get("/api/admin/preview/poster?ratings_limit=1", &token)).await.unwrap();
     assert_eq!(res_small.status(), StatusCode::OK);
     let body_small = res_small.into_body().collect().await.unwrap().to_bytes();
 
     // Request with limit=0 (show all 8 badges)
-    let req_all = Request::builder()
-        .uri("/api/preview/poster?ratings_limit=0")
-        .body(Body::empty())
-        .unwrap();
-    let res_all = app.clone().oneshot(req_all).await.unwrap();
+    let res_all = app.clone().oneshot(authed_get("/api/admin/preview/poster?ratings_limit=0", &token)).await.unwrap();
     assert_eq!(res_all.status(), StatusCode::OK);
     let body_all = res_all.into_body().collect().await.unwrap().to_bytes();
 
@@ -81,21 +77,14 @@ async fn preview_respects_ratings_limit() {
 #[tokio::test]
 async fn preview_respects_ratings_order() {
     let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
 
     // Two different badge selections should produce different images
-    let req1 = Request::builder()
-        .uri("/api/preview/poster?ratings_limit=2&ratings_order=imdb,tmdb")
-        .body(Body::empty())
-        .unwrap();
-    let res1 = app.clone().oneshot(req1).await.unwrap();
+    let res1 = app.clone().oneshot(authed_get("/api/admin/preview/poster?ratings_limit=2&ratings_order=imdb,tmdb", &token)).await.unwrap();
     assert_eq!(res1.status(), StatusCode::OK);
     let body1 = res1.into_body().collect().await.unwrap().to_bytes();
 
-    let req2 = Request::builder()
-        .uri("/api/preview/poster?ratings_limit=2&ratings_order=rt,mc")
-        .body(Body::empty())
-        .unwrap();
-    let res2 = app.clone().oneshot(req2).await.unwrap();
+    let res2 = app.clone().oneshot(authed_get("/api/admin/preview/poster?ratings_limit=2&ratings_order=rt,mc", &token)).await.unwrap();
     assert_eq!(res2.status(), StatusCode::OK);
     let body2 = res2.into_body().collect().await.unwrap().to_bytes();
 
@@ -110,13 +99,9 @@ async fn preview_respects_ratings_order() {
 #[tokio::test]
 async fn preview_with_empty_order_still_works() {
     let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
 
-    let req = Request::builder()
-        .uri("/api/preview/poster?ratings_order=&ratings_limit=3")
-        .body(Body::empty())
-        .unwrap();
-
-    let res = app.clone().oneshot(req).await.unwrap();
+    let res = app.clone().oneshot(authed_get("/api/admin/preview/poster?ratings_order=&ratings_limit=3", &token)).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
     assert_eq!(res.headers().get("content-type").unwrap(), "image/jpeg");
 }
@@ -124,22 +109,15 @@ async fn preview_with_empty_order_still_works() {
 #[tokio::test]
 async fn preview_cache_returns_identical_bytes_for_same_params() {
     let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
 
-    let uri = "/api/preview/poster?ratings_limit=2&ratings_order=imdb,tmdb";
+    let uri = "/api/admin/preview/poster?ratings_limit=2&ratings_order=imdb,tmdb";
 
-    let req1 = Request::builder()
-        .uri(uri)
-        .body(Body::empty())
-        .unwrap();
-    let res1 = app.clone().oneshot(req1).await.unwrap();
+    let res1 = app.clone().oneshot(authed_get(uri, &token)).await.unwrap();
     assert_eq!(res1.status(), StatusCode::OK);
     let body1 = res1.into_body().collect().await.unwrap().to_bytes();
 
-    let req2 = Request::builder()
-        .uri(uri)
-        .body(Body::empty())
-        .unwrap();
-    let res2 = app.clone().oneshot(req2).await.unwrap();
+    let res2 = app.clone().oneshot(authed_get(uri, &token)).await.unwrap();
     assert_eq!(res2.status(), StatusCode::OK);
     let body2 = res2.into_body().collect().await.unwrap().to_bytes();
 
@@ -150,19 +128,12 @@ async fn preview_cache_returns_identical_bytes_for_same_params() {
 #[tokio::test]
 async fn preview_cache_differs_for_different_params() {
     let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
 
-    let req1 = Request::builder()
-        .uri("/api/preview/poster?ratings_limit=1&ratings_order=imdb")
-        .body(Body::empty())
-        .unwrap();
-    let res1 = app.clone().oneshot(req1).await.unwrap();
+    let res1 = app.clone().oneshot(authed_get("/api/admin/preview/poster?ratings_limit=1&ratings_order=imdb", &token)).await.unwrap();
     let body1 = res1.into_body().collect().await.unwrap().to_bytes();
 
-    let req2 = Request::builder()
-        .uri("/api/preview/poster?ratings_limit=1&ratings_order=rt")
-        .body(Body::empty())
-        .unwrap();
-    let res2 = app.clone().oneshot(req2).await.unwrap();
+    let res2 = app.clone().oneshot(authed_get("/api/admin/preview/poster?ratings_limit=1&ratings_order=rt", &token)).await.unwrap();
     let body2 = res2.into_body().collect().await.unwrap().to_bytes();
 
     // Different rating params should produce different images (different cache keys)
@@ -172,14 +143,11 @@ async fn preview_cache_differs_for_different_params() {
 #[tokio::test]
 async fn preview_cache_populates_entry_count() {
     let (app, state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
 
     assert_eq!(state.preview_cache.entry_count(), 0);
 
-    let req = Request::builder()
-        .uri("/api/preview/poster?ratings_limit=2&ratings_order=imdb,rt")
-        .body(Body::empty())
-        .unwrap();
-    let res = app.clone().oneshot(req).await.unwrap();
+    let res = app.clone().oneshot(authed_get("/api/admin/preview/poster?ratings_limit=2&ratings_order=imdb,rt", &token)).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
 
     // Force pending tasks to run so moka registers the insert
@@ -193,11 +161,7 @@ async fn preview_cache_survives_settings_update() {
     let token = common::setup_admin(&app).await;
 
     // Warm the preview cache
-    let req = Request::builder()
-        .uri("/api/preview/poster?ratings_limit=3")
-        .body(Body::empty())
-        .unwrap();
-    let res = app.clone().oneshot(req).await.unwrap();
+    let res = app.clone().oneshot(authed_get("/api/admin/preview/poster?ratings_limit=3", &token)).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
 
     state.preview_cache.run_pending_tasks().await;
@@ -229,15 +193,12 @@ async fn preview_cache_survives_settings_update() {
 #[tokio::test]
 async fn preview_serves_from_filesystem_after_memory_eviction() {
     let (app, state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
 
-    let uri = "/api/preview/poster?ratings_limit=2&ratings_order=imdb,rt";
+    let uri = "/api/admin/preview/poster?ratings_limit=2&ratings_order=imdb,rt";
 
     // First request — renders and writes to both memory + filesystem
-    let req = Request::builder()
-        .uri(uri)
-        .body(Body::empty())
-        .unwrap();
-    let res = app.clone().oneshot(req).await.unwrap();
+    let res = app.clone().oneshot(authed_get(uri, &token)).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
     let body1 = res.into_body().collect().await.unwrap().to_bytes();
 
@@ -247,11 +208,7 @@ async fn preview_serves_from_filesystem_after_memory_eviction() {
     assert_eq!(state.preview_cache.entry_count(), 0);
 
     // Second request — should serve from filesystem, not re-render
-    let req = Request::builder()
-        .uri(uri)
-        .body(Body::empty())
-        .unwrap();
-    let res = app.clone().oneshot(req).await.unwrap();
+    let res = app.clone().oneshot(authed_get(uri, &token)).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
     let body2 = res.into_body().collect().await.unwrap().to_bytes();
 
@@ -261,4 +218,20 @@ async fn preview_serves_from_filesystem_after_memory_eviction() {
     // Memory cache should be re-populated from filesystem
     state.preview_cache.run_pending_tasks().await;
     assert_eq!(state.preview_cache.entry_count(), 1);
+}
+
+#[tokio::test]
+async fn preview_accessible_via_self_serve_auth() {
+    let (app, _state) = common::setup_test_app().await;
+    let api_key_token = common::setup_api_key_session(&app).await;
+
+    let req = Request::builder()
+        .uri("/api/key/me/preview/poster")
+        .header("authorization", format!("Bearer {api_key_token}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(res.headers().get("content-type").unwrap(), "image/jpeg");
 }

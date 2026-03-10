@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cache;
 use crate::error::AppError;
-use crate::routes::poster;
+use crate::poster::serve;
 use crate::services::db::{self, validate_fanart_lang, validate_poster_source, validate_ratings_limit, validate_ratings_order, default_ratings_limit, default_ratings_order};
 use crate::AppState;
 
@@ -230,6 +230,6 @@ pub async fn fetch_poster(
         .await
         .map_err(|e| AppError::Other(e.to_string()))?;
 
-    let bytes = poster::handle_inner(&state, &id_type, &id_value, &settings).await?;
-    Ok(poster::jpeg_response(bytes))
+    let bytes = serve::handle_inner(&state, &id_type, &id_value, &settings).await?;
+    Ok(serve::jpeg_response(bytes))
 }

@@ -138,20 +138,18 @@ test.describe('settings', () => {
     const previewImg = page.locator('img[alt="Poster preview"]')
     await expect(previewImg).toBeVisible()
 
-    // Wait for the image to have a non-zero natural width (i.e. it actually loaded)
+    // Preview uses blob URLs fetched with auth — wait for image to load
     await expect(previewImg).toHaveJSProperty('complete', true)
     const naturalWidth = await previewImg.evaluate((img: HTMLImageElement) => img.naturalWidth)
     expect(naturalWidth).toBeGreaterThan(0)
   })
 
-  test('preview image src includes ratings params', async ({ page }) => {
+  test('preview image uses blob URL (fetched with auth)', async ({ page }) => {
     const previewImg = page.locator('img[alt="Poster preview"]')
     await expect(previewImg).toBeVisible()
 
     const src = await previewImg.getAttribute('src')
-    expect(src).toContain('/api/preview/poster')
-    expect(src).toMatch(/ratings_limit=\d+/)
-    expect(src).toContain('ratings_order=')
+    expect(src).toContain('blob:')
   })
 
   test('preview updates when ratings limit changes', async ({ page }) => {
@@ -167,10 +165,10 @@ test.describe('settings', () => {
     await limitInput.fill(newValue)
 
     // Wait for debounced update (500ms) + network
-    await page.waitForTimeout(1000)
+    await page.waitForTimeout(1500)
 
     const newSrc = await previewImg.getAttribute('src')
-    expect(newSrc).toContain(`ratings_limit=${newValue}`)
+    // Blob URL should change when preview is re-fetched
     expect(newSrc).not.toBe(initialSrc)
   })
 })

@@ -4,9 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import PosterSettingsForm from '@/components/PosterSettingsForm.vue'
 import type { PosterSettings } from '@/components/PosterSettingsForm.vue'
 
-vi.mock('@/lib/api', () => ({
-  BASE_URL: 'http://test-api',
-}))
+vi.mock('@/lib/api', () => ({}))
 
 const defaultSettings: PosterSettings = {
   poster_source: 'tmdb',
@@ -17,13 +15,21 @@ const defaultSettings: PosterSettings = {
   ratings_order: 'mal,imdb,lb,rt,rta,mc,tmdb,trakt',
 }
 
-function mountForm(overrides: Partial<PosterSettings> = {}) {
+function makeFetchPreview() {
+  return vi.fn().mockResolvedValue({
+    ok: true,
+    blob: () => Promise.resolve(new Blob(['fake-jpeg'], { type: 'image/jpeg' })),
+  })
+}
+
+function mountForm(overrides: Partial<PosterSettings> = {}, fetchPreview = makeFetchPreview()) {
   const settings = { ...defaultSettings, ...overrides }
   return mount(PosterSettingsForm, {
     props: {
       settings,
       loadSettings: vi.fn().mockResolvedValue(settings),
       saveSettings: vi.fn().mockResolvedValue(null),
+      fetchPreview,
     },
     global: {
       plugins: [createPinia()],
@@ -53,50 +59,59 @@ describe('PosterSettingsForm', () => {
     expect(wrapper.find('img[alt="Poster preview"]').exists()).toBe(true)
   })
 
-  it('sets initial preview src on mount', () => {
+  it('calls fetchPreview on mount', async () => {
+    const fetchPreview = makeFetchPreview()
+    mountForm({}, fetchPreview)
+    await flushPromises()
+
+    expect(fetchPreview).toHaveBeenCalledWith(3, 'mal,imdb,lb,rt,rta,mc,tmdb,trakt')
+  })
+
+  it('calls fetchPreview with correct params for custom settings', async () => {
+    const fetchPreview = makeFetchPreview()
+    mountForm({ ratings_limit: 5, ratings_order: 'imdb,rt,tmdb' }, fetchPreview)
+    await flushPromises()
+
+    expect(fetchPreview).toHaveBeenCalledWith(5, expect.stringContaining('imdb'))
+  })
+
+  it('sets preview src from blob after fetch', async () => {
     const wrapper = mountForm()
+    await flushPromises()
+
     const img = wrapper.find('img[alt="Poster preview"]')
-    const src = img.attributes('src')!
-    expect(src).toContain('http://test-api/api/preview/poster')
-    expect(src).toContain('ratings_limit=3')
-    expect(src).toContain('ratings_order=mal')
+    const src = img.attributes('src')
+    expect(src).toBeTruthy()
+    expect(src).toContain('blob:')
   })
 
-  it('preview URL includes current ratings_limit and ratings_order', () => {
-    const wrapper = mountForm({
-      ratings_limit: 5,
-      ratings_order: 'imdb,rt,tmdb',
-    })
-    const src = wrapper.find('img[alt="Poster preview"]').attributes('src')!
-    expect(src).toContain('ratings_limit=5')
-    expect(src).toContain('ratings_order=imdb')
-    expect(src).toContain('rt')
-    expect(src).toContain('tmdb')
-  })
+  it('updates preview after debounce when ratings_limit changes', async () => {
+    const fetchPreview = makeFetchPreview()
+    const wrapper = mountForm({}, fetchPreview)
+    await flushPromises()
+    fetchPreview.mockClear()
 
-  it('updates preview URL after debounce when ratings_limit changes', async () => {
-    const wrapper = mountForm()
-    const initialSrc = wrapper.find('img[alt="Poster preview"]').attributes('src')!
-
-    // Change the limit via the native input (not stubbed)
+    // Change the limit
     const limitInput = wrapper.find('input[type="number"]')
     await limitInput.setValue(5)
     await flushPromises()
 
-    // Before debounce fires, src should still be the old one
-    expect(wrapper.find('img[alt="Poster preview"]').attributes('src')).toBe(initialSrc)
+    // Before debounce fires, fetchPreview should not have been called again
+    expect(fetchPreview).not.toHaveBeenCalled()
 
     // Advance past debounce timer
     vi.advanceTimersByTime(600)
     await flushPromises()
 
-    const newSrc = wrapper.find('img[alt="Poster preview"]').attributes('src')!
-    expect(newSrc).toContain('ratings_limit=5')
-    expect(newSrc).not.toBe(initialSrc)
+    expect(fetchPreview).toHaveBeenCalledWith(5, expect.any(String))
   })
 
-  it('debounces rapid changes — only last value takes effect', async () => {
-    const wrapper = mountForm()
+  it('debounces rapid changes — only last value triggers fetch', async () => {
+    const fetchPreview = makeFetchPreview()
+    const wrapper = mountForm({}, fetchPreview)
+    await flushPromises()
+    fetchPreview.mockClear()
+
     const limitInput = wrapper.find('input[type="number"]')
 
     // Rapid changes
@@ -110,12 +125,16 @@ describe('PosterSettingsForm', () => {
     vi.advanceTimersByTime(600)
     await flushPromises()
 
-    const src = wrapper.find('img[alt="Poster preview"]').attributes('src')!
-    expect(src).toContain('ratings_limit=7')
+    // Should only have been called once with the final value
+    expect(fetchPreview).toHaveBeenCalledTimes(1)
+    expect(fetchPreview).toHaveBeenCalledWith(7, expect.any(String))
   })
 
-  it('shows loading state while preview loads', () => {
-    const wrapper = mountForm()
+  it('shows loading state while preview loads', async () => {
+    // Use a fetch that never resolves to keep loading state
+    const fetchPreview = vi.fn().mockReturnValue(new Promise(() => {}))
+    const wrapper = mountForm({}, fetchPreview)
+
     // previewLoading starts true on mount (updatePreview is called)
     const spinner = wrapper.find('.animate-spin')
     expect(spinner.exists()).toBe(true)
@@ -125,11 +144,12 @@ describe('PosterSettingsForm', () => {
     expect(img.isVisible()).toBe(false)
   })
 
-  it('hides loading spinner and shows image after load', async () => {
+  it('hides loading spinner and shows image after successful fetch', async () => {
     const wrapper = mountForm()
-    const img = wrapper.find('img[alt="Poster preview"]')
+    await flushPromises()
 
-    // Simulate the image load event
+    // After fetch resolves, trigger image load
+    const img = wrapper.find('img[alt="Poster preview"]')
     await img.trigger('load')
     await flushPromises()
 
@@ -137,20 +157,19 @@ describe('PosterSettingsForm', () => {
     expect(img.isVisible()).toBe(true)
   })
 
-  it('shows error message when preview fails to load', async () => {
-    const wrapper = mountForm()
-    const img = wrapper.find('img[alt="Poster preview"]')
-
-    // Simulate image error
-    await img.trigger('error')
+  it('shows error message when preview fetch fails', async () => {
+    const fetchPreview = vi.fn().mockResolvedValue({ ok: false })
+    const wrapper = mountForm({}, fetchPreview)
     await flushPromises()
 
     expect(wrapper.text()).toContain('Failed to load preview')
   })
 
-  it('preview URL uses BASE_URL from api module', () => {
-    const wrapper = mountForm()
-    const src = wrapper.find('img[alt="Poster preview"]').attributes('src')!
-    expect(src.startsWith('http://test-api/api/preview/poster')).toBe(true)
+  it('shows error message when preview fetch throws', async () => {
+    const fetchPreview = vi.fn().mockRejectedValue(new Error('Network error'))
+    const wrapper = mountForm({}, fetchPreview)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Failed to load preview')
   })
 })

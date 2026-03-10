@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { keysApi } from '@/lib/api'
+import { keysApi, adminApi } from '@/lib/api'
 import RefreshButton from '@/components/RefreshButton.vue'
 import PosterSettingsForm from '@/components/PosterSettingsForm.vue'
 import type { PosterSettings } from '@/components/PosterSettingsForm.vue'
@@ -211,6 +211,7 @@ async function deleteKey(id: number) {
             :load-settings="makeLoadSettings(key.id)"
             :save-settings="makeSaveSettings(key.id)"
             :reset-settings="makeResetSettings(key.id)"
+            :fetch-preview="adminApi.previewPoster"
           />
         </div>
       </div>

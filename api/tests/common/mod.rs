@@ -176,6 +176,47 @@ pub async fn setup_admin(app: &axum::Router) -> String {
     json["token"].as_str().unwrap().to_string()
 }
 
+/// Helper: set up admin, create an API key, log in with it, and return the session JWT.
+pub async fn setup_api_key_session(app: &axum::Router) -> String {
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    let admin_token = setup_admin(app).await;
+
+    // Create an API key
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/keys")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {admin_token}"))
+        .body(Body::from(
+            serde_json::json!({"name": "preview-test-key"}).to_string(),
+        ))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let raw_key = json["key"].as_str().unwrap().to_string();
+
+    // Log in with the API key
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/auth/key-login")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({"api_key": raw_key}).to_string(),
+        ))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    json["token"].as_str().unwrap().to_string()
+}
+
 /// Extract Set-Cookie header value from a response.
 pub fn extract_set_cookie(headers: &axum::http::HeaderMap) -> Option<String> {
     headers

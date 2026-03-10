@@ -117,7 +117,7 @@ async function fetchPoster() {
     const fetchedKey = `${fetchIdType.value}/${idValue}`
     fetchIdValue.value = ''
     fetchModalOpen.value = false
-    refetch()
+    await refetch()
     openPreview(fetchedKey)
   } catch (e) {
     fetchError.value = e instanceof Error ? e.message : 'Fetch failed'

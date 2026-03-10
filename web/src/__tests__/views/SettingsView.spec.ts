@@ -7,11 +7,11 @@ import SettingsView from '@/views/SettingsView.vue'
 const mockAdminApi = vi.hoisted(() => ({
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
+  previewPoster: vi.fn().mockResolvedValue({ ok: true, blob: () => Promise.resolve(new Blob()) }),
 }))
 
 vi.mock('@/lib/api', () => ({
   adminApi: mockAdminApi,
-  BASE_URL: '',
 }))
 
 const defaultSettings = {

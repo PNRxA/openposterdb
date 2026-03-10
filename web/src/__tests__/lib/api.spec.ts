@@ -191,4 +191,16 @@ describe('api', () => {
     const [url] = fetchMock.mock.calls[0]
     expect(url).toBe('/api/admin/posters/tmdb/550/fetch')
   })
+
+  it('adminApi.previewPoster calls GET with correct URL and params', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.previewPoster(3, 'imdb,rt,tmdb')
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toContain('/api/admin/preview/poster')
+    expect(url).toContain('ratings_limit=3')
+    expect(url).toContain('ratings_order=imdb%2Crt%2Ctmdb')
+  })
 })

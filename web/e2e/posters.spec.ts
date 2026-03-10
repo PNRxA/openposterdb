@@ -46,11 +46,11 @@ test.describe('posters page', () => {
   test('fetch button opens modal with form', async ({ page }) => {
     await page.click('button:has-text("Fetch")')
     await expect(page.getByText('Fetch Poster')).toBeVisible()
-    const modal = page.getByText('Fetch Poster').locator('..')
+    const modal = page.getByRole('dialog')
     await expect(modal.getByText('ID Type')).toBeVisible()
     await expect(modal.getByText('ID Value')).toBeVisible()
-    await expect(page.locator('select')).toBeVisible()
-    await expect(page.locator('input[placeholder="e.g. tt1234567"]')).toBeVisible()
+    await expect(modal.locator('select')).toBeVisible()
+    await expect(modal.locator('input[placeholder="e.g. tt1234567"]')).toBeVisible()
   })
 
   test('fetch modal has correct id type options', async ({ page }) => {
