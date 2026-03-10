@@ -7,6 +7,7 @@ use sea_orm::{ConnectionTrait, DatabaseConnection, SqlxSqliteConnector};
 use zeroize::Zeroizing;
 
 use openposterdb_api::config::Config;
+use openposterdb_api::services::fanart::FanartClient;
 use openposterdb_api::services::tmdb::TmdbClient;
 use openposterdb_api::{build_app, AppState, FONT_BYTES, SCHEMA_SQL};
 
@@ -37,7 +38,8 @@ pub async fn setup_test_app_with_cors(cors_origin: Option<String>) -> (axum::Rou
 async fn _setup_test_app(cors_origin: Option<String>, secure_cookies: bool) -> (axum::Router, Arc<AppState>) {
     let sqlite_opts = sqlx::sqlite::SqliteConnectOptions::new()
         .filename(":memory:")
-        .create_if_missing(true);
+        .create_if_missing(true)
+        .pragma("foreign_keys", "ON");
     let pool = sqlx::sqlite::SqlitePoolOptions::new()
         .max_connections(1)
         .connect_with(sqlite_opts)
@@ -92,11 +94,12 @@ async fn _setup_test_app(cors_origin: Option<String>, secure_cookies: bool) -> (
             poster_mem_cache_mb: 1,
             static_dir: None,
             cors_origin,
+            fanart_api_key: Some("test".into()),
         },
         tmdb: TmdbClient::new("test".into(), http.clone()),
         omdb: None,
         mdblist: None,
-        http,
+        http: http.clone(),
         font,
         refresh_locks,
         db,
@@ -108,6 +111,23 @@ async fn _setup_test_app(cors_origin: Option<String>, secure_cookies: bool) -> (
         ratings_cache,
         poster_mem_cache,
         pending_last_used: Arc::new(DashMap::new()),
+        fanart: Some(FanartClient::new("test".into(), http)),
+        fanart_cache: moka::future::Cache::builder()
+            .max_capacity(100)
+            .time_to_live(Duration::from_secs(3600))
+            .build(),
+        fanart_negative: moka::future::Cache::builder()
+            .max_capacity(100)
+            .time_to_live(Duration::from_secs(3600))
+            .build(),
+        settings_cache: moka::future::Cache::builder()
+            .max_capacity(100)
+            .time_to_live(Duration::from_secs(300))
+            .build(),
+        global_settings_cache: moka::future::Cache::builder()
+            .max_capacity(1)
+            .time_to_live(Duration::from_secs(300))
+            .build(),
     });
 
     let app = build_app(state.clone());

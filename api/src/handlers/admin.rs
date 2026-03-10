@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cache;
 use crate::error::AppError;
-use crate::services::db;
+use crate::services::db::{self, validate_fanart_lang, validate_poster_source};
 use crate::AppState;
 
 #[derive(Serialize)]
@@ -137,4 +137,63 @@ pub async fn poster_image(
         [(axum::http::header::CONTENT_TYPE, "image/jpeg")],
         bytes,
     ))
+}
+
+#[derive(Serialize)]
+pub struct GlobalSettingsResponse {
+    pub poster_source: String,
+    pub fanart_lang: String,
+    pub fanart_textless: bool,
+    pub fanart_available: bool,
+}
+
+pub async fn get_settings(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<GlobalSettingsResponse>, AppError> {
+    let db_ref = state.db.clone();
+    let settings = state
+        .global_settings_cache
+        .try_get_with((), async move {
+            let globals = db::get_global_settings(&db_ref).await?;
+            Ok::<_, AppError>(Arc::new(db::parse_global_poster_settings(&globals)))
+        })
+        .await
+        .map_err(|e| AppError::Other(e.to_string()))?;
+    Ok(Json(GlobalSettingsResponse {
+        poster_source: settings.poster_source.clone(),
+        fanart_lang: settings.fanart_lang.clone(),
+        fanart_textless: settings.fanart_textless,
+        fanart_available: state.fanart.is_some(),
+    }))
+}
+
+#[derive(Deserialize)]
+pub struct UpdateGlobalSettingsRequest {
+    pub poster_source: String,
+    #[serde(default = "db::default_fanart_lang")]
+    pub fanart_lang: String,
+    #[serde(default)]
+    pub fanart_textless: bool,
+}
+
+pub async fn update_settings(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<UpdateGlobalSettingsRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    validate_poster_source(&req.poster_source)?;
+    validate_fanart_lang(&req.fanart_lang)?;
+    let textless_str = if req.fanart_textless { "true" } else { "false" };
+    db::set_global_settings_batch(
+        &state.db,
+        &[
+            ("poster_source", &req.poster_source),
+            ("fanart_lang", &req.fanart_lang),
+            ("fanart_textless", textless_str),
+        ],
+    )
+    .await?;
+    // Invalidate caches
+    state.global_settings_cache.invalidate(&()).await;
+    state.settings_cache.invalidate_all();
+    Ok(Json(serde_json::json!({ "ok": true })))
 }

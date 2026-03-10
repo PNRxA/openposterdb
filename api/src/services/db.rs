@@ -1,8 +1,42 @@
 use sea_orm::{ConnectionTrait, DatabaseConnection, EntityTrait, Set, TransactionTrait};
 use zeroize::Zeroizing;
 
-use crate::entity::{admin_user, api_key, refresh_token};
+use std::collections::HashMap;
+
+use crate::entity::{admin_user, api_key, api_key_settings, global_settings, refresh_token};
 use crate::error::AppError;
+
+pub fn default_fanart_lang() -> String {
+    "en".to_string()
+}
+
+/// Validate that poster_source is a known value.
+pub fn validate_poster_source(source: &str) -> Result<(), AppError> {
+    if source == "tmdb" || source == "fanart" {
+        Ok(())
+    } else {
+        Err(AppError::BadRequest(
+            "poster_source must be 'tmdb' or 'fanart'".into(),
+        ))
+    }
+}
+
+/// Validate a fanart language code: 2–5 ASCII alphanumeric chars or hyphens (e.g. "en", "pt-BR").
+pub fn validate_fanart_lang(lang: &str) -> Result<(), AppError> {
+    if lang.len() >= 2
+        && lang.len() <= 5
+        && lang
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-')
+    {
+        Ok(())
+    } else {
+        Err(AppError::BadRequest(
+            "fanart_lang must be 2-5 ASCII alphanumeric characters (e.g. 'en', 'de', 'pt-BR')"
+                .into(),
+        ))
+    }
+}
 
 fn now_utc() -> String {
     chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string()
@@ -112,6 +146,41 @@ mod tests {
         let secret = load_secret_from_env(var_name);
         unsafe { std::env::remove_var(var_name) };
         assert_eq!(secret.len(), 32);
+    }
+
+    #[test]
+    fn default_fanart_lang_returns_en() {
+        assert_eq!(default_fanart_lang(), "en");
+    }
+
+    #[test]
+    fn validate_fanart_lang_valid_codes() {
+        assert!(validate_fanart_lang("en").is_ok());
+        assert!(validate_fanart_lang("de").is_ok());
+        assert!(validate_fanart_lang("fr").is_ok());
+        assert!(validate_fanart_lang("ja").is_ok());
+        assert!(validate_fanart_lang("pt-BR").is_ok());
+        assert!(validate_fanart_lang("zh-CN").is_ok());
+    }
+
+    #[test]
+    fn validate_fanart_lang_rejects_too_short() {
+        assert!(validate_fanart_lang("e").is_err());
+        assert!(validate_fanart_lang("").is_err());
+    }
+
+    #[test]
+    fn validate_fanart_lang_rejects_too_long() {
+        assert!(validate_fanart_lang("abcdef").is_err());
+        assert!(validate_fanart_lang("toolongvalue").is_err());
+    }
+
+    #[test]
+    fn validate_fanart_lang_rejects_special_chars() {
+        assert!(validate_fanart_lang("../../").is_err());
+        assert!(validate_fanart_lang("en\0").is_err());
+        assert!(validate_fanart_lang("a b").is_err());
+        assert!(validate_fanart_lang("en/de").is_err());
     }
 }
 
@@ -350,6 +419,16 @@ pub async fn list_api_keys(db: &impl ConnectionTrait) -> Result<Vec<api_key::Mod
         .map_err(|e| AppError::DbError(e.to_string()))
 }
 
+pub async fn find_api_key_by_id(
+    db: &impl ConnectionTrait,
+    id: i32,
+) -> Result<Option<api_key::Model>, AppError> {
+    api_key::Entity::find_by_id(id)
+        .one(db)
+        .await
+        .map_err(|e| AppError::DbError(e.to_string()))
+}
+
 pub async fn delete_api_key(db: &impl ConnectionTrait, id: i32) -> Result<(), AppError> {
     api_key::Entity::delete_by_id(id)
         .exec(db)
@@ -410,6 +489,186 @@ pub async fn batch_update_last_used(
             .await
             .map_err(|e| AppError::DbError(e.to_string()))?;
     }
+    Ok(())
+}
+
+// --- Global settings ---
+
+pub async fn get_global_settings(
+    db: &impl ConnectionTrait,
+) -> Result<HashMap<String, String>, AppError> {
+    let rows = global_settings::Entity::find()
+        .all(db)
+        .await
+        .map_err(|e| AppError::DbError(e.to_string()))?;
+    Ok(rows.into_iter().map(|r| (r.key, r.value)).collect())
+}
+
+pub async fn set_global_setting(
+    db: &impl ConnectionTrait,
+    key: &str,
+    value: &str,
+) -> Result<(), AppError> {
+    let model = global_settings::ActiveModel {
+        key: Set(key.to_string()),
+        value: Set(value.to_string()),
+    };
+    global_settings::Entity::insert(model)
+        .on_conflict(
+            sea_orm::sea_query::OnConflict::column(global_settings::Column::Key)
+                .update_column(global_settings::Column::Value)
+                .to_owned(),
+        )
+        .exec(db)
+        .await
+        .map_err(|e| AppError::DbError(e.to_string()))?;
+    Ok(())
+}
+
+// --- Per-key settings ---
+
+pub async fn get_api_key_settings(
+    db: &impl ConnectionTrait,
+    api_key_id: i32,
+) -> Result<Option<api_key_settings::Model>, AppError> {
+    api_key_settings::Entity::find_by_id(api_key_id)
+        .one(db)
+        .await
+        .map_err(|e| AppError::DbError(e.to_string()))
+}
+
+pub async fn upsert_api_key_settings(
+    db: &impl ConnectionTrait,
+    api_key_id: i32,
+    source: &str,
+    lang: &str,
+    textless: bool,
+) -> Result<(), AppError> {
+    let model = api_key_settings::ActiveModel {
+        api_key_id: Set(api_key_id),
+        poster_source: Set(source.to_string()),
+        fanart_lang: Set(lang.to_string()),
+        fanart_textless: Set(textless),
+    };
+    api_key_settings::Entity::insert(model)
+        .on_conflict(
+            sea_orm::sea_query::OnConflict::column(api_key_settings::Column::ApiKeyId)
+                .update_columns([
+                    api_key_settings::Column::PosterSource,
+                    api_key_settings::Column::FanartLang,
+                    api_key_settings::Column::FanartTextless,
+                ])
+                .to_owned(),
+        )
+        .exec(db)
+        .await
+        .map_err(|e| AppError::DbError(e.to_string()))?;
+    Ok(())
+}
+
+pub async fn delete_api_key_settings(
+    db: &impl ConnectionTrait,
+    api_key_id: i32,
+) -> Result<(), AppError> {
+    api_key_settings::Entity::delete_by_id(api_key_id)
+        .exec(db)
+        .await
+        .map_err(|e| AppError::DbError(e.to_string()))?;
+    Ok(())
+}
+
+// --- Effective poster settings ---
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct PosterSettings {
+    pub poster_source: String,
+    pub fanart_lang: String,
+    pub fanart_textless: bool,
+    pub is_default: bool,
+}
+
+impl Default for PosterSettings {
+    fn default() -> Self {
+        Self {
+            poster_source: "tmdb".to_string(),
+            fanart_lang: "en".to_string(),
+            fanart_textless: false,
+            is_default: true,
+        }
+    }
+}
+
+/// Parse raw global settings (key-value HashMap) into a PosterSettings struct.
+pub fn parse_global_poster_settings(globals: &HashMap<String, String>) -> PosterSettings {
+    if globals.is_empty() {
+        return PosterSettings::default();
+    }
+    let defaults = PosterSettings::default();
+    PosterSettings {
+        poster_source: globals
+            .get("poster_source")
+            .cloned()
+            .unwrap_or(defaults.poster_source),
+        fanart_lang: globals
+            .get("fanart_lang")
+            .cloned()
+            .unwrap_or(defaults.fanart_lang),
+        fanart_textless: globals
+            .get("fanart_textless")
+            .map(|v| v == "true")
+            .unwrap_or(defaults.fanart_textless),
+        is_default: true,
+    }
+}
+
+pub async fn get_effective_poster_settings(
+    db: &impl ConnectionTrait,
+    api_key_id: i32,
+    cached_globals: Option<&PosterSettings>,
+) -> PosterSettings {
+    // Check per-key settings first
+    match get_api_key_settings(db, api_key_id).await {
+        Ok(Some(s)) => {
+            return PosterSettings {
+                poster_source: s.poster_source,
+                fanart_lang: s.fanart_lang,
+                fanart_textless: s.fanart_textless,
+                is_default: false,
+            };
+        }
+        Ok(None) => {} // no per-key override, fall through
+        Err(e) => {
+            tracing::warn!(error = %e, api_key_id, "failed to load per-key settings, falling back");
+        }
+    }
+    // Use cached global settings if provided
+    if let Some(globals) = cached_globals {
+        return globals.clone();
+    }
+    // Otherwise load from DB
+    match get_global_settings(db).await {
+        Ok(ref globals) => parse_global_poster_settings(globals),
+        Err(e) => {
+            tracing::warn!(error = %e, "failed to load global settings, using defaults");
+            PosterSettings::default()
+        }
+    }
+}
+
+pub async fn set_global_settings_batch(
+    db: &DatabaseConnection,
+    settings: &[(&str, &str)],
+) -> Result<(), AppError> {
+    let txn = db
+        .begin()
+        .await
+        .map_err(|e| AppError::DbError(e.to_string()))?;
+    for (key, value) in settings {
+        set_global_setting(&txn, key, value).await?;
+    }
+    txn.commit()
+        .await
+        .map_err(|e| AppError::DbError(e.to_string()))?;
     Ok(())
 }
 

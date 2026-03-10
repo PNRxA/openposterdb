@@ -1,13 +1,18 @@
+> [!NOTE]
+> This project is developed with the assistance of AI code generation tools. AI-generated code is reviewed and tested before being merged, but if you encounter any issues, please feel free to open an issue or submit a pull request.
+
 # OpenPosterDB
 
-Self-hosted API that generates movie and TV show posters with rating badges from multiple sources overlaid on them. Fetches poster art from TMDB, aggregates ratings from IMDb, Rotten Tomatoes, Metacritic, Trakt, Letterboxd, MyAnimeList, and composites color-coded badges onto the image.
+Self-hosted API that generates movie and TV show posters with rating badges from multiple sources overlaid on them. Fetches poster art from TMDB (or optionally [Fanart.tv](https://fanart.tv)), aggregates ratings from IMDb, Rotten Tomatoes, Metacritic, Trakt, Letterboxd, MyAnimeList, and composites color-coded badges onto the image.
 
 ## Features
 
 - **Multi-source ratings** — Aggregates from OMDb (IMDb, RT, Metacritic) and MDBList (Trakt, Letterboxd, MAL)
+- **Alternative poster sources** — Use TMDB (default) or Fanart.tv with language preference and textless poster support
+- **Configurable per API key** — Override poster source, language, and textless settings per key, or set global defaults
 - **ID resolution** — Accepts IMDb, TMDB, or TVDB IDs
 - **Multi-layer caching** — In-memory (moka), filesystem, and SQLite metadata with background refresh and request coalescing
-- **Admin UI** — Vue 3 web panel for API key management
+- **Admin UI** — Vue 3 web panel for API key management, poster settings, and global configuration
 - **Auth** — Argon2 password hashing, JWT access tokens, rotating refresh tokens, API key access for poster endpoints
 
 ## Tech Stack
@@ -23,6 +28,7 @@ Self-hosted API that generates movie and TV show posters with rating badges from
 - Node.js 20.19+ (for admin UI)
 - A [TMDB API key](https://www.themoviedb.org/settings/api)
 - At least one of: [OMDb API key](https://www.omdbapi.com/apikey.aspx), [MDBList API key](https://mdblist.com/preferences/)
+- Optional: [Fanart.tv API key](https://fanart.tv/get-an-api-key/) (for alternative poster source with language/textless support)
 
 ### Docker
 
@@ -75,6 +81,7 @@ See [docker-compose.yml](docker-compose.yml) for the full compose configuration.
 | `RATINGS_MAX_AGE_SECS` | `31536000` | Film age after which ratings stop refreshing |
 | `POSTER_STALE_SECS` | `0` | Base poster cache lifetime (0 = never re-fetch) |
 | `COOKIE_SECURE` | `true` | HTTPS-only cookies |
+| `FANART_API_KEY` | — | [Fanart.tv](https://fanart.tv/get-an-api-key/) key (enables Fanart.tv as alternative poster source) |
 | `CORS_ORIGIN` | — | Allowed origin for admin requests |
 | `ADMIN_USERNAME` | — | Seed admin username on first run |
 | `ADMIN_PASSWORD` | — | Seed admin password on first run |

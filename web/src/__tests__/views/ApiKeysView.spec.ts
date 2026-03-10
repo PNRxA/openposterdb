@@ -8,6 +8,9 @@ const mockKeysApi = vi.hoisted(() => ({
   list: vi.fn(),
   create: vi.fn(),
   delete: vi.fn(),
+  getSettings: vi.fn(),
+  updateSettings: vi.fn(),
+  deleteSettings: vi.fn(),
 }))
 
 vi.mock('@/lib/api', () => ({
@@ -111,5 +114,23 @@ describe('ApiKeysView', () => {
     await flushPromises()
 
     expect(mockKeysApi.list).toHaveBeenCalled()
+  })
+
+  it('shows settings button for each key', async () => {
+    mockKeysApi.list.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(sampleKeys),
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    // Each key should have a settings icon button
+    const settingsButtons = wrapper.findAll('button').filter((b) => {
+      // The Settings button contains the Settings lucide icon
+      return b.find('svg') !== undefined && !b.text().includes('Delete') && !b.text().includes('Create') && !b.text().includes('Refresh')
+    })
+    // At minimum we should have some non-delete, non-create buttons (the settings gear buttons)
+    expect(settingsButtons.length).toBeGreaterThanOrEqual(2)
   })
 })

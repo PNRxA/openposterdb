@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 
 use super::auth::AuthUser;
 use crate::error::AppError;
-use crate::services::db;
+use crate::services::db::{self, validate_fanart_lang, validate_poster_source};
 use crate::AppState;
 
 #[derive(Serialize)]
@@ -88,5 +88,67 @@ pub async fn delete(
 ) -> Result<Json<Value>, AppError> {
     db::delete_api_key(&state.db, id).await?;
     state.api_key_cache.invalidate_all();
+    Ok(Json(json!({ "ok": true })))
+}
+
+#[derive(Serialize)]
+pub struct PosterSettingsResponse {
+    pub poster_source: String,
+    pub fanart_lang: String,
+    pub fanart_textless: bool,
+    pub fanart_available: bool,
+    pub is_default: bool,
+}
+
+pub async fn get_settings(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<i32>,
+) -> Result<Json<PosterSettingsResponse>, AppError> {
+    db::find_api_key_by_id(&state.db, id)
+        .await?
+        .ok_or_else(|| AppError::IdNotFound(format!("API key {id} not found")))?;
+    let settings = db::get_effective_poster_settings(&state.db, id, None).await;
+    Ok(Json(PosterSettingsResponse {
+        poster_source: settings.poster_source,
+        fanart_lang: settings.fanart_lang,
+        fanart_textless: settings.fanart_textless,
+        fanart_available: state.fanart.is_some(),
+        is_default: settings.is_default,
+    }))
+}
+
+#[derive(Deserialize)]
+pub struct UpdateSettingsRequest {
+    pub poster_source: String,
+    #[serde(default = "db::default_fanart_lang")]
+    pub fanart_lang: String,
+    #[serde(default)]
+    pub fanart_textless: bool,
+}
+
+pub async fn update_settings(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<i32>,
+    Json(req): Json<UpdateSettingsRequest>,
+) -> Result<Json<Value>, AppError> {
+    db::find_api_key_by_id(&state.db, id)
+        .await?
+        .ok_or_else(|| AppError::IdNotFound(format!("API key {id} not found")))?;
+    validate_poster_source(&req.poster_source)?;
+    validate_fanart_lang(&req.fanart_lang)?;
+    db::upsert_api_key_settings(&state.db, id, &req.poster_source, &req.fanart_lang, req.fanart_textless).await?;
+    state.settings_cache.invalidate(&id).await;
+    Ok(Json(json!({ "ok": true })))
+}
+
+pub async fn delete_settings(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<i32>,
+) -> Result<Json<Value>, AppError> {
+    db::find_api_key_by_id(&state.db, id)
+        .await?
+        .ok_or_else(|| AppError::IdNotFound(format!("API key {id} not found")))?;
+    db::delete_api_key_settings(&state.db, id).await?;
+    state.settings_cache.invalidate(&id).await;
     Ok(Json(json!({ "ok": true })))
 }

@@ -11,4 +11,10 @@ pub fn api_key_routes() -> Router<Arc<AppState>> {
         .route("/api/keys", get(handlers::api_keys::list))
         .route("/api/keys", post(handlers::api_keys::create))
         .route("/api/keys/{id}", delete(handlers::api_keys::delete))
+        .route(
+            "/api/keys/{id}/settings",
+            get(handlers::api_keys::get_settings)
+                .put(handlers::api_keys::update_settings)
+                .delete(handlers::api_keys::delete_settings),
+        )
 }

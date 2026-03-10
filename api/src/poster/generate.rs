@@ -21,6 +21,9 @@ pub struct PosterParams<'a> {
     pub quality: u8,
     pub cache_dir: &'a str,
     pub poster_stale_secs: u64,
+    pub poster_bytes_override: Option<Vec<u8>>,
+    /// Whether to normalize the poster width (e.g. for fanart sources with larger images).
+    pub normalize_width: bool,
 }
 
 pub async fn generate_poster(params: PosterParams<'_>) -> Result<Vec<u8>, AppError> {
@@ -33,29 +36,35 @@ pub async fn generate_poster(params: PosterParams<'_>) -> Result<Vec<u8>, AppErr
         quality,
         cache_dir,
         poster_stale_secs,
+        poster_bytes_override,
+        normalize_width,
     } = params;
-    // Fetch base poster, using cache
-    let poster_cache = cache::poster_cache_path(cache_dir, poster_path)?;
-    let poster_bytes = if let Some(entry) = cache::read(&poster_cache, poster_stale_secs).await {
-        if entry.is_stale {
-            // Stale — refetch in foreground (rare with default 0 = never stale)
+
+    let poster_bytes = if let Some(bytes) = poster_bytes_override {
+        bytes
+    } else {
+        // Fetch base poster from TMDB, using cache
+        let poster_cache = cache::poster_cache_path(cache_dir, poster_path)?;
+        if let Some(entry) = cache::read(&poster_cache, poster_stale_secs).await {
+            if entry.is_stale {
+                let bytes = tmdb.fetch_poster_bytes(poster_path, http).await?;
+                cache::write(&poster_cache, &bytes).await?;
+                bytes
+            } else {
+                entry.bytes
+            }
+        } else {
             let bytes = tmdb.fetch_poster_bytes(poster_path, http).await?;
             cache::write(&poster_cache, &bytes).await?;
             bytes
-        } else {
-            entry.bytes
         }
-    } else {
-        let bytes = tmdb.fetch_poster_bytes(poster_path, http).await?;
-        cache::write(&poster_cache, &bytes).await?;
-        bytes
     };
 
     // Move CPU-bound image processing to a blocking thread
     let badges = badges.to_vec();
     let font = font.clone();
     let buf = tokio::task::spawn_blocking(move || {
-        render_poster_sync(&poster_bytes, &badges, &font, quality)
+        render_poster_sync(&poster_bytes, &badges, &font, quality, normalize_width)
     })
     .await
     .map_err(|e| AppError::Other(e.to_string()))??;
@@ -68,9 +77,20 @@ fn render_poster_sync(
     badges: &[RatingBadge],
     font: &FontArc,
     quality: u8,
+    normalize_width: bool,
 ) -> Result<Vec<u8>, AppError> {
     let base = image::load_from_memory(poster_bytes)
         .map_err(AppError::Image)?;
+
+    const TARGET_WIDTH: u32 = 500;
+    let base = if normalize_width && base.width() > TARGET_WIDTH {
+        let scale = TARGET_WIDTH as f64 / base.width() as f64;
+        let target_height = (base.height() as f64 * scale).round() as u32;
+        base.resize_exact(TARGET_WIDTH, target_height, image::imageops::FilterType::Lanczos3)
+    } else {
+        base
+    };
+
     let mut canvas: RgbaImage = base.to_rgba8();
 
     if !badges.is_empty() {
@@ -154,7 +174,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = render_poster_sync(&png_bytes, &[], &font, 85).unwrap();
+        let result = render_poster_sync(&png_bytes, &[], &font, 85, false).unwrap();
         assert!(!result.is_empty());
         // Should be valid JPEG
         assert_eq!(result[0], 0xFF);
@@ -197,7 +217,7 @@ mod tests {
             },
         ];
 
-        let result = render_poster_sync(&png_bytes, &badges, &font, 85).unwrap();
+        let result = render_poster_sync(&png_bytes, &badges, &font, 85, false).unwrap();
         assert!(!result.is_empty());
         assert_eq!(result[0], 0xFF);
         assert_eq!(result[1], 0xD8);
@@ -206,7 +226,7 @@ mod tests {
     #[test]
     fn render_poster_invalid_image_bytes() {
         let font = FontArc::try_from_slice(crate::FONT_BYTES).unwrap();
-        let result = render_poster_sync(b"not an image", &[], &font, 85);
+        let result = render_poster_sync(b"not an image", &[], &font, 85, false);
         assert!(result.is_err());
     }
 }

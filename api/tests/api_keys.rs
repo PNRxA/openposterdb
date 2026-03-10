@@ -155,3 +155,237 @@ async fn create_key_with_empty_name() {
     let res = app.oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
 }
+
+// --- Per-key settings endpoints ---
+
+#[tokio::test]
+async fn key_settings_requires_auth() {
+    let (app, _state) = common::setup_test_app().await;
+
+    let req = Request::builder()
+        .uri("/api/keys/1/settings")
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/api/keys/1/settings")
+        .header("content-type", "application/json")
+        .body(json_body(serde_json::json!({"poster_source": "tmdb"})))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+    let req = Request::builder()
+        .method("DELETE")
+        .uri("/api/keys/1/settings")
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn get_key_settings_returns_defaults() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    // Create a key
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/keys")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(json_body(serde_json::json!({"name": "test-key"})))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let id = json["id"].as_i64().unwrap();
+
+    // Get settings
+    let req = Request::builder()
+        .uri(format!("/api/keys/{id}/settings"))
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["poster_source"], "tmdb");
+    assert_eq!(json["fanart_lang"], "en");
+    assert_eq!(json["fanart_textless"], false);
+    assert_eq!(json["is_default"], true);
+}
+
+#[tokio::test]
+async fn update_key_settings_and_read_back() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    // Create a key
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/keys")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(json_body(serde_json::json!({"name": "test-key"})))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let id = json["id"].as_i64().unwrap();
+
+    // Update settings
+    let req = Request::builder()
+        .method("PUT")
+        .uri(format!("/api/keys/{id}/settings"))
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(json_body(serde_json::json!({
+            "poster_source": "fanart",
+            "fanart_lang": "ja",
+            "fanart_textless": true
+        })))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Read back
+    let req = Request::builder()
+        .uri(format!("/api/keys/{id}/settings"))
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["poster_source"], "fanart");
+    assert_eq!(json["fanart_lang"], "ja");
+    assert_eq!(json["fanart_textless"], true);
+    assert_eq!(json["is_default"], false);
+}
+
+#[tokio::test]
+async fn delete_key_settings_resets_to_defaults() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    // Create a key
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/keys")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(json_body(serde_json::json!({"name": "test-key"})))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let id = json["id"].as_i64().unwrap();
+
+    // Set custom settings
+    let req = Request::builder()
+        .method("PUT")
+        .uri(format!("/api/keys/{id}/settings"))
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(json_body(serde_json::json!({
+            "poster_source": "fanart",
+            "fanart_lang": "de",
+            "fanart_textless": true
+        })))
+        .unwrap();
+    app.clone().oneshot(req).await.unwrap();
+
+    // Delete settings
+    let req = Request::builder()
+        .method("DELETE")
+        .uri(format!("/api/keys/{id}/settings"))
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Should be back to defaults
+    let req = Request::builder()
+        .uri(format!("/api/keys/{id}/settings"))
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["poster_source"], "tmdb");
+    assert_eq!(json["is_default"], true);
+}
+
+#[tokio::test]
+async fn update_key_settings_rejects_invalid_source() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    // Create a key
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/keys")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(json_body(serde_json::json!({"name": "test-key"})))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let id = json["id"].as_i64().unwrap();
+
+    let req = Request::builder()
+        .method("PUT")
+        .uri(format!("/api/keys/{id}/settings"))
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(json_body(serde_json::json!({
+            "poster_source": "invalid"
+        })))
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn update_key_settings_rejects_invalid_lang() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    // Create a key
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/keys")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(json_body(serde_json::json!({"name": "test-key"})))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let id = json["id"].as_i64().unwrap();
+
+    let req = Request::builder()
+        .method("PUT")
+        .uri(format!("/api/keys/{id}/settings"))
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(json_body(serde_json::json!({
+            "poster_source": "fanart",
+            "fanart_lang": "a"
+        })))
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}

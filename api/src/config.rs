@@ -14,6 +14,7 @@ pub struct Config {
     pub poster_mem_cache_mb: u64,
     pub static_dir: Option<String>,
     pub cors_origin: Option<String>,
+    pub fanart_api_key: Option<String>,
 }
 
 impl Config {
@@ -46,6 +47,7 @@ impl Config {
                 .unwrap_or(512),
             static_dir: env::var("STATIC_DIR").ok(),
             cors_origin: env::var("CORS_ORIGIN").ok(),
+            fanart_api_key: env::var("FANART_API_KEY").ok(),
         };
 
         if config.omdb_api_key.is_none() && config.mdblist_api_key.is_none() {

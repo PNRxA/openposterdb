@@ -117,4 +117,16 @@
   body {
     @apply bg-background text-foreground;
   }
+  button,
+  select,
+  input[type='checkbox'],
+  input[type='radio'],
+  input[type='submit'],
+  input[type='reset'],
+  input[type='button'],
+  label[for],
+  a,
+  [role='button'] {
+    cursor: pointer;
+  }
 }

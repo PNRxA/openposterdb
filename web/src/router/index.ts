@@ -27,6 +27,12 @@ const router = createRouter({
           component: () => import('@/views/ApiKeysView.vue'),
           meta: { title: 'API Keys' },
         },
+        {
+          path: 'settings',
+          name: 'settings',
+          component: () => import('@/views/SettingsView.vue'),
+          meta: { title: 'Settings' },
+        },
       ],
     },
     {

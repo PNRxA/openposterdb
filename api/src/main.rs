@@ -11,6 +11,7 @@ use openposterdb_api::cache::MemCacheEntry;
 use openposterdb_api::config::Config;
 use openposterdb_api::handlers;
 use openposterdb_api::services::db;
+use openposterdb_api::services::fanart::FanartClient;
 use openposterdb_api::services::mdblist::MdblistClient;
 use openposterdb_api::services::omdb::OmdbClient;
 use openposterdb_api::services::tmdb::TmdbClient;
@@ -45,6 +46,11 @@ async fn main() {
         .as_ref()
         .map(|key| MdblistClient::new(key.clone(), http.clone()));
 
+    let fanart = config
+        .fanart_api_key
+        .as_ref()
+        .map(|key| FanartClient::new(key.clone(), http.clone()));
+
     // Load JWT secret
     let jwt_secret = db::load_secret_from_env("JWT_SECRET");
     let secure_cookies = std::env::var("COOKIE_SECURE")
@@ -65,7 +71,8 @@ async fn main() {
         .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
         .pragma("busy_timeout", "5000")
         .pragma("synchronous", "NORMAL")
-        .pragma("cache_size", "-8000");
+        .pragma("cache_size", "-8000")
+        .pragma("foreign_keys", "ON");
     let pool = sqlx::sqlite::SqlitePoolOptions::new()
         .max_connections(32)
         .min_connections(4)
@@ -152,6 +159,26 @@ async fn main() {
         .time_to_live(Duration::from_secs(300))
         .build();
 
+    let fanart_cache = moka::future::Cache::builder()
+        .max_capacity(10_000)
+        .time_to_live(Duration::from_secs(3600))
+        .build();
+
+    let fanart_negative = moka::future::Cache::builder()
+        .max_capacity(10_000)
+        .time_to_live(Duration::from_secs(3600))
+        .build();
+
+    let settings_cache = moka::future::Cache::builder()
+        .max_capacity(10_000)
+        .time_to_live(Duration::from_secs(300))
+        .build();
+
+    let global_settings_cache = moka::future::Cache::builder()
+        .max_capacity(1)
+        .time_to_live(Duration::from_secs(300))
+        .build();
+
     let pending_last_used: Arc<DashMap<i32, ()>> = Arc::new(DashMap::new());
 
     let state = Arc::new(AppState {
@@ -170,6 +197,11 @@ async fn main() {
         ratings_cache,
         poster_mem_cache,
         pending_last_used: pending_last_used.clone(),
+        fanart,
+        fanart_cache,
+        fanart_negative,
+        settings_cache,
+        global_settings_cache,
         config: config.clone(),
     });
 

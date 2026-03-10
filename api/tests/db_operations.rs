@@ -339,3 +339,228 @@ async fn delete_refresh_tokens_for_user_clears_all() {
         assert!(found.is_none());
     }
 }
+
+// --- Global settings ---
+
+#[tokio::test]
+async fn global_settings_empty_by_default() {
+    let (_app, state) = common::setup_test_app().await;
+    let settings = db::get_global_settings(&state.db).await.unwrap();
+    assert!(settings.is_empty());
+}
+
+#[tokio::test]
+async fn set_and_get_global_setting() {
+    let (_app, state) = common::setup_test_app().await;
+    db::set_global_setting(&state.db, "poster_source", "fanart").await.unwrap();
+    db::set_global_setting(&state.db, "fanart_lang", "de").await.unwrap();
+
+    let settings = db::get_global_settings(&state.db).await.unwrap();
+    assert_eq!(settings.get("poster_source").unwrap(), "fanart");
+    assert_eq!(settings.get("fanart_lang").unwrap(), "de");
+}
+
+#[tokio::test]
+async fn set_global_setting_upserts() {
+    let (_app, state) = common::setup_test_app().await;
+    db::set_global_setting(&state.db, "poster_source", "tmdb").await.unwrap();
+    db::set_global_setting(&state.db, "poster_source", "fanart").await.unwrap();
+
+    let settings = db::get_global_settings(&state.db).await.unwrap();
+    assert_eq!(settings.get("poster_source").unwrap(), "fanart");
+}
+
+#[tokio::test]
+async fn set_global_settings_batch_atomic() {
+    let (_app, state) = common::setup_test_app().await;
+    db::set_global_settings_batch(
+        &state.db,
+        &[
+            ("poster_source", "fanart"),
+            ("fanart_lang", "fr"),
+            ("fanart_textless", "true"),
+        ],
+    )
+    .await
+    .unwrap();
+
+    let settings = db::get_global_settings(&state.db).await.unwrap();
+    assert_eq!(settings.get("poster_source").unwrap(), "fanart");
+    assert_eq!(settings.get("fanart_lang").unwrap(), "fr");
+    assert_eq!(settings.get("fanart_textless").unwrap(), "true");
+}
+
+// --- Per-key settings ---
+
+#[tokio::test]
+async fn api_key_settings_none_by_default() {
+    let (_app, state) = common::setup_test_app().await;
+    let settings = db::get_api_key_settings(&state.db, 999).await.unwrap();
+    assert!(settings.is_none());
+}
+
+#[tokio::test]
+async fn upsert_and_get_api_key_settings() {
+    let (app, state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    // Create an API key via the API to get a valid id
+    use axum::body::Body;
+    use axum::http::Request;
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/keys")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::from(serde_json::json!({"name": "test"}).to_string()))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let key_id = json["id"].as_i64().unwrap() as i32;
+
+    db::upsert_api_key_settings(&state.db, key_id, "fanart", "ja", true).await.unwrap();
+
+    let settings = db::get_api_key_settings(&state.db, key_id).await.unwrap();
+    assert!(settings.is_some());
+    let s = settings.unwrap();
+    assert_eq!(s.poster_source, "fanart");
+    assert_eq!(s.fanart_lang, "ja");
+    assert!(s.fanart_textless);
+}
+
+#[tokio::test]
+async fn upsert_api_key_settings_overwrites() {
+    let (app, state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    use axum::body::Body;
+    use axum::http::Request;
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/keys")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::from(serde_json::json!({"name": "test"}).to_string()))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let key_id = json["id"].as_i64().unwrap() as i32;
+
+    db::upsert_api_key_settings(&state.db, key_id, "tmdb", "en", false).await.unwrap();
+    db::upsert_api_key_settings(&state.db, key_id, "fanart", "de", true).await.unwrap();
+
+    let s = db::get_api_key_settings(&state.db, key_id).await.unwrap().unwrap();
+    assert_eq!(s.poster_source, "fanart");
+    assert_eq!(s.fanart_lang, "de");
+    assert!(s.fanart_textless);
+}
+
+#[tokio::test]
+async fn delete_api_key_settings_removes() {
+    let (app, state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    use axum::body::Body;
+    use axum::http::Request;
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/keys")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::from(serde_json::json!({"name": "test"}).to_string()))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let key_id = json["id"].as_i64().unwrap() as i32;
+
+    db::upsert_api_key_settings(&state.db, key_id, "fanart", "en", false).await.unwrap();
+    db::delete_api_key_settings(&state.db, key_id).await.unwrap();
+
+    let s = db::get_api_key_settings(&state.db, key_id).await.unwrap();
+    assert!(s.is_none());
+}
+
+// --- Effective settings cascade ---
+
+#[tokio::test]
+async fn effective_settings_defaults_when_nothing_configured() {
+    let (_app, state) = common::setup_test_app().await;
+    let s = db::get_effective_poster_settings(&state.db, 999, None).await;
+    assert_eq!(s.poster_source, "tmdb");
+    assert_eq!(s.fanart_lang, "en");
+    assert!(!s.fanart_textless);
+    assert!(s.is_default);
+}
+
+#[tokio::test]
+async fn effective_settings_uses_global_when_no_per_key() {
+    let (_app, state) = common::setup_test_app().await;
+    db::set_global_settings_batch(
+        &state.db,
+        &[
+            ("poster_source", "fanart"),
+            ("fanart_lang", "fr"),
+            ("fanart_textless", "true"),
+        ],
+    )
+    .await
+    .unwrap();
+
+    let s = db::get_effective_poster_settings(&state.db, 999, None).await;
+    assert_eq!(s.poster_source, "fanart");
+    assert_eq!(s.fanart_lang, "fr");
+    assert!(s.fanart_textless);
+    assert!(s.is_default); // global settings still marked as "default"
+}
+
+#[tokio::test]
+async fn effective_settings_per_key_overrides_global() {
+    let (app, state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    use axum::body::Body;
+    use axum::http::Request;
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/keys")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::from(serde_json::json!({"name": "test"}).to_string()))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let key_id = json["id"].as_i64().unwrap() as i32;
+
+    // Set global to fanart/fr
+    db::set_global_settings_batch(
+        &state.db,
+        &[("poster_source", "fanart"), ("fanart_lang", "fr")],
+    )
+    .await
+    .unwrap();
+
+    // Set per-key to tmdb/ja
+    db::upsert_api_key_settings(&state.db, key_id, "tmdb", "ja", true).await.unwrap();
+
+    let s = db::get_effective_poster_settings(&state.db, key_id, None).await;
+    assert_eq!(s.poster_source, "tmdb");
+    assert_eq!(s.fanart_lang, "ja");
+    assert!(s.fanart_textless);
+    assert!(!s.is_default); // per-key override
+}

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { LayoutDashboard, Image, KeyRound, LogOut } from 'lucide-vue-next'
+import { LayoutDashboard, Image, KeyRound, Settings, LogOut } from 'lucide-vue-next'
 import {
   Sidebar,
   SidebarContent,
@@ -25,6 +25,7 @@ const items = [
   { title: 'Dashboard', icon: LayoutDashboard, to: '/' },
   { title: 'Posters', icon: Image, to: '/posters' },
   { title: 'API Keys', icon: KeyRound, to: '/keys' },
+  { title: 'Settings', icon: Settings, to: '/settings' },
 ]
 
 function isActive(path: string) {

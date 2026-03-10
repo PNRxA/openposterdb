@@ -19,6 +19,7 @@ pub enum MediaType {
 pub struct ResolvedId {
     pub imdb_id: Option<String>,
     pub tmdb_id: u64,
+    pub tvdb_id: Option<u64>,
     pub media_type: MediaType,
     pub poster_path: Option<String>,
     pub release_date: Option<String>,
@@ -74,7 +75,14 @@ pub async fn resolve(
             }
         })
         .await
-        .map_err(|e| AppError::Other(e.to_string()))
+        .map_err(|arc_err| match arc_err.as_ref() {
+            AppError::InvalidIdType(msg) => AppError::InvalidIdType(msg.clone()),
+            AppError::IdNotFound(msg) => AppError::IdNotFound(msg.clone()),
+            AppError::BadRequest(msg) => AppError::BadRequest(msg.clone()),
+            AppError::Unauthorized => AppError::Unauthorized,
+            AppError::Forbidden(msg) => AppError::Forbidden(msg.clone()),
+            other => AppError::Other(other.to_string()),
+        })
 }
 
 async fn resolve_imdb(imdb_id: &str, tmdb: &TmdbClient) -> Result<ResolvedId, AppError> {
@@ -86,6 +94,7 @@ async fn resolve_imdb(imdb_id: &str, tmdb: &TmdbClient) -> Result<ResolvedId, Ap
         return Ok(ResolvedId {
             imdb_id: Some(imdb_id.to_string()),
             tmdb_id: movie.id,
+            tvdb_id: None,
             media_type: MediaType::Movie,
             poster_path: movie.poster_path.clone(),
             release_date: movie.release_date.clone(),
@@ -95,6 +104,7 @@ async fn resolve_imdb(imdb_id: &str, tmdb: &TmdbClient) -> Result<ResolvedId, Ap
         return Ok(ResolvedId {
             imdb_id: Some(imdb_id.to_string()),
             tmdb_id: tv.id,
+            tvdb_id: None,
             media_type: MediaType::Tv,
             poster_path: tv.poster_path.clone(),
             release_date: tv.first_air_date.clone(),
@@ -126,6 +136,7 @@ async fn resolve_tmdb(id_value: &str, tmdb: &TmdbClient) -> Result<ResolvedId, A
     #[derive(Deserialize)]
     struct ExternalIds {
         imdb_id: Option<String>,
+        tvdb_id: Option<u64>,
     }
 
     let path = match media_type {
@@ -136,7 +147,9 @@ async fn resolve_tmdb(id_value: &str, tmdb: &TmdbClient) -> Result<ResolvedId, A
 
     let imdb_id = details
         .imdb_id
-        .or_else(|| details.external_ids.and_then(|e| e.imdb_id));
+        .or_else(|| details.external_ids.as_ref().and_then(|e| e.imdb_id.clone()));
+
+    let tvdb_id = details.external_ids.as_ref().and_then(|e| e.tvdb_id);
 
     let release_date = match media_type {
         MediaType::Movie => details.release_date,
@@ -146,6 +159,7 @@ async fn resolve_tmdb(id_value: &str, tmdb: &TmdbClient) -> Result<ResolvedId, A
     Ok(ResolvedId {
         imdb_id,
         tmdb_id,
+        tvdb_id,
         media_type,
         poster_path: details.poster_path,
         release_date,
@@ -190,6 +204,7 @@ mod tests {
 }
 
 async fn resolve_tvdb(tvdb_id: &str, tmdb: &TmdbClient) -> Result<ResolvedId, AppError> {
+    let tvdb_id_num = tvdb_id.parse::<u64>().ok();
     let result: FindResult = tmdb
         .get(&format!("/find/{tvdb_id}"), &[("external_source", "tvdb_id")])
         .await?;
@@ -217,6 +232,7 @@ async fn resolve_tvdb(tvdb_id: &str, tmdb: &TmdbClient) -> Result<ResolvedId, Ap
                 .external_ids
                 .and_then(|e| e.imdb_id),
             tmdb_id: tv.id,
+            tvdb_id: tvdb_id_num,
             media_type: MediaType::Tv,
             poster_path: details.poster_path.or_else(|| tv.poster_path.clone()),
             release_date: details.first_air_date,
@@ -235,6 +251,7 @@ async fn resolve_tvdb(tvdb_id: &str, tmdb: &TmdbClient) -> Result<ResolvedId, Ap
         return Ok(ResolvedId {
             imdb_id: details.imdb_id,
             tmdb_id: movie.id,
+            tvdb_id: tvdb_id_num,
             media_type: MediaType::Movie,
             poster_path: details.poster_path.or_else(|| movie.poster_path.clone()),
             release_date: details.release_date,

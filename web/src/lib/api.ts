@@ -53,6 +53,13 @@ export async function post(path: string, body?: unknown): Promise<Response> {
   })
 }
 
+export async function put(path: string, body?: unknown): Promise<Response> {
+  return request(path, {
+    method: 'PUT',
+    body: body ? JSON.stringify(body) : undefined,
+  })
+}
+
 export async function del(path: string): Promise<Response> {
   return request(path, { method: 'DELETE' })
 }
@@ -65,10 +72,26 @@ export const adminApi = {
     get(`/api/admin/posters?page=${page}&page_size=${pageSize}`),
   getPosterImage: (key: string): Promise<Response> =>
     get(`/api/admin/posters/${key}/image`),
+  getSettings: (): Promise<Response> => get('/api/admin/settings'),
+  updateSettings: (settings: {
+    poster_source: string
+    fanart_lang: string
+    fanart_textless: boolean
+  }): Promise<Response> => put('/api/admin/settings', settings),
 }
 
 export const keysApi = {
   list: (): Promise<Response> => get('/api/keys'),
   create: (name: string): Promise<Response> => post('/api/keys', { name }),
   delete: (id: number): Promise<Response> => del(`/api/keys/${id}`),
+  getSettings: (id: number): Promise<Response> => get(`/api/keys/${id}/settings`),
+  updateSettings: (
+    id: number,
+    settings: {
+      poster_source: string
+      fanart_lang: string
+      fanart_textless: boolean
+    },
+  ): Promise<Response> => put(`/api/keys/${id}/settings`, settings),
+  deleteSettings: (id: number): Promise<Response> => del(`/api/keys/${id}/settings`),
 }

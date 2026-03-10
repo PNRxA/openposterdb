@@ -38,6 +38,7 @@ export default async function globalSetup() {
       '-e JWT_SECRET=abababababababababababababababababababababababababababababababab',
       '-e LISTEN_ADDR=0.0.0.0:3000',
       '-e COOKIE_SECURE=false',
+      '-e FANART_API_KEY=test',
       '-e CACHE_DIR=/tmp/openposterdb-e2e',
       IMAGE_NAME,
     ].join(' '),

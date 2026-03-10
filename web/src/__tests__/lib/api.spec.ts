@@ -11,7 +11,7 @@ vi.mock('@/stores/auth', () => ({
   useAuthStore: () => mockAuthStore,
 }))
 
-import { get, post, del, setOnAuthFailure } from '@/lib/api'
+import { get, post, put, del, setOnAuthFailure } from '@/lib/api'
 
 const mockOnAuthFailure = vi.fn()
 setOnAuthFailure(mockOnAuthFailure)
@@ -146,6 +146,18 @@ describe('api', () => {
 
     expect(res.status).toBe(401)
     expect(mockAuthStore.refresh).not.toHaveBeenCalled()
+  })
+
+  it('put sends JSON body with PUT method', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await put('/api/settings', { poster_source: 'fanart' })
+
+    const [, options] = fetchMock.mock.calls[0]
+    expect(options.method).toBe('PUT')
+    expect(options.headers.get('Content-Type')).toBe('application/json')
+    expect(options.body).toBe(JSON.stringify({ poster_source: 'fanart' }))
   })
 
   it('post without body does not set Content-Type', async () => {

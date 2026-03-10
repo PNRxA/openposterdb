@@ -26,6 +26,8 @@ use zeroize::Zeroizing;
 use cache::MemCacheEntry;
 use config::Config;
 use id::ResolvedId;
+use services::db::PosterSettings;
+use services::fanart::{FanartClient, FanartPoster};
 use services::mdblist::MdblistClient;
 use services::omdb::OmdbClient;
 use services::ratings::RatingBadge;
@@ -49,6 +51,13 @@ pub struct AppState {
     pub ratings_cache: moka::future::Cache<String, Vec<RatingBadge>>,
     pub poster_mem_cache: moka::future::Cache<String, MemCacheEntry>,
     pub pending_last_used: Arc<DashMap<i32, ()>>,
+    pub fanart: Option<FanartClient>,
+    pub fanart_cache: moka::future::Cache<String, Arc<Vec<FanartPoster>>>,
+    /// Tracks negative fanart results — e.g. "movie:123:textless" means no textless poster exists.
+    /// Entries expire after the same TTL as fanart_cache so we recheck periodically.
+    pub fanart_negative: moka::future::Cache<String, ()>,
+    pub settings_cache: moka::future::Cache<i32, Arc<PosterSettings>>,
+    pub global_settings_cache: moka::future::Cache<(), Arc<PosterSettings>>,
 }
 
 pub static FONT_BYTES: &[u8] = include_bytes!("../assets/fonts/Inter-Bold.ttf");
@@ -82,6 +91,16 @@ pub const SCHEMA_SQL: &[&str] = &[
         created_at   TEXT NOT NULL DEFAULT (datetime('now')),
         last_used_at TEXT
     )",
+    "CREATE TABLE IF NOT EXISTS global_settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    )",
+    "CREATE TABLE IF NOT EXISTS api_key_settings (
+        api_key_id      INTEGER PRIMARY KEY REFERENCES api_keys(id) ON DELETE CASCADE,
+        poster_source   TEXT NOT NULL DEFAULT 'tmdb',
+        fanart_lang     TEXT NOT NULL DEFAULT 'en',
+        fanart_textless INTEGER NOT NULL DEFAULT 0
+    )",
 ];
 
 fn build_cors_layer(config: &Config) -> CorsLayer {
@@ -93,6 +112,7 @@ fn build_cors_layer(config: &Config) -> CorsLayer {
             .allow_methods(AllowMethods::list([
                 axum::http::Method::GET,
                 axum::http::Method::POST,
+                axum::http::Method::PUT,
                 axum::http::Method::DELETE,
             ]))
             .allow_headers(AllowHeaders::list([

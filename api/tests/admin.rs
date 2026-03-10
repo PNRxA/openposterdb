@@ -145,3 +145,121 @@ async fn poster_image_requires_auth() {
     let res = app.oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 }
+
+// --- Global settings endpoints ---
+
+#[tokio::test]
+async fn settings_requires_auth() {
+    let (app, _state) = common::setup_test_app().await;
+
+    let req = Request::builder()
+        .uri("/api/admin/settings")
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn get_settings_returns_defaults() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    let req = Request::builder()
+        .uri("/api/admin/settings")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["poster_source"], "tmdb");
+    assert_eq!(json["fanart_lang"], "en");
+    assert_eq!(json["fanart_textless"], false);
+    assert_eq!(json["fanart_available"], true);
+}
+
+#[tokio::test]
+async fn update_settings_and_read_back() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    // Update
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/api/admin/settings")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::from(
+            serde_json::json!({
+                "poster_source": "fanart",
+                "fanart_lang": "de",
+                "fanart_textless": true
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Read back
+    let req = Request::builder()
+        .uri("/api/admin/settings")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["poster_source"], "fanart");
+    assert_eq!(json["fanart_lang"], "de");
+    assert_eq!(json["fanart_textless"], true);
+}
+
+#[tokio::test]
+async fn update_settings_rejects_invalid_source() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/api/admin/settings")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::from(
+            serde_json::json!({
+                "poster_source": "invalid",
+                "fanart_lang": "en"
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn update_settings_rejects_invalid_lang() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/api/admin/settings")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::from(
+            serde_json::json!({
+                "poster_source": "fanart",
+                "fanart_lang": "../../etc"
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
