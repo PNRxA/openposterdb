@@ -1,4 +1,5 @@
 /target
 .env
+# Application data
 /cache
-/data
+/db
