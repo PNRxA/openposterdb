@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cache;
 use crate::error::AppError;
-use crate::services::db::{self, validate_fanart_lang, validate_poster_source};
+use crate::services::db::{self, validate_fanart_lang, validate_poster_source, validate_ratings_limit, validate_ratings_order, default_ratings_limit, default_ratings_order};
 use crate::AppState;
 
 #[derive(Serialize)]
@@ -145,6 +145,8 @@ pub struct GlobalSettingsResponse {
     pub fanart_lang: String,
     pub fanart_textless: bool,
     pub fanart_available: bool,
+    pub ratings_limit: i32,
+    pub ratings_order: String,
 }
 
 pub async fn get_settings(
@@ -164,6 +166,8 @@ pub async fn get_settings(
         fanart_lang: settings.fanart_lang.clone(),
         fanart_textless: settings.fanart_textless,
         fanart_available: state.fanart.is_some(),
+        ratings_limit: settings.ratings_limit,
+        ratings_order: settings.ratings_order.clone(),
     }))
 }
 
@@ -174,6 +178,10 @@ pub struct UpdateGlobalSettingsRequest {
     pub fanart_lang: String,
     #[serde(default)]
     pub fanart_textless: bool,
+    #[serde(default = "default_ratings_limit")]
+    pub ratings_limit: i32,
+    #[serde(default = "default_ratings_order")]
+    pub ratings_order: String,
 }
 
 pub async fn update_settings(
@@ -182,13 +190,18 @@ pub async fn update_settings(
 ) -> Result<Json<serde_json::Value>, AppError> {
     validate_poster_source(&req.poster_source)?;
     validate_fanart_lang(&req.fanart_lang)?;
+    validate_ratings_limit(req.ratings_limit)?;
+    validate_ratings_order(&req.ratings_order)?;
     let textless_str = if req.fanart_textless { "true" } else { "false" };
+    let limit_str = req.ratings_limit.to_string();
     db::set_global_settings_batch(
         &state.db,
         &[
             ("poster_source", &req.poster_source),
             ("fanart_lang", &req.fanart_lang),
             ("fanart_textless", textless_str),
+            ("ratings_limit", &limit_str),
+            ("ratings_order", &req.ratings_order),
         ],
     )
     .await?;

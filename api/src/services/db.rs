@@ -5,9 +5,18 @@ use std::collections::HashMap;
 
 use crate::entity::{admin_user, api_key, api_key_settings, global_settings, refresh_token};
 use crate::error::AppError;
+use crate::services::ratings::RatingSource;
 
 pub fn default_fanart_lang() -> String {
     "en".to_string()
+}
+
+pub fn default_ratings_limit() -> i32 {
+    3
+}
+
+pub fn default_ratings_order() -> String {
+    "mal,imdb,lb,rt,rta,mc,tmdb,trakt".to_string()
 }
 
 /// Validate that poster_source is a known value.
@@ -19,6 +28,40 @@ pub fn validate_poster_source(source: &str) -> Result<(), AppError> {
             "poster_source must be 'tmdb' or 'fanart'".into(),
         ))
     }
+}
+
+/// Validate ratings_limit is 0–8.
+pub fn validate_ratings_limit(limit: i32) -> Result<(), AppError> {
+    if (0..=8).contains(&limit) {
+        Ok(())
+    } else {
+        Err(AppError::BadRequest(
+            "ratings_limit must be between 0 and 8".into(),
+        ))
+    }
+}
+
+/// Validate a comma-separated list of rating source keys (no duplicates).
+pub fn validate_ratings_order(order: &str) -> Result<(), AppError> {
+    if order.is_empty() {
+        return Ok(());
+    }
+    let mut seen = std::collections::HashSet::new();
+    for key in order.split(',') {
+        let key = key.trim();
+        if RatingSource::from_key(key).is_none() {
+            return Err(AppError::BadRequest(format!(
+                "unknown rating source key: '{key}'. Valid keys: {}",
+                RatingSource::all_keys().join(", ")
+            )));
+        }
+        if !seen.insert(key) {
+            return Err(AppError::BadRequest(format!(
+                "duplicate rating source key: '{key}'"
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// Validate a fanart language code: 2–5 ASCII alphanumeric chars or hyphens (e.g. "en", "pt-BR").
@@ -151,6 +194,47 @@ mod tests {
     #[test]
     fn default_fanart_lang_returns_en() {
         assert_eq!(default_fanart_lang(), "en");
+    }
+
+    #[test]
+    fn validate_ratings_limit_accepts_valid() {
+        for i in 0..=8 {
+            assert!(validate_ratings_limit(i).is_ok(), "limit {i} should be valid");
+        }
+    }
+
+    #[test]
+    fn validate_ratings_limit_rejects_negative() {
+        assert!(validate_ratings_limit(-1).is_err());
+    }
+
+    #[test]
+    fn validate_ratings_limit_rejects_too_large() {
+        assert!(validate_ratings_limit(9).is_err());
+        assert!(validate_ratings_limit(100).is_err());
+    }
+
+    #[test]
+    fn validate_ratings_order_accepts_empty() {
+        assert!(validate_ratings_order("").is_ok());
+    }
+
+    #[test]
+    fn validate_ratings_order_accepts_valid_keys() {
+        assert!(validate_ratings_order("imdb,tmdb,rt").is_ok());
+        assert!(validate_ratings_order("mal,imdb,rta,trakt,lb,mc,tmdb,rt").is_ok());
+    }
+
+    #[test]
+    fn validate_ratings_order_rejects_unknown_keys() {
+        assert!(validate_ratings_order("imdb,bogus").is_err());
+        assert!(validate_ratings_order("unknown").is_err());
+    }
+
+    #[test]
+    fn validate_ratings_order_rejects_duplicates() {
+        assert!(validate_ratings_order("imdb,imdb").is_err());
+        assert!(validate_ratings_order("rt,tmdb,rt").is_err());
     }
 
     #[test]
@@ -543,12 +627,16 @@ pub async fn upsert_api_key_settings(
     source: &str,
     lang: &str,
     textless: bool,
+    ratings_limit: i32,
+    ratings_order: &str,
 ) -> Result<(), AppError> {
     let model = api_key_settings::ActiveModel {
         api_key_id: Set(api_key_id),
         poster_source: Set(source.to_string()),
         fanart_lang: Set(lang.to_string()),
         fanart_textless: Set(textless),
+        ratings_limit: Set(ratings_limit),
+        ratings_order: Set(ratings_order.to_string()),
     };
     api_key_settings::Entity::insert(model)
         .on_conflict(
@@ -557,6 +645,8 @@ pub async fn upsert_api_key_settings(
                     api_key_settings::Column::PosterSource,
                     api_key_settings::Column::FanartLang,
                     api_key_settings::Column::FanartTextless,
+                    api_key_settings::Column::RatingsLimit,
+                    api_key_settings::Column::RatingsOrder,
                 ])
                 .to_owned(),
         )
@@ -584,6 +674,8 @@ pub struct PosterSettings {
     pub poster_source: String,
     pub fanart_lang: String,
     pub fanart_textless: bool,
+    pub ratings_limit: i32,
+    pub ratings_order: String,
     pub is_default: bool,
 }
 
@@ -593,6 +685,8 @@ impl Default for PosterSettings {
             poster_source: "tmdb".to_string(),
             fanart_lang: "en".to_string(),
             fanart_textless: false,
+            ratings_limit: 3,
+            ratings_order: "mal,imdb,lb,rt,rta,mc,tmdb,trakt".to_string(),
             is_default: true,
         }
     }
@@ -617,6 +711,14 @@ pub fn parse_global_poster_settings(globals: &HashMap<String, String>) -> Poster
             .get("fanart_textless")
             .map(|v| v == "true")
             .unwrap_or(defaults.fanart_textless),
+        ratings_limit: globals
+            .get("ratings_limit")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(defaults.ratings_limit),
+        ratings_order: globals
+            .get("ratings_order")
+            .cloned()
+            .unwrap_or(defaults.ratings_order),
         is_default: true,
     }
 }
@@ -633,6 +735,8 @@ pub async fn get_effective_poster_settings(
                 poster_source: s.poster_source,
                 fanart_lang: s.fanart_lang,
                 fanart_textless: s.fanart_textless,
+                ratings_limit: s.ratings_limit,
+                ratings_order: s.ratings_order,
                 is_default: false,
             };
         }

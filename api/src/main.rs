@@ -15,7 +15,7 @@ use openposterdb_api::services::fanart::FanartClient;
 use openposterdb_api::services::mdblist::MdblistClient;
 use openposterdb_api::services::omdb::OmdbClient;
 use openposterdb_api::services::tmdb::TmdbClient;
-use openposterdb_api::{build_app, AppState, FONT_BYTES, SCHEMA_SQL};
+use openposterdb_api::{build_app, AppState, FONT_BYTES, MIGRATIONS, SCHEMA_SQL};
 
 #[tokio::main]
 async fn main() {
@@ -90,6 +90,15 @@ async fn main() {
             .execute_unprepared(sql)
             .await
             .expect("failed to create table");
+    }
+    for (sql, expected_err) in MIGRATIONS {
+        match database.execute_unprepared(sql).await {
+            Ok(_) => {}
+            Err(e) if e.to_string().to_lowercase().contains(expected_err) => {
+                tracing::debug!("Migration already applied: {e}");
+            }
+            Err(e) => panic!("migration failed: {e}\n  SQL: {sql}"),
+        }
     }
 
     // Clean up expired refresh tokens

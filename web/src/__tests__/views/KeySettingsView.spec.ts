@@ -61,6 +61,8 @@ const sampleSettings = {
   fanart_lang: 'en',
   fanart_textless: false,
   fanart_available: true,
+  ratings_limit: 3,
+  ratings_order: 'mal,imdb,lb,rt,rta,mc,tmdb,trakt',
   is_default: true,
 }
 

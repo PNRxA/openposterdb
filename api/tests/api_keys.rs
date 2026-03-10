@@ -220,6 +220,8 @@ async fn get_key_settings_returns_defaults() {
     assert_eq!(json["fanart_lang"], "en");
     assert_eq!(json["fanart_textless"], false);
     assert_eq!(json["is_default"], true);
+    assert_eq!(json["ratings_limit"], 3);
+    assert_eq!(json["ratings_order"], "mal,imdb,lb,rt,rta,mc,tmdb,trakt");
 }
 
 #[tokio::test]
@@ -384,6 +386,114 @@ async fn update_key_settings_rejects_invalid_lang() {
         .body(json_body(serde_json::json!({
             "poster_source": "fanart",
             "fanart_lang": "a"
+        })))
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn update_key_settings_with_ratings_and_read_back() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/keys")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(json_body(serde_json::json!({"name": "test-key"})))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let id = json["id"].as_i64().unwrap();
+
+    let req = Request::builder()
+        .method("PUT")
+        .uri(format!("/api/keys/{id}/settings"))
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(json_body(serde_json::json!({
+            "poster_source": "tmdb",
+            "ratings_limit": 4,
+            "ratings_order": "trakt,imdb,mal,lb"
+        })))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let req = Request::builder()
+        .uri(format!("/api/keys/{id}/settings"))
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["ratings_limit"], 4);
+    assert_eq!(json["ratings_order"], "trakt,imdb,mal,lb");
+    assert_eq!(json["is_default"], false);
+}
+
+#[tokio::test]
+async fn update_key_settings_rejects_invalid_ratings_limit() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/keys")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(json_body(serde_json::json!({"name": "test-key"})))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let id = json["id"].as_i64().unwrap();
+
+    let req = Request::builder()
+        .method("PUT")
+        .uri(format!("/api/keys/{id}/settings"))
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(json_body(serde_json::json!({
+            "poster_source": "tmdb",
+            "ratings_limit": -1
+        })))
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn update_key_settings_rejects_invalid_ratings_order() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/keys")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(json_body(serde_json::json!({"name": "test-key"})))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let id = json["id"].as_i64().unwrap();
+
+    let req = Request::builder()
+        .method("PUT")
+        .uri(format!("/api/keys/{id}/settings"))
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(json_body(serde_json::json!({
+            "poster_source": "tmdb",
+            "ratings_order": "invalid_source"
         })))
         .unwrap();
     let res = app.oneshot(req).await.unwrap();

@@ -179,6 +179,8 @@ async fn get_settings_returns_defaults() {
     assert_eq!(json["fanart_lang"], "en");
     assert_eq!(json["fanart_textless"], false);
     assert_eq!(json["fanart_available"], true);
+    assert_eq!(json["ratings_limit"], 3);
+    assert_eq!(json["ratings_order"], "mal,imdb,lb,rt,rta,mc,tmdb,trakt");
 }
 
 #[tokio::test]
@@ -256,6 +258,86 @@ async fn update_settings_rejects_invalid_lang() {
             serde_json::json!({
                 "poster_source": "fanart",
                 "fanart_lang": "../../etc"
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn update_settings_with_ratings_and_read_back() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/api/admin/settings")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::from(
+            serde_json::json!({
+                "poster_source": "tmdb",
+                "ratings_limit": 3,
+                "ratings_order": "mal,imdb,rta"
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let req = Request::builder()
+        .uri("/api/admin/settings")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["ratings_limit"], 3);
+    assert_eq!(json["ratings_order"], "mal,imdb,rta");
+}
+
+#[tokio::test]
+async fn update_settings_rejects_invalid_ratings_limit() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/api/admin/settings")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::from(
+            serde_json::json!({
+                "poster_source": "tmdb",
+                "ratings_limit": 9
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn update_settings_rejects_invalid_ratings_order() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/api/admin/settings")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::from(
+            serde_json::json!({
+                "poster_source": "tmdb",
+                "ratings_order": "imdb,bogus"
             })
             .to_string(),
         ))

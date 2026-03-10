@@ -77,6 +77,8 @@ export const adminApi = {
     poster_source: string
     fanart_lang: string
     fanart_textless: boolean
+    ratings_limit: number
+    ratings_order: string
   }): Promise<Response> => put('/api/admin/settings', settings),
 }
 
@@ -106,6 +108,8 @@ export const selfApi = {
     poster_source: string
     fanart_lang: string
     fanart_textless: boolean
+    ratings_limit: number
+    ratings_order: string
   }): Promise<Response> =>
     keyRequest('/api/key/me/settings', {
       method: 'PUT',
@@ -126,6 +130,8 @@ export const keysApi = {
       poster_source: string
       fanart_lang: string
       fanart_textless: boolean
+      ratings_limit: number
+      ratings_order: string
     },
   ): Promise<Response> => put(`/api/keys/${id}/settings`, settings),
   deleteSettings: (id: number): Promise<Response> => del(`/api/keys/${id}/settings`),

@@ -99,8 +99,24 @@ pub const SCHEMA_SQL: &[&str] = &[
         api_key_id      INTEGER PRIMARY KEY REFERENCES api_keys(id) ON DELETE CASCADE,
         poster_source   TEXT NOT NULL DEFAULT 'tmdb',
         fanart_lang     TEXT NOT NULL DEFAULT 'en',
-        fanart_textless INTEGER NOT NULL DEFAULT 0
+        fanart_textless INTEGER NOT NULL DEFAULT 0,
+        ratings_limit   INTEGER NOT NULL DEFAULT 3,
+        ratings_order   TEXT NOT NULL DEFAULT 'mal,imdb,lb,rt,rta,mc,tmdb,trakt'
     )",
+];
+
+/// Migrations that run after schema creation. Each is checked for a specific
+/// expected error before being skipped (e.g. "duplicate column" for ADD COLUMN).
+/// This avoids blindly swallowing all ALTER errors.
+pub const MIGRATIONS: &[(&str, &str)] = &[
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN ratings_limit INTEGER NOT NULL DEFAULT 3",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN ratings_order TEXT NOT NULL DEFAULT 'mal,imdb,lb,rt,rta,mc,tmdb,trakt'",
+        "duplicate column",
+    ),
 ];
 
 fn build_cors_layer(config: &Config) -> CorsLayer {

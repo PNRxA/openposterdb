@@ -452,6 +452,8 @@ async fn generate_poster_with_source(
     )
     .await;
 
+    let badges = ratings::apply_rating_preferences(badges, &settings.ratings_order, settings.ratings_limit);
+
     // Try to fetch poster bytes from fanart.tv if configured
     let fanart_result = if settings.poster_source == "fanart" {
         if let Some(ref fanart) = state.fanart {

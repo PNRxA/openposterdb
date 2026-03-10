@@ -56,7 +56,7 @@ async function loadSettings(): Promise<PosterSettings | null> {
   return null
 }
 
-async function saveSettings(s: { poster_source: string; fanart_lang: string; fanart_textless: boolean }): Promise<string | null> {
+async function saveSettings(s: { poster_source: string; fanart_lang: string; fanart_textless: boolean; ratings_limit: number; ratings_order: string }): Promise<string | null> {
   const res = await selfApi.updateSettings(s)
   if (res.ok) return null
   const data = await res.json().catch(() => null)

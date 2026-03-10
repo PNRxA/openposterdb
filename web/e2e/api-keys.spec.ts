@@ -54,6 +54,65 @@ test.describe('api keys', () => {
     await expect(refreshButton).toBeVisible()
   })
 
+  /** Helper: create a key with a unique name and expand its settings panel. */
+  let settingsKeyCounter = 0
+  async function createKeyAndOpenSettings(page: any) {
+    const keyName = `settings-key-${++settingsKeyCounter}-${Date.now()}`
+    await page.fill('input[placeholder*="Key name"]', keyName)
+    await page.click('button:has-text("Create")')
+    await expect(page.getByText(keyName)).toBeVisible()
+
+    // Dismiss the key banner if present
+    const dismissBtn = page.locator('button:has-text("Dismiss")')
+    if (await dismissBtn.isVisible()) await dismissBtn.click()
+
+    // Click the settings gear button (the outline button with no text, next to Delete)
+    const keyRow = page.getByText(keyName).locator('..').locator('..')
+    await keyRow.locator('button:not(:has-text("Delete"))').first().click()
+
+    // Wait for settings form to load
+    await expect(page.locator('text=Rating Display')).toBeVisible()
+
+    return keyName
+  }
+
+  test('per-key settings panel shows rating display section', async ({ page }) => {
+    await createKeyAndOpenSettings(page)
+
+    await expect(page.locator('text=Max ratings to show')).toBeVisible()
+    await expect(page.locator('text=Rating order')).toBeVisible()
+  })
+
+  test('per-key rating limit defaults to 3', async ({ page }) => {
+    await createKeyAndOpenSettings(page)
+
+    const limitInput = page.locator('input[type="number"]')
+    await expect(limitInput).toBeVisible()
+    await expect(limitInput).toHaveValue('3')
+  })
+
+  test('per-key rating settings persist after save', async ({ page }) => {
+    const keyName = await createKeyAndOpenSettings(page)
+
+    // Change limit to a non-default value
+    const limitInput = page.locator('input[type="number"]')
+    await limitInput.fill('5')
+
+    // Save
+    await page.locator('button:has-text("Save")').click()
+    await expect(page.locator('button:has-text("Save") .text-green-500')).toBeVisible()
+
+    // Collapse and re-expand settings to verify persistence
+    const keyRow = page.getByText(keyName).locator('..').locator('..')
+    await keyRow.locator('button:not(:has-text("Delete"))').first().click()
+    await expect(page.locator('text=Rating Display')).not.toBeVisible()
+
+    await keyRow.locator('button:not(:has-text("Delete"))').first().click()
+    await expect(page.locator('text=Rating Display')).toBeVisible()
+
+    await expect(page.locator('input[type="number"]')).toHaveValue('5')
+  })
+
   test('delete a key removes it from list', async ({ page }) => {
     // Create a key
     await page.fill('input[placeholder*="Key name"]', 'to-delete')

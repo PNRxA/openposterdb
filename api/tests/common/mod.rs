@@ -9,7 +9,7 @@ use zeroize::Zeroizing;
 use openposterdb_api::config::Config;
 use openposterdb_api::services::fanart::FanartClient;
 use openposterdb_api::services::tmdb::TmdbClient;
-use openposterdb_api::{build_app, AppState, FONT_BYTES, SCHEMA_SQL};
+use openposterdb_api::{build_app, AppState, FONT_BYTES, MIGRATIONS, SCHEMA_SQL};
 
 pub struct TestAppOptions {
     pub cors_origin: Option<String>,
@@ -48,7 +48,16 @@ async fn _setup_test_app(cors_origin: Option<String>, secure_cookies: bool) -> (
     let db: DatabaseConnection = SqlxSqliteConnector::from_sqlx_sqlite_pool(pool);
 
     for sql in SCHEMA_SQL {
-        db.execute_unprepared(sql).await.unwrap();
+        db.execute_unprepared(sql)
+            .await
+            .expect("failed to create table");
+    }
+    for (sql, expected_err) in MIGRATIONS {
+        match db.execute_unprepared(sql).await {
+            Ok(_) => {}
+            Err(e) if e.to_string().to_lowercase().contains(expected_err) => {}
+            Err(e) => panic!("migration failed: {e}\n  SQL: {sql}"),
+        }
     }
 
     let jwt_secret = Zeroizing::new(vec![0xAB; 32]);

@@ -60,6 +60,8 @@ describe('selfApi', () => {
       poster_source: 'fanart',
       fanart_lang: 'de',
       fanart_textless: true,
+      ratings_limit: 3,
+      ratings_order: 'mal,imdb,trakt',
     })
 
     const [url, options] = fetchMock.mock.calls[0]
@@ -70,6 +72,8 @@ describe('selfApi', () => {
       poster_source: 'fanart',
       fanart_lang: 'de',
       fanart_textless: true,
+      ratings_limit: 3,
+      ratings_order: 'mal,imdb,trakt',
     })
   })
 

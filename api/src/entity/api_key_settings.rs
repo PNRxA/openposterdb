@@ -8,6 +8,8 @@ pub struct Model {
     pub poster_source: String,
     pub fanart_lang: String,
     pub fanart_textless: bool,
+    pub ratings_limit: i32,
+    pub ratings_order: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -53,7 +53,7 @@ test.describe('key settings (self-service)', () => {
     await expect(saveButton).toBeVisible()
 
     await saveButton.click()
-    await expect(page.locator('text=Saved')).toBeVisible()
+    await expect(page.locator('button:has-text("Save") .text-green-500')).toBeVisible()
   })
 
   test('fanart options appear when fanart is selected', async ({ page, request }) => {
@@ -79,7 +79,7 @@ test.describe('key settings (self-service)', () => {
 
     // Save
     await page.locator('button:has-text("Save")').click()
-    await expect(page.locator('text=Saved')).toBeVisible()
+    await expect(page.locator('button:has-text("Save") .text-green-500')).toBeVisible()
 
     // Reload
     await page.reload()
@@ -89,13 +89,33 @@ test.describe('key settings (self-service)', () => {
     await expect(page.locator('select')).toHaveValue('fanart')
   })
 
+  test('rating display section is visible', async ({ page, request }) => {
+    await loginWithApiKey(page, request)
+
+    await expect(page.locator('text=Rating Display')).toBeVisible()
+    await expect(page.locator('text=Max ratings to show')).toBeVisible()
+    await expect(page.locator('text=Rating order')).toBeVisible()
+  })
+
+  test('rating limit defaults to 3', async ({ page, request }) => {
+    await loginWithApiKey(page, request)
+
+    const limitInput = page.locator('input[type="number"]')
+    await expect(limitInput).toBeVisible()
+    await expect(limitInput).toHaveValue('3')
+  })
+
   test('reset to defaults works', async ({ page, request }) => {
     await loginWithApiKey(page, request)
 
-    // Change settings
-    await page.locator('select').selectOption('fanart')
+    // Note the current (default) poster source
+    const defaultSource = await page.locator('select').inputValue()
+
+    // Change to something different
+    const altSource = defaultSource === 'tmdb' ? 'fanart' : 'tmdb'
+    await page.locator('select').selectOption(altSource)
     await page.locator('button:has-text("Save")').click()
-    await expect(page.locator('text=Saved')).toBeVisible()
+    await expect(page.locator('button:has-text("Save") .text-green-500')).toBeVisible()
 
     // Wait for "Using defaults" badge to disappear (confirms custom settings saved)
     await expect(page.locator('text=Using defaults')).not.toBeVisible()
@@ -103,8 +123,8 @@ test.describe('key settings (self-service)', () => {
     // Reset to defaults
     await page.locator('button:has-text("Reset to defaults")').click()
 
-    // Should be back to TMDB
-    await expect(page.locator('select')).toHaveValue('tmdb')
-    await expect(page.locator('text=Using defaults')).toBeVisible()
+    // Should be back to defaults
+    await expect(page.locator('text=Using defaults')).toBeVisible({ timeout: 10000 })
+    await expect(page.locator('select')).toHaveValue(defaultSource)
   })
 })

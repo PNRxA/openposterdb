@@ -422,7 +422,7 @@ async fn upsert_and_get_api_key_settings() {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let key_id = json["id"].as_i64().unwrap() as i32;
 
-    db::upsert_api_key_settings(&state.db, key_id, "fanart", "ja", true).await.unwrap();
+    db::upsert_api_key_settings(&state.db, key_id, "fanart", "ja", true, 0, "").await.unwrap();
 
     let settings = db::get_api_key_settings(&state.db, key_id).await.unwrap();
     assert!(settings.is_some());
@@ -430,6 +430,93 @@ async fn upsert_and_get_api_key_settings() {
     assert_eq!(s.poster_source, "fanart");
     assert_eq!(s.fanart_lang, "ja");
     assert!(s.fanart_textless);
+    assert_eq!(s.ratings_limit, 0);
+    assert_eq!(s.ratings_order, "");
+}
+
+#[tokio::test]
+async fn upsert_api_key_settings_with_ratings() {
+    let (app, state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    use axum::body::Body;
+    use axum::http::Request;
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/keys")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::from(serde_json::json!({"name": "test"}).to_string()))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let key_id = json["id"].as_i64().unwrap() as i32;
+
+    db::upsert_api_key_settings(&state.db, key_id, "tmdb", "en", false, 3, "mal,imdb,trakt").await.unwrap();
+
+    let s = db::get_api_key_settings(&state.db, key_id).await.unwrap().unwrap();
+    assert_eq!(s.ratings_limit, 3);
+    assert_eq!(s.ratings_order, "mal,imdb,trakt");
+}
+
+#[tokio::test]
+async fn effective_settings_includes_ratings_from_global() {
+    let (_app, state) = common::setup_test_app().await;
+    db::set_global_settings_batch(
+        &state.db,
+        &[
+            ("poster_source", "tmdb"),
+            ("ratings_limit", "4"),
+            ("ratings_order", "imdb,tmdb,rt,rta"),
+        ],
+    )
+    .await
+    .unwrap();
+
+    let s = db::get_effective_poster_settings(&state.db, 999, None).await;
+    assert_eq!(s.ratings_limit, 4);
+    assert_eq!(s.ratings_order, "imdb,tmdb,rt,rta");
+}
+
+#[tokio::test]
+async fn effective_settings_per_key_ratings_override_global() {
+    let (app, state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    use axum::body::Body;
+    use axum::http::Request;
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/keys")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::from(serde_json::json!({"name": "test"}).to_string()))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let key_id = json["id"].as_i64().unwrap() as i32;
+
+    db::set_global_settings_batch(
+        &state.db,
+        &[("ratings_limit", "2"), ("ratings_order", "imdb,tmdb")],
+    )
+    .await
+    .unwrap();
+
+    db::upsert_api_key_settings(&state.db, key_id, "tmdb", "en", false, 5, "mal,lb").await.unwrap();
+
+    let s = db::get_effective_poster_settings(&state.db, key_id, None).await;
+    assert_eq!(s.ratings_limit, 5);
+    assert_eq!(s.ratings_order, "mal,lb");
+    assert!(!s.is_default);
 }
 
 #[tokio::test]
@@ -454,8 +541,8 @@ async fn upsert_api_key_settings_overwrites() {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let key_id = json["id"].as_i64().unwrap() as i32;
 
-    db::upsert_api_key_settings(&state.db, key_id, "tmdb", "en", false).await.unwrap();
-    db::upsert_api_key_settings(&state.db, key_id, "fanart", "de", true).await.unwrap();
+    db::upsert_api_key_settings(&state.db, key_id, "tmdb", "en", false, 0, "").await.unwrap();
+    db::upsert_api_key_settings(&state.db, key_id, "fanart", "de", true, 0, "").await.unwrap();
 
     let s = db::get_api_key_settings(&state.db, key_id).await.unwrap().unwrap();
     assert_eq!(s.poster_source, "fanart");
@@ -485,7 +572,7 @@ async fn delete_api_key_settings_removes() {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let key_id = json["id"].as_i64().unwrap() as i32;
 
-    db::upsert_api_key_settings(&state.db, key_id, "fanart", "en", false).await.unwrap();
+    db::upsert_api_key_settings(&state.db, key_id, "fanart", "en", false, 0, "").await.unwrap();
     db::delete_api_key_settings(&state.db, key_id).await.unwrap();
 
     let s = db::get_api_key_settings(&state.db, key_id).await.unwrap();
@@ -556,7 +643,7 @@ async fn effective_settings_per_key_overrides_global() {
     .unwrap();
 
     // Set per-key to tmdb/ja
-    db::upsert_api_key_settings(&state.db, key_id, "tmdb", "ja", true).await.unwrap();
+    db::upsert_api_key_settings(&state.db, key_id, "tmdb", "ja", true, 0, "").await.unwrap();
 
     let s = db::get_effective_poster_settings(&state.db, key_id, None).await;
     assert_eq!(s.poster_source, "tmdb");

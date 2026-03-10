@@ -31,6 +31,37 @@ impl RatingSource {
         }
     }
 
+    pub fn key(&self) -> &'static str {
+        match self {
+            Self::Imdb => "imdb",
+            Self::Tmdb => "tmdb",
+            Self::Rt => "rt",
+            Self::RtAudience => "rta",
+            Self::Metacritic => "mc",
+            Self::Trakt => "trakt",
+            Self::Letterboxd => "lb",
+            Self::Mal => "mal",
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<Self> {
+        match key {
+            "imdb" => Some(Self::Imdb),
+            "tmdb" => Some(Self::Tmdb),
+            "rt" => Some(Self::Rt),
+            "rta" => Some(Self::RtAudience),
+            "mc" => Some(Self::Metacritic),
+            "trakt" => Some(Self::Trakt),
+            "lb" => Some(Self::Letterboxd),
+            "mal" => Some(Self::Mal),
+            _ => None,
+        }
+    }
+
+    pub fn all_keys() -> Vec<&'static str> {
+        vec!["imdb", "tmdb", "rt", "rta", "mc", "trakt", "lb", "mal"]
+    }
+
     pub fn color(&self) -> Rgba<u8> {
         match self {
             Self::Imdb => Rgba([180, 145, 15, 255]),       // gold
@@ -192,6 +223,43 @@ async fn fetch_omdb_ratings(imdb_id: Option<&str>, omdb: Option<&OmdbClient>) ->
     Some(badges)
 }
 
+/// Reorder and/or limit rating badges based on user preferences.
+///
+/// - If `order` is non-empty, badges are reordered to match the specified order.
+///   Unmentioned sources are appended after in their original order.
+/// - If `limit` > 0, the result is truncated to that many badges.
+pub fn apply_rating_preferences(badges: Vec<RatingBadge>, order: &str, limit: i32) -> Vec<RatingBadge> {
+    let mut result = if order.is_empty() {
+        badges
+    } else {
+        let preferred: Vec<RatingSource> = order
+            .split(',')
+            .filter_map(|k| RatingSource::from_key(k.trim()))
+            .collect();
+
+        let mut ordered = Vec::with_capacity(badges.len());
+        // Add badges in preferred order
+        for src in &preferred {
+            if let Some(badge) = badges.iter().find(|b| b.source == *src) {
+                ordered.push(badge.clone());
+            }
+        }
+        // Add remaining badges not in the preferred list
+        for badge in &badges {
+            if !preferred.contains(&badge.source) {
+                ordered.push(badge.clone());
+            }
+        }
+        ordered
+    };
+
+    if limit > 0 {
+        result.truncate(limit as usize);
+    }
+
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -217,6 +285,79 @@ mod tests {
         assert_eq!(RatingSource::Trakt.color(), Rgba([175, 15, 45, 255]));
         assert_eq!(RatingSource::Letterboxd.color(), Rgba([0, 155, 88, 255]));
         assert_eq!(RatingSource::Mal.color(), Rgba([34, 60, 120, 255]));
+    }
+
+    #[test]
+    fn rating_source_key_roundtrip() {
+        let sources = [
+            RatingSource::Imdb,
+            RatingSource::Tmdb,
+            RatingSource::Rt,
+            RatingSource::RtAudience,
+            RatingSource::Metacritic,
+            RatingSource::Trakt,
+            RatingSource::Letterboxd,
+            RatingSource::Mal,
+        ];
+        for src in sources {
+            assert_eq!(RatingSource::from_key(src.key()), Some(src));
+        }
+    }
+
+    #[test]
+    fn from_key_unknown_returns_none() {
+        assert_eq!(RatingSource::from_key("unknown"), None);
+    }
+
+    #[test]
+    fn apply_rating_preferences_reorder() {
+        let badges = vec![
+            RatingBadge { source: RatingSource::Imdb, value: "8.0".into() },
+            RatingBadge { source: RatingSource::Tmdb, value: "75%".into() },
+            RatingBadge { source: RatingSource::Trakt, value: "80%".into() },
+        ];
+        let result = apply_rating_preferences(badges, "trakt,imdb", 0);
+        assert_eq!(result[0].source, RatingSource::Trakt);
+        assert_eq!(result[1].source, RatingSource::Imdb);
+        assert_eq!(result[2].source, RatingSource::Tmdb);
+    }
+
+    #[test]
+    fn apply_rating_preferences_limit() {
+        let badges = vec![
+            RatingBadge { source: RatingSource::Imdb, value: "8.0".into() },
+            RatingBadge { source: RatingSource::Tmdb, value: "75%".into() },
+            RatingBadge { source: RatingSource::Trakt, value: "80%".into() },
+        ];
+        let result = apply_rating_preferences(badges, "", 2);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].source, RatingSource::Imdb);
+        assert_eq!(result[1].source, RatingSource::Tmdb);
+    }
+
+    #[test]
+    fn apply_rating_preferences_reorder_and_limit() {
+        let badges = vec![
+            RatingBadge { source: RatingSource::Imdb, value: "8.0".into() },
+            RatingBadge { source: RatingSource::Tmdb, value: "75%".into() },
+            RatingBadge { source: RatingSource::Mal, value: "8.50".into() },
+            RatingBadge { source: RatingSource::Trakt, value: "80%".into() },
+        ];
+        let result = apply_rating_preferences(badges, "mal,imdb,rta,trakt", 3);
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0].source, RatingSource::Mal);
+        assert_eq!(result[1].source, RatingSource::Imdb);
+        assert_eq!(result[2].source, RatingSource::Trakt);
+    }
+
+    #[test]
+    fn apply_rating_preferences_empty_order_zero_limit() {
+        let badges = vec![
+            RatingBadge { source: RatingSource::Imdb, value: "8.0".into() },
+            RatingBadge { source: RatingSource::Tmdb, value: "75%".into() },
+        ];
+        let result = apply_rating_preferences(badges.clone(), "", 0);
+        assert_eq!(result.len(), 2);
     }
 
     #[test]

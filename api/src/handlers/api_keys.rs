@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 use super::auth::AuthUser;
 use super::middleware::ApiKeyUser;
 use crate::error::AppError;
-use crate::services::db::{self, validate_fanart_lang, validate_poster_source};
+use crate::services::db::{self, validate_fanart_lang, validate_poster_source, validate_ratings_limit, validate_ratings_order, default_ratings_limit, default_ratings_order};
 use crate::AppState;
 
 #[derive(Serialize)]
@@ -99,6 +99,8 @@ pub struct PosterSettingsResponse {
     pub fanart_textless: bool,
     pub fanart_available: bool,
     pub is_default: bool,
+    pub ratings_limit: i32,
+    pub ratings_order: String,
 }
 
 pub async fn get_settings(
@@ -115,6 +117,8 @@ pub async fn get_settings(
         fanart_textless: settings.fanart_textless,
         fanart_available: state.fanart.is_some(),
         is_default: settings.is_default,
+        ratings_limit: settings.ratings_limit,
+        ratings_order: settings.ratings_order,
     }))
 }
 
@@ -125,6 +129,10 @@ pub struct UpdateSettingsRequest {
     pub fanart_lang: String,
     #[serde(default)]
     pub fanart_textless: bool,
+    #[serde(default = "default_ratings_limit")]
+    pub ratings_limit: i32,
+    #[serde(default = "default_ratings_order")]
+    pub ratings_order: String,
 }
 
 pub async fn update_settings(
@@ -137,7 +145,9 @@ pub async fn update_settings(
         .ok_or_else(|| AppError::IdNotFound(format!("API key {id} not found")))?;
     validate_poster_source(&req.poster_source)?;
     validate_fanart_lang(&req.fanart_lang)?;
-    db::upsert_api_key_settings(&state.db, id, &req.poster_source, &req.fanart_lang, req.fanart_textless).await?;
+    validate_ratings_limit(req.ratings_limit)?;
+    validate_ratings_order(&req.ratings_order)?;
+    db::upsert_api_key_settings(&state.db, id, &req.poster_source, &req.fanart_lang, req.fanart_textless, req.ratings_limit, &req.ratings_order).await?;
     state.settings_cache.invalidate(&id).await;
     Ok(Json(json!({ "ok": true })))
 }
@@ -181,6 +191,8 @@ pub async fn get_own_settings(
         fanart_textless: settings.fanart_textless,
         fanart_available: state.fanart.is_some(),
         is_default: settings.is_default,
+        ratings_limit: settings.ratings_limit,
+        ratings_order: settings.ratings_order,
     }))
 }
 
@@ -192,7 +204,9 @@ pub async fn update_own_settings(
     let id = api_key_user.key_id;
     validate_poster_source(&req.poster_source)?;
     validate_fanart_lang(&req.fanart_lang)?;
-    db::upsert_api_key_settings(&state.db, id, &req.poster_source, &req.fanart_lang, req.fanart_textless).await?;
+    validate_ratings_limit(req.ratings_limit)?;
+    validate_ratings_order(&req.ratings_order)?;
+    db::upsert_api_key_settings(&state.db, id, &req.poster_source, &req.fanart_lang, req.fanart_textless, req.ratings_limit, &req.ratings_order).await?;
     state.settings_cache.invalidate(&id).await;
     Ok(Json(json!({ "ok": true })))
 }

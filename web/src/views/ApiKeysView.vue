@@ -7,7 +7,7 @@ import PosterSettingsForm from '@/components/PosterSettingsForm.vue'
 import type { PosterSettings } from '@/components/PosterSettingsForm.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Settings } from 'lucide-vue-next'
+import { Settings, Plus, Loader2, Check } from 'lucide-vue-next'
 
 interface ApiKey {
   id: number
@@ -33,6 +33,8 @@ const newKeyName = ref('')
 const newKeyValue = ref<string | null>(null)
 const error = ref('')
 const loading = ref(false)
+const showCreateCheck = ref(false)
+let createCheckTimeout: ReturnType<typeof setTimeout> | null = null
 
 // Per-key settings state
 const expandedKey = ref<number | null>(null)
@@ -51,7 +53,8 @@ async function toggleSettings(id: number) {
 }
 
 async function fetchSettings(id: number): Promise<PosterSettings | null> {
-  settingsLoading[id] = true
+  const isInitialLoad = !keySettings[id]
+  if (isInitialLoad) settingsLoading[id] = true
   try {
     const res = await keysApi.getSettings(id)
     if (res.ok) {
@@ -62,7 +65,7 @@ async function fetchSettings(id: number): Promise<PosterSettings | null> {
   } catch {
     // handled by caller
   } finally {
-    settingsLoading[id] = false
+    if (isInitialLoad) settingsLoading[id] = false
   }
   return null
 }
@@ -72,7 +75,7 @@ function makeLoadSettings(id: number) {
 }
 
 function makeSaveSettings(id: number) {
-  return async (s: { poster_source: string; fanart_lang: string; fanart_textless: boolean }): Promise<string | null> => {
+  return async (s: { poster_source: string; fanart_lang: string; fanart_textless: boolean; ratings_limit: number; ratings_order: string }): Promise<string | null> => {
     const res = await keysApi.updateSettings(id, s)
     if (res.ok) return null
     const data = await res.json().catch(() => null)
@@ -91,6 +94,8 @@ async function createKey() {
   if (loading.value || !newKeyName.value.trim()) return
   error.value = ''
   loading.value = true
+  showCreateCheck.value = false
+  if (createCheckTimeout) clearTimeout(createCheckTimeout)
   try {
     const res = await keysApi.create(newKeyName.value.trim())
     if (res.ok) {
@@ -98,6 +103,8 @@ async function createKey() {
       newKeyValue.value = data.key
       newKeyName.value = ''
       queryClient.invalidateQueries({ queryKey: ['api-keys'] })
+      showCreateCheck.value = true
+      createCheckTimeout = setTimeout(() => (showCreateCheck.value = false), 1500)
     } else {
       const data = await res.json()
       error.value = data.error || 'Failed to create key'
@@ -144,7 +151,23 @@ async function deleteKey(id: number) {
           required
           class="flex-1"
         />
-        <Button type="submit" :disabled="loading">Create</Button>
+        <Button type="submit" :disabled="loading">
+          <span class="relative size-4">
+            <Transition
+              enter-active-class="transition duration-200 ease-out"
+              enter-from-class="opacity-0 scale-50"
+              enter-to-class="opacity-100 scale-100"
+              leave-active-class="transition duration-150 ease-in"
+              leave-from-class="opacity-100 scale-100"
+              leave-to-class="opacity-0 scale-50"
+            >
+              <Check v-if="showCreateCheck" class="absolute inset-0 size-4 text-green-500" />
+              <Loader2 v-else-if="loading" class="absolute inset-0 size-4 animate-spin" />
+              <Plus v-else class="absolute inset-0 size-4" />
+            </Transition>
+          </span>
+          Create
+        </Button>
       </form>
       <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
 

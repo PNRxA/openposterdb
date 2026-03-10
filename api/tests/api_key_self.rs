@@ -192,6 +192,8 @@ async fn get_own_settings_returns_defaults() {
     assert_eq!(json["fanart_textless"], false);
     assert_eq!(json["is_default"], true);
     assert_eq!(json["fanart_available"], true);
+    assert_eq!(json["ratings_limit"], 3);
+    assert_eq!(json["ratings_order"], "mal,imdb,lb,rt,rta,mc,tmdb,trakt");
 }
 
 // --- PUT /api/key/me/settings ---
@@ -588,4 +590,78 @@ async fn key_session_only_sees_own_settings() {
     let body = res.into_body().collect().await.unwrap().to_bytes();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(json["name"], "key-b");
+}
+
+// --- Rating settings via self-service ---
+
+#[tokio::test]
+async fn update_own_settings_with_ratings_and_read_back() {
+    let (app, _state) = common::setup_test_app().await;
+    let (_raw_key, session_token) = create_api_key_and_login(&app).await;
+
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/api/key/me/settings")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {session_token}"))
+        .body(json_body(serde_json::json!({
+            "poster_source": "tmdb",
+            "ratings_limit": 5,
+            "ratings_order": "mal,imdb,trakt,rt,rta"
+        })))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let req = Request::builder()
+        .uri("/api/key/me/settings")
+        .header("authorization", format!("Bearer {session_token}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["ratings_limit"], 5);
+    assert_eq!(json["ratings_order"], "mal,imdb,trakt,rt,rta");
+    assert_eq!(json["is_default"], false);
+}
+
+#[tokio::test]
+async fn update_own_settings_rejects_invalid_ratings_limit() {
+    let (app, _state) = common::setup_test_app().await;
+    let (_raw_key, session_token) = create_api_key_and_login(&app).await;
+
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/api/key/me/settings")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {session_token}"))
+        .body(json_body(serde_json::json!({
+            "poster_source": "tmdb",
+            "ratings_limit": 99
+        })))
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn update_own_settings_rejects_invalid_ratings_order() {
+    let (app, _state) = common::setup_test_app().await;
+    let (_raw_key, session_token) = create_api_key_and_login(&app).await;
+
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/api/key/me/settings")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {session_token}"))
+        .body(json_body(serde_json::json!({
+            "poster_source": "tmdb",
+            "ratings_order": "imdb,nope"
+        })))
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
 }

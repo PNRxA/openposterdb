@@ -54,7 +54,7 @@ test.describe('settings', () => {
 
     await saveButton.click()
 
-    await expect(page.locator('text=Saved')).toBeVisible()
+    await expect(page.locator('button:has-text("Save") .text-green-500')).toBeVisible()
   })
 
   test('settings persist after save and reload', async ({ page }) => {
@@ -64,7 +64,7 @@ test.describe('settings', () => {
 
     // Save
     await page.locator('button:has-text("Save")').click()
-    await expect(page.locator('text=Saved')).toBeVisible()
+    await expect(page.locator('button:has-text("Save") .text-green-500')).toBeVisible()
 
     // Reload page
     await page.reload()
@@ -80,6 +80,42 @@ test.describe('settings', () => {
 
     await refreshButton.click()
     await expect(refreshButton).toBeVisible()
+  })
+
+  test('rating display section is visible', async ({ page }) => {
+    await expect(page.locator('text=Rating Display')).toBeVisible()
+    await expect(page.locator('text=Max ratings to show')).toBeVisible()
+    await expect(page.locator('text=Rating order')).toBeVisible()
+  })
+
+  test('rating limit input defaults to 3', async ({ page }) => {
+    const limitInput = page.locator('input[type="number"]')
+    await expect(limitInput).toBeVisible()
+    await expect(limitInput).toHaveValue('3')
+  })
+
+  test('all 8 rating sources are listed in order', async ({ page }) => {
+    const ratingSection = page.locator('text=Rating order').locator('..')
+    for (const label of ['IMDb', 'TMDB', 'Rotten Tomatoes (Critics)', 'Rotten Tomatoes (Audience)', 'Metacritic', 'Trakt', 'Letterboxd', 'MyAnimeList']) {
+      await expect(ratingSection.locator(`text=${label}`)).toBeVisible()
+    }
+  })
+
+  test('rating settings persist after save and reload', async ({ page }) => {
+    // Change limit to a non-default value
+    const limitInput = page.locator('input[type="number"]')
+    await limitInput.fill('5')
+
+    // Save
+    await page.locator('button:has-text("Save")').click()
+    await expect(page.locator('button:has-text("Save") .text-green-500')).toBeVisible()
+
+    // Reload
+    await page.reload()
+    await expect(page.locator('h1')).toContainText('Settings')
+
+    // Limit should be preserved
+    await expect(page.locator('input[type="number"]')).toHaveValue('5')
   })
 
   test('sidebar navigation to settings works', async ({ page }) => {

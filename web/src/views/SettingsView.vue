@@ -29,6 +29,8 @@ async function saveSettings(s: {
   poster_source: string
   fanart_lang: string
   fanart_textless: boolean
+  ratings_limit: number
+  ratings_order: string
 }): Promise<string | null> {
   const res = await adminApi.updateSettings(s)
   if (res.ok) return null

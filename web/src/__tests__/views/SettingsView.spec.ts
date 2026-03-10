@@ -18,6 +18,8 @@ const defaultSettings = {
   fanart_lang: 'en',
   fanart_textless: false,
   fanart_available: true,
+  ratings_limit: 3,
+  ratings_order: 'mal,imdb,lb,rt,rta,mc,tmdb,trakt',
 }
 
 function mountView() {
@@ -126,14 +128,17 @@ describe('SettingsView', () => {
     await saveBtn.trigger('click')
     await flushPromises()
 
-    expect(mockAdminApi.updateSettings).toHaveBeenCalledWith({
-      poster_source: 'tmdb',
-      fanart_lang: 'en',
-      fanart_textless: false,
-    })
+    expect(mockAdminApi.updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        poster_source: 'tmdb',
+        fanart_lang: 'en',
+        fanart_textless: false,
+        ratings_limit: 3,
+      }),
+    )
   })
 
-  it('shows success message after save', async () => {
+  it('shows success check icon after save', async () => {
     mockAdminApi.updateSettings.mockResolvedValue({ ok: true })
 
     const wrapper = mountView()
@@ -143,7 +148,7 @@ describe('SettingsView', () => {
     await saveBtn.trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Saved')
+    expect(wrapper.find('.text-green-500').exists()).toBe(true)
   })
 
   it('shows error message on save failure', async () => {
@@ -160,6 +165,33 @@ describe('SettingsView', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('Invalid language')
+  })
+
+  it('includes ratings fields in save payload', async () => {
+    mockAdminApi.getSettings.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          ...defaultSettings,
+          ratings_limit: 3,
+          ratings_order: 'mal,imdb,trakt,rt,rta,mc,tmdb,lb',
+        }),
+    })
+    mockAdminApi.updateSettings.mockResolvedValue({ ok: true })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    const saveBtn = wrapper.findAll('button').find((b) => b.text() === 'Save')!
+    await saveBtn.trigger('click')
+    await flushPromises()
+
+    expect(mockAdminApi.updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ratings_limit: 3,
+        ratings_order: expect.stringContaining('mal'),
+      }),
+    )
   })
 
   it('shows generic error on network failure', async () => {
