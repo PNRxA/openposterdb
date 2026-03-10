@@ -78,7 +78,7 @@ See [docker-compose.yml](docker-compose.yml) for the full compose configuration.
 | `MDBLIST_API_KEY` | — | MDBList key (Trakt, Letterboxd, MAL ratings) |
 | `LISTEN_ADDR` | `0.0.0.0:3000` | Server bind address |
 | `CACHE_DIR` | `./cache` | Poster and metadata cache directory |
-| `DB_DIR` | `$CACHE_DIR` | SQLite database directory (defaults to CACHE_DIR) |
+| `DB_DIR` | `./data` | SQLite database directory |
 | `POSTER_QUALITY` | `85` | JPEG output quality (1-100) |
 | `POSTER_MEM_CACHE_MB` | `512` | In-memory cache size in MB |
 | `RATINGS_STALE_SECS` | `86400` | Min ratings cache lifetime |

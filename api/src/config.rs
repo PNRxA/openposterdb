@@ -24,7 +24,7 @@ impl Config {
             tmdb_api_key: env::var("TMDB_API_KEY").expect("TMDB_API_KEY must be set"),
             omdb_api_key: env::var("OMDB_API_KEY").ok(),
             cache_dir: env::var("CACHE_DIR").unwrap_or_else(|_| "./cache".into()),
-            db_dir: env::var("DB_DIR").unwrap_or_else(|_| env::var("CACHE_DIR").unwrap_or_else(|_| "./cache".into())),
+            db_dir: env::var("DB_DIR").unwrap_or_else(|_| "./data".into()),
             listen_addr: env::var("LISTEN_ADDR").unwrap_or_else(|_| "0.0.0.0:3000".into()),
             ratings_min_stale_secs: env::var("RATINGS_STALE_SECS")
                 .ok()
