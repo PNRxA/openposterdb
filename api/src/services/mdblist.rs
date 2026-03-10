@@ -1,5 +1,6 @@
 use crate::error::AppError;
 use crate::id::MediaType;
+use crate::services::retry::{self, MDBLIST_RETRY};
 use serde::Deserialize;
 
 #[derive(Clone)]
@@ -39,13 +40,14 @@ impl MdblistClient {
 
         let url = format!("https://api.mdblist.com/imdb/{kind}/{imdb_id}");
 
-        let resp = self
-            .http
-            .get(&url)
-            .query(&[("apikey", &self.api_key)])
-            .send()
-            .await?
-            .error_for_status()?;
+        let resp = retry::send_with_retry(&MDBLIST_RETRY, || {
+            self.http
+                .get(&url)
+                .query(&[("apikey", &self.api_key)])
+                .send()
+        })
+        .await?
+        .error_for_status()?;
 
         Ok(resp.json().await?)
     }

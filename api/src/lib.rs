@@ -39,7 +39,7 @@ pub struct AppState {
     pub tmdb: TmdbClient,
     pub omdb: Option<OmdbClient>,
     pub mdblist: Option<MdblistClient>,
-    pub http: reqwest::Client,
+
     pub font: FontArc,
     pub refresh_locks: moka::sync::Cache<String, ()>,
     pub db: DatabaseConnection,

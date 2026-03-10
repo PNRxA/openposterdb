@@ -565,7 +565,6 @@ async fn generate_poster_with_source(
         poster_path,
         badges: &badges,
         tmdb: &state.tmdb,
-        http: &state.http,
         font: &state.font,
         quality: state.config.poster_quality,
         cache_dir: &state.config.cache_dir,

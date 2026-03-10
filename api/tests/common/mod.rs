@@ -109,7 +109,7 @@ async fn _setup_test_app(cors_origin: Option<String>, secure_cookies: bool) -> (
         tmdb: TmdbClient::new("test".into(), http.clone()),
         omdb: None,
         mdblist: None,
-        http: http.clone(),
+
         font,
         refresh_locks,
         db,

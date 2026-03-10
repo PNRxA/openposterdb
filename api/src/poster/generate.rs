@@ -16,7 +16,7 @@ pub struct PosterParams<'a> {
     pub poster_path: &'a str,
     pub badges: &'a [RatingBadge],
     pub tmdb: &'a TmdbClient,
-    pub http: &'a reqwest::Client,
+
     pub font: &'a FontArc,
     pub quality: u8,
     pub cache_dir: &'a str,
@@ -31,7 +31,6 @@ pub async fn generate_poster(params: PosterParams<'_>) -> Result<Vec<u8>, AppErr
         poster_path,
         badges,
         tmdb,
-        http,
         font,
         quality,
         cache_dir,
@@ -47,14 +46,14 @@ pub async fn generate_poster(params: PosterParams<'_>) -> Result<Vec<u8>, AppErr
         let poster_cache = cache::base_poster_path(cache_dir, poster_path)?;
         if let Some(entry) = cache::read(&poster_cache, poster_stale_secs).await {
             if entry.is_stale {
-                let bytes = tmdb.fetch_poster_bytes(poster_path, http).await?;
+                let bytes = tmdb.fetch_poster_bytes(poster_path).await?;
                 cache::write(&poster_cache, &bytes).await?;
                 bytes
             } else {
                 entry.bytes
             }
         } else {
-            let bytes = tmdb.fetch_poster_bytes(poster_path, http).await?;
+            let bytes = tmdb.fetch_poster_bytes(poster_path).await?;
             cache::write(&poster_cache, &bytes).await?;
             bytes
         }

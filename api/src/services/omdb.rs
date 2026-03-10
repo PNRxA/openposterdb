@@ -1,4 +1,5 @@
 use crate::error::AppError;
+use crate::services::retry::{self, OMDB_RETRY};
 use serde::Deserialize;
 
 #[derive(Clone)]
@@ -31,13 +32,15 @@ impl OmdbClient {
     }
 
     pub async fn get_ratings(&self, imdb_id: &str) -> Result<OmdbResponse, AppError> {
-        let resp = self
-            .http
-            .get("https://www.omdbapi.com/")
-            .query(&[("apikey", &self.api_key), ("i", &imdb_id.to_string())])
-            .send()
-            .await?
-            .error_for_status()?;
+        let imdb_id = imdb_id.to_owned();
+        let resp = retry::send_with_retry(&OMDB_RETRY, || {
+            self.http
+                .get("https://www.omdbapi.com/")
+                .query(&[("apikey", &self.api_key), ("i", &imdb_id)])
+                .send()
+        })
+        .await?
+        .error_for_status()?;
         Ok(resp.json().await?)
     }
 }

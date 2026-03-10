@@ -33,7 +33,11 @@ async fn main() {
         .init();
 
     let config = Config::from_env();
-    let http = reqwest::Client::new();
+    let http = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .connect_timeout(Duration::from_secs(10))
+        .build()
+        .expect("failed to build HTTP client");
     let font = FontArc::try_from_slice(FONT_BYTES).expect("failed to load font");
 
     let omdb = config
@@ -204,10 +208,10 @@ async fn main() {
     let pending_last_used: Arc<DashMap<i32, ()>> = Arc::new(DashMap::new());
 
     let state = Arc::new(AppState {
-        tmdb: TmdbClient::new(config.tmdb_api_key.clone(), http.clone()),
+        tmdb: TmdbClient::new(config.tmdb_api_key.clone(), http),
         omdb,
         mdblist,
-        http,
+
         font,
         refresh_locks,
         db: database,

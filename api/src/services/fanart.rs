@@ -1,4 +1,5 @@
 use crate::error::AppError;
+use crate::services::retry::{self, FANART_RETRY};
 use serde::Deserialize;
 
 #[derive(Clone)]
@@ -60,7 +61,7 @@ impl FanartClient {
             "https://webservice.fanart.tv/v3/movies/{tmdb_id}?api_key={}",
             self.api_key
         );
-        let resp = self.http.get(&url).send().await?;
+        let resp = retry::send_with_retry(&FANART_RETRY, || self.http.get(&url).send()).await?;
         if resp.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(FanartImages { posters: vec![], logos: vec![], backdrops: vec![] });
         }
@@ -79,7 +80,7 @@ impl FanartClient {
             "https://webservice.fanart.tv/v3/tv/{id}?api_key={}",
             self.api_key
         );
-        let resp = self.http.get(&url).send().await?;
+        let resp = retry::send_with_retry(&FANART_RETRY, || self.http.get(&url).send()).await?;
         if resp.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(FanartImages { posters: vec![], logos: vec![], backdrops: vec![] });
         }
@@ -126,7 +127,10 @@ impl FanartClient {
     }
 
     pub async fn fetch_poster_bytes(&self, url: &str) -> Result<Vec<u8>, AppError> {
-        let resp = self.http.get(url).send().await?.error_for_status()?;
+        let url = url.to_owned();
+        let resp = retry::send_with_retry(&FANART_RETRY, || self.http.get(&url).send())
+            .await?
+            .error_for_status()?;
         Ok(resp.bytes().await?.to_vec())
     }
 }
