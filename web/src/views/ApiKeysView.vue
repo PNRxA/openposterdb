@@ -3,6 +3,8 @@ import { ref, reactive } from 'vue'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { keysApi } from '@/lib/api'
 import RefreshButton from '@/components/RefreshButton.vue'
+import PosterSettingsForm from '@/components/PosterSettingsForm.vue'
+import type { PosterSettings } from '@/components/PosterSettingsForm.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Settings } from 'lucide-vue-next'
@@ -13,14 +15,6 @@ interface ApiKey {
   key_prefix: string
   created_at: string
   last_used_at: string | null
-}
-
-interface KeySettings {
-  poster_source: string
-  fanart_lang: string
-  fanart_textless: boolean
-  fanart_available: boolean
-  is_default: boolean
 }
 
 const queryClient = useQueryClient()
@@ -42,16 +36,8 @@ const loading = ref(false)
 
 // Per-key settings state
 const expandedKey = ref<number | null>(null)
-const keySettings = reactive<Record<number, KeySettings>>({})
+const keySettings = reactive<Record<number, PosterSettings>>({})
 const settingsLoading = reactive<Record<number, boolean>>({})
-const settingsSaving = reactive<Record<number, boolean>>({})
-const settingsError = reactive<Record<number, string>>({})
-const settingsSuccess = reactive<Record<number, boolean>>({})
-
-// Editable form state per key
-const editSource = reactive<Record<number, string>>({})
-const editLang = reactive<Record<number, string>>({})
-const editTextless = reactive<Record<number, boolean>>({})
 
 async function toggleSettings(id: number) {
   if (expandedKey.value === id) {
@@ -60,71 +46,44 @@ async function toggleSettings(id: number) {
   }
   expandedKey.value = id
   if (!keySettings[id]) {
-    await loadSettings(id)
+    await fetchSettings(id)
   }
 }
 
-async function loadSettings(id: number) {
+async function fetchSettings(id: number): Promise<PosterSettings | null> {
   settingsLoading[id] = true
-  settingsError[id] = ''
   try {
     const res = await keysApi.getSettings(id)
     if (res.ok) {
-      const data: KeySettings = await res.json()
+      const data: PosterSettings = await res.json()
       keySettings[id] = data
-      editSource[id] = data.poster_source
-      editLang[id] = data.fanart_lang
-      editTextless[id] = data.fanart_textless
-    } else {
-      settingsError[id] = 'Failed to load settings'
+      return data
     }
   } catch {
-    settingsError[id] = 'Failed to load settings'
+    // handled by caller
   } finally {
     settingsLoading[id] = false
   }
+  return null
 }
 
-async function saveSettings(id: number) {
-  if (settingsSaving[id]) return
-  settingsSaving[id] = true
-  settingsError[id] = ''
-  settingsSuccess[id] = false
-  try {
-    const res = await keysApi.updateSettings(id, {
-      poster_source: editSource[id] ?? 'tmdb',
-      fanart_lang: editLang[id] ?? 'en',
-      fanart_textless: editTextless[id] ?? false,
-    })
-    if (res.ok) {
-      settingsSuccess[id] = true
-      await loadSettings(id)
-      setTimeout(() => (settingsSuccess[id] = false), 2000)
-    } else {
-      const data = await res.json().catch(() => null)
-      settingsError[id] = data?.error || 'Failed to save'
-    }
-  } catch {
-    settingsError[id] = 'Failed to save'
-  } finally {
-    settingsSaving[id] = false
+function makeLoadSettings(id: number) {
+  return () => fetchSettings(id)
+}
+
+function makeSaveSettings(id: number) {
+  return async (s: { poster_source: string; fanart_lang: string; fanart_textless: boolean }): Promise<string | null> => {
+    const res = await keysApi.updateSettings(id, s)
+    if (res.ok) return null
+    const data = await res.json().catch(() => null)
+    return data?.error || 'Failed to save'
   }
 }
 
-async function resetSettings(id: number) {
-  settingsSaving[id] = true
-  settingsError[id] = ''
-  try {
+function makeResetSettings(id: number) {
+  return async (): Promise<boolean> => {
     const res = await keysApi.deleteSettings(id)
-    if (res.ok) {
-      await loadSettings(id)
-    } else {
-      settingsError[id] = 'Failed to reset'
-    }
-  } catch {
-    settingsError[id] = 'Failed to reset'
-  } finally {
-    settingsSaving[id] = false
+    return res.ok
   }
 }
 
@@ -220,71 +179,16 @@ async function deleteKey(id: number) {
         </div>
 
         <!-- Inline settings panel -->
-        <div v-if="expandedKey === key.id" class="border-t px-3 py-4 space-y-4 bg-muted/30">
+        <div v-if="expandedKey === key.id" class="border-t px-3 py-4 bg-muted/30">
           <div v-if="settingsLoading[key.id]" class="text-sm text-muted-foreground">Loading settings...</div>
-          <template v-else-if="keySettings[key.id]">
-            <div class="flex items-center gap-2">
-              <h3 class="text-sm font-semibold">Poster Settings</h3>
-              <span
-                v-if="keySettings[key.id]?.is_default"
-                class="text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded"
-              >
-                Using defaults
-              </span>
-            </div>
-
-            <div class="space-y-2">
-              <label class="text-sm font-medium">Poster Source</label>
-              <select
-                v-model="editSource[key.id]"
-                class="flex h-9 w-full max-w-xs rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                <option value="tmdb">TMDB</option>
-                <option value="fanart" :disabled="!keySettings[key.id]?.fanart_available">
-                  Fanart.tv{{ !keySettings[key.id]?.fanart_available ? ' (no API key)' : '' }}
-                </option>
-              </select>
-            </div>
-
-            <template v-if="editSource[key.id] === 'fanart'">
-              <div class="space-y-2">
-                <label class="text-sm font-medium">Language</label>
-                <Input
-                  v-model="editLang[key.id]"
-                  type="text"
-                  placeholder="en"
-                  class="max-w-[120px]"
-                />
-              </div>
-
-              <div class="flex items-center gap-2">
-                <input
-                  :id="`textless-${key.id}`"
-                  v-model="editTextless[key.id]"
-                  type="checkbox"
-                  class="h-4 w-4 rounded border-input"
-                />
-                <label :for="`textless-${key.id}`" class="text-sm font-medium">Prefer textless posters</label>
-              </div>
-            </template>
-
-            <div class="flex items-center gap-3 pt-1">
-              <Button size="sm" :disabled="settingsSaving[key.id]" @click="saveSettings(key.id)">
-                {{ settingsSaving[key.id] ? 'Saving...' : 'Save' }}
-              </Button>
-              <Button
-                v-if="!keySettings[key.id]?.is_default"
-                variant="outline"
-                size="sm"
-                :disabled="settingsSaving[key.id]"
-                @click="resetSettings(key.id)"
-              >
-                Reset to defaults
-              </Button>
-              <span v-if="settingsSuccess[key.id]" class="text-sm text-green-600">Saved</span>
-              <span v-if="settingsError[key.id]" class="text-sm text-destructive">{{ settingsError[key.id] }}</span>
-            </div>
-          </template>
+          <PosterSettingsForm
+            v-else-if="keySettings[key.id]"
+            :settings="keySettings[key.id]!"
+            :uid="String(key.id)"
+            :load-settings="makeLoadSettings(key.id)"
+            :save-settings="makeSaveSettings(key.id)"
+            :reset-settings="makeResetSettings(key.id)"
+          />
         </div>
       </div>
     </div>

@@ -11,6 +11,7 @@ const mockRouter = {
 const mockAuthStore = {
   checkSetupRequired: vi.fn().mockResolvedValue(false),
   login: vi.fn(),
+  loginWithApiKey: vi.fn(),
   isAuthenticated: false,
 }
 
@@ -42,9 +43,10 @@ describe('LoginView', () => {
     vi.clearAllMocks()
     mockAuthStore.checkSetupRequired.mockResolvedValue(false)
     mockAuthStore.login.mockReset()
+    mockAuthStore.loginWithApiKey.mockReset()
   })
 
-  it('renders login form', async () => {
+  it('renders admin login form by default', async () => {
     const wrapper = mountView()
     await flushPromises()
 
@@ -53,7 +55,7 @@ describe('LoginView', () => {
     expect(wrapper.find('button[type="submit"]').exists()).toBe(true)
   })
 
-  it('shows error message on failed login', async () => {
+  it('shows error message on failed admin login', async () => {
     mockAuthStore.login.mockResolvedValue(false)
     const wrapper = mountView()
     await flushPromises()
@@ -66,7 +68,7 @@ describe('LoginView', () => {
     expect(wrapper.text()).toContain('Invalid username or password')
   })
 
-  it('calls auth.login on form submit', async () => {
+  it('calls auth.login on admin form submit', async () => {
     mockAuthStore.login.mockResolvedValue(true)
     const wrapper = mountView()
     await flushPromises()
@@ -78,5 +80,69 @@ describe('LoginView', () => {
 
     expect(mockAuthStore.login).toHaveBeenCalledWith('admin', 'secret')
     expect(mockRouter.push).toHaveBeenCalledWith('/')
+  })
+
+  it('toggles to API key mode', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    // Click the toggle link
+    await wrapper.find('button.underline').trigger('click')
+    await flushPromises()
+
+    // Should show API key input, not username/password
+    expect(wrapper.find('input#apikey').exists()).toBe(true)
+    expect(wrapper.find('input#username').exists()).toBe(false)
+    expect(wrapper.find('input#password').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Sign in as admin instead')
+  })
+
+  it('calls loginWithApiKey in apikey mode', async () => {
+    mockAuthStore.loginWithApiKey.mockResolvedValue(true)
+    const wrapper = mountView()
+    await flushPromises()
+
+    // Switch to API key mode
+    await wrapper.find('button.underline').trigger('click')
+    await flushPromises()
+
+    await wrapper.find('input#apikey').setValue('my-secret-key')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(mockAuthStore.loginWithApiKey).toHaveBeenCalledWith('my-secret-key')
+    expect(mockRouter.push).toHaveBeenCalledWith('/key-settings')
+  })
+
+  it('shows error on failed API key login', async () => {
+    mockAuthStore.loginWithApiKey.mockResolvedValue(false)
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('button.underline').trigger('click')
+    await flushPromises()
+
+    await wrapper.find('input#apikey').setValue('bad-key')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Invalid API key')
+  })
+
+  it('toggles back to admin mode from apikey mode', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    // Toggle to apikey
+    await wrapper.find('button.underline').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('input#apikey').exists()).toBe(true)
+
+    // Toggle back to admin
+    await wrapper.find('button.underline').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('input#username').exists()).toBe(true)
+    expect(wrapper.find('input#apikey').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Sign in with API key instead')
   })
 })

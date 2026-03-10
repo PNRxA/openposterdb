@@ -113,7 +113,7 @@ describe('SettingsView', () => {
 
     const fanartOption = wrapper.find('option[value="fanart"]')
     expect(fanartOption.attributes('disabled')).toBeDefined()
-    expect(fanartOption.text()).toContain('no API key configured')
+    expect(fanartOption.text()).toContain('no API key')
   })
 
   it('calls updateSettings on save', async () => {
@@ -172,6 +172,6 @@ describe('SettingsView', () => {
     await saveBtn.trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Failed to save settings')
+    expect(wrapper.text()).toContain('Failed to save')
   })
 })

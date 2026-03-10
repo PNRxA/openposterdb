@@ -80,6 +80,41 @@ export const adminApi = {
   }): Promise<Response> => put('/api/admin/settings', settings),
 }
 
+// --- Self-service API (API key session JWT auth) ---
+
+const KEY_BASE_URL = import.meta.env.VITE_API_URL || ''
+
+function keyRequest(path: string, options: RequestInit = {}): Promise<Response> {
+  const auth = useAuthStore()
+  const headers = new Headers(options.headers)
+
+  if (auth.apiKeyToken) {
+    headers.set('Authorization', `Bearer ${auth.apiKeyToken}`)
+  }
+
+  if (options.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
+
+  return fetch(`${KEY_BASE_URL}${path}`, { ...options, headers })
+}
+
+export const selfApi = {
+  getInfo: (): Promise<Response> => keyRequest('/api/key/me'),
+  getSettings: (): Promise<Response> => keyRequest('/api/key/me/settings'),
+  updateSettings: (settings: {
+    poster_source: string
+    fanart_lang: string
+    fanart_textless: boolean
+  }): Promise<Response> =>
+    keyRequest('/api/key/me/settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    }),
+  resetSettings: (): Promise<Response> =>
+    keyRequest('/api/key/me/settings', { method: 'DELETE' }),
+}
+
 export const keysApi = {
   list: (): Promise<Response> => get('/api/keys'),
   create: (name: string): Promise<Response> => post('/api/keys', { name }),

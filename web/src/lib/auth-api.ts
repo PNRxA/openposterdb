@@ -22,4 +22,10 @@ export const authApi = {
       method: 'POST',
       credentials: 'include',
     }),
+  keyLogin: (apiKey: string): Promise<Response> =>
+    fetch(`${BASE_URL}/api/auth/key-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey }),
+    }),
 }

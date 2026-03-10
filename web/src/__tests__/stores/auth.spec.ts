@@ -13,7 +13,19 @@ const localStorageStub = {
   }),
 }
 
+const sessionStorageMock: Record<string, string> = {}
+const sessionStorageStub = {
+  getItem: vi.fn((key: string) => sessionStorageMock[key] ?? null),
+  setItem: vi.fn((key: string, value: string) => {
+    sessionStorageMock[key] = value
+  }),
+  removeItem: vi.fn((key: string) => {
+    delete sessionStorageMock[key]
+  }),
+}
+
 vi.stubGlobal('localStorage', localStorageStub)
+vi.stubGlobal('sessionStorage', sessionStorageStub)
 
 function mockFetchSuccess(data: Record<string, unknown>, ok = true) {
   return vi.fn().mockResolvedValue({
@@ -27,8 +39,10 @@ describe('auth store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     Object.keys(localStorageMock).forEach((k) => delete localStorageMock[k])
+    Object.keys(sessionStorageMock).forEach((k) => delete sessionStorageMock[k])
     vi.restoreAllMocks()
     vi.stubGlobal('localStorage', localStorageStub)
+    vi.stubGlobal('sessionStorage', sessionStorageStub)
   })
 
   it('token is set via login and stored in localStorage', async () => {
@@ -213,5 +227,87 @@ describe('auth store', () => {
     localStorageMock['token'] = 'persisted-token'
     const auth = useAuthStore()
     expect(auth.token).toBe('persisted-token')
+  })
+
+  it('isAdminSession is true only with admin token', async () => {
+    vi.stubGlobal('fetch', mockFetchSuccess({ token: 'abc123' }))
+    const auth = useAuthStore()
+    await auth.login('user', 'pass')
+    expect(auth.isAdminSession).toBe(true)
+    expect(auth.isApiKeySession).toBe(false)
+  })
+
+  it('isApiKeySession is true only with API key token', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchSuccess({ token: 'jwt-token', name: 'test-key', key_prefix: 'abc' }),
+    )
+    const auth = useAuthStore()
+    await auth.loginWithApiKey('raw-key')
+    expect(auth.isApiKeySession).toBe(true)
+    expect(auth.isAdminSession).toBe(false)
+  })
+
+  it('loginWithApiKey stores JWT token in sessionStorage', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchSuccess({ token: 'jwt-token', name: 'my-key', key_prefix: 'xyz' }),
+    )
+    const auth = useAuthStore()
+    const ok = await auth.loginWithApiKey('raw-key')
+    expect(ok).toBe(true)
+    expect(auth.apiKeyToken).toBe('jwt-token')
+    expect(sessionStorageStub.setItem).toHaveBeenCalledWith('apiKeyToken', 'jwt-token')
+    expect(auth.apiKeyInfo).toEqual({ name: 'my-key', key_prefix: 'xyz' })
+  })
+
+  it('loginWithApiKey returns false on failure', async () => {
+    vi.stubGlobal('fetch', mockFetchSuccess({}, false))
+    const auth = useAuthStore()
+    const ok = await auth.loginWithApiKey('bad-key')
+    expect(ok).toBe(false)
+    expect(auth.apiKeyToken).toBeNull()
+  })
+
+  it('logoutApiKey clears API key session', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchSuccess({ token: 'jwt-token', name: 'k', key_prefix: 'x' }),
+    )
+    const auth = useAuthStore()
+    await auth.loginWithApiKey('key')
+    auth.logoutApiKey()
+    expect(auth.apiKeyToken).toBeNull()
+    expect(auth.apiKeyInfo).toBeNull()
+    expect(auth.isApiKeySession).toBe(false)
+    expect(sessionStorageStub.removeItem).toHaveBeenCalledWith('apiKeyToken')
+  })
+
+  it('isAuthenticated is true for either session type', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchSuccess({ token: 'jwt', name: 'k', key_prefix: 'x' }),
+    )
+    const auth = useAuthStore()
+    expect(auth.isAuthenticated).toBe(false)
+    await auth.loginWithApiKey('key')
+    expect(auth.isAuthenticated).toBe(true)
+  })
+
+  it('logout clears both admin and API key sessions', async () => {
+    vi.stubGlobal('fetch', mockFetchSuccess({ token: 'tok' }))
+    const auth = useAuthStore()
+    await auth.login('user', 'pass')
+    auth.logout()
+    expect(auth.isAdminSession).toBe(false)
+    expect(auth.isApiKeySession).toBe(false)
+    expect(auth.isAuthenticated).toBe(false)
+  })
+
+  it('initializes apiKeyToken from sessionStorage', () => {
+    sessionStorageMock['apiKeyToken'] = 'persisted-jwt'
+    const auth = useAuthStore()
+    expect(auth.apiKeyToken).toBe('persisted-jwt')
+    expect(auth.isApiKeySession).toBe(true)
   })
 })

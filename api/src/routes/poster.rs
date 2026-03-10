@@ -3,12 +3,12 @@ use axum::http::header;
 use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
 use serde::Deserialize;
-use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use std::time::Instant;
 
 use crate::cache::{self, MemCacheEntry};
 use crate::error::AppError;
+use crate::handlers::auth::hash_api_key;
 use crate::id::{self, IdType, MediaType};
 use crate::poster::generate;
 use crate::services::db::PosterSettings;
@@ -30,9 +30,7 @@ pub async fn handler(
     let use_fallback = query.fallback.as_deref() == Some("true");
 
     // Validate API key (cached, including negative results to prevent DB hammering)
-    let mut hasher = Sha256::new();
-    hasher.update(api_key.as_bytes());
-    let key_hash = format!("{:x}", hasher.finalize());
+    let key_hash = hash_api_key(&api_key);
 
     let db = state.db.clone();
     let hash_clone = key_hash.clone();

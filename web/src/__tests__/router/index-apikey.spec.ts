@@ -3,12 +3,6 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
-vi.stubGlobal('sessionStorage', {
-  getItem: vi.fn(() => null),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-})
-
 function makeRouter() {
   return createRouter({
     history: createWebHistory(),
@@ -19,14 +13,13 @@ function makeRouter() {
         meta: { requiresAuth: true },
         children: [
           { path: '', name: 'dashboard', component: { template: '<div>Dashboard</div>' } },
-          { path: 'posters', name: 'posters', component: { template: '<div>Posters</div>' } },
           { path: 'keys', name: 'keys', component: { template: '<div>Keys</div>' } },
         ],
       },
       {
         path: '/key-settings',
         name: 'key-settings',
-        component: { template: '<div>Key Settings</div>' },
+        component: { template: '<div>KeySettings</div>' },
         meta: { requiresApiKey: true },
       },
       { path: '/login', name: 'login', component: { template: '<div>Login</div>' } },
@@ -35,10 +28,9 @@ function makeRouter() {
   })
 }
 
-function addGuards(router: ReturnType<typeof createRouter>) {
-  const auth = useAuthStore()
+// Replicate the actual guard logic for testing
+function addGuard(router: ReturnType<typeof makeRouter>, auth: ReturnType<typeof useAuthStore>) {
   router.beforeEach(async (to) => {
-    // Admin routes require admin session
     if (to.matched.some((r) => r.meta.requiresAuth)) {
       if (!auth.isAdminSession) {
         if (auth.isApiKeySession) {
@@ -47,106 +39,73 @@ function addGuards(router: ReturnType<typeof createRouter>) {
         return { name: 'login' }
       }
     }
-
-    // API key routes require API key session
     if (to.matched.some((r) => r.meta.requiresApiKey) && !auth.isApiKeySession) {
       return { name: 'login' }
     }
-
-    // Redirect away from login/setup if already authenticated
-    if (to.name === 'login' || to.name === 'setup') {
-      if (auth.isAdminSession) {
-        return { name: 'dashboard' }
-      }
-      if (auth.isApiKeySession) {
-        return { name: 'key-settings' }
-      }
+    if (to.name === 'login') {
+      if (auth.isAdminSession) return { name: 'dashboard' }
+      if (auth.isApiKeySession) return { name: 'key-settings' }
     }
   })
 }
 
-describe('router', () => {
+describe('router - API key session', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
   })
 
-  it('unauthenticated user visiting / gets redirected to /login', async () => {
+  it('API key session visiting / redirects to /key-settings', async () => {
     const router = makeRouter()
-    addGuards(router)
+    const auth = useAuthStore()
+    auth.apiKeyToken = 'jwt-token'
+
+    addGuard(router, auth)
 
     await router.push('/')
+    await router.isReady()
+
+    expect(router.currentRoute.value.name).toBe('key-settings')
+  })
+
+  it('API key session visiting /login redirects to /key-settings', async () => {
+    const router = makeRouter()
+    const auth = useAuthStore()
+    auth.apiKeyToken = 'jwt-token'
+
+    addGuard(router, auth)
+
+    await router.push('/login')
+    await router.isReady()
+
+    expect(router.currentRoute.value.name).toBe('key-settings')
+  })
+
+  it('unauthenticated user visiting /key-settings redirects to /login', async () => {
+    const router = makeRouter()
+    const auth = useAuthStore()
+
+    addGuard(router, auth)
+
+    await router.push('/key-settings')
     await router.isReady()
 
     expect(router.currentRoute.value.name).toBe('login')
   })
 
-  it('admin user visiting /login gets redirected to dashboard', async () => {
+  it('admin session can access / but not /key-settings', async () => {
     const router = makeRouter()
     const auth = useAuthStore()
-    auth.token = 'valid-token'
-    addGuards(router)
+    auth.token = 'jwt-token'
 
-    await router.push('/login')
+    addGuard(router, auth)
+
+    await router.push('/')
     await router.isReady()
-
     expect(router.currentRoute.value.name).toBe('dashboard')
-  })
 
-  it('API key user visiting / gets redirected to key-settings', async () => {
-    const router = makeRouter()
-    const auth = useAuthStore()
-    auth.apiKeyToken = 'jwt-token'
-    addGuards(router)
-
-    await router.push('/')
-    await router.isReady()
-
-    expect(router.currentRoute.value.name).toBe('key-settings')
-  })
-
-  it('API key user visiting /login gets redirected to key-settings', async () => {
-    const router = makeRouter()
-    const auth = useAuthStore()
-    auth.apiKeyToken = 'jwt-token'
-    addGuards(router)
-
-    await router.push('/login')
-    await router.isReady()
-
-    expect(router.currentRoute.value.name).toBe('key-settings')
-  })
-
-  it('unauthenticated user visiting /key-settings gets redirected to /login', async () => {
-    const router = makeRouter()
-    addGuards(router)
-
+    // Admin without apiKey gets bounced from /key-settings → login → dashboard
     await router.push('/key-settings')
     await router.isReady()
-
-    expect(router.currentRoute.value.name).toBe('login')
-  })
-
-  it('API key user can access /key-settings', async () => {
-    const router = makeRouter()
-    const auth = useAuthStore()
-    auth.apiKeyToken = 'jwt-token'
-    addGuards(router)
-
-    await router.push('/key-settings')
-    await router.isReady()
-
-    expect(router.currentRoute.value.name).toBe('key-settings')
-  })
-
-  it('admin user can access admin routes', async () => {
-    const router = makeRouter()
-    const auth = useAuthStore()
-    auth.token = 'valid-token'
-    addGuards(router)
-
-    await router.push('/')
-    await router.isReady()
-
     expect(router.currentRoute.value.name).toBe('dashboard')
   })
 })

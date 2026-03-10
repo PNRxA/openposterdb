@@ -10,7 +10,8 @@ pub fn auth_routes() -> Router<Arc<AppState>> {
     let rate_limited = Router::new()
         .route("/api/auth/setup", post(handlers::auth::setup))
         .route("/api/auth/login", post(handlers::auth::login))
-        .route("/api/auth/refresh", post(handlers::auth::refresh));
+        .route("/api/auth/refresh", post(handlers::auth::refresh))
+        .route("/api/auth/key-login", post(handlers::auth::key_login));
 
     #[cfg(not(any(test, feature = "test-support")))]
     let rate_limited = {

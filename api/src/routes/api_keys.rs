@@ -18,3 +18,14 @@ pub fn api_key_routes() -> Router<Arc<AppState>> {
                 .delete(handlers::api_keys::delete_settings),
         )
 }
+
+pub fn api_key_self_routes() -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/api/key/me", get(handlers::api_keys::get_own_key_info))
+        .route(
+            "/api/key/me/settings",
+            get(handlers::api_keys::get_own_settings)
+                .put(handlers::api_keys::update_own_settings)
+                .delete(handlers::api_keys::reset_own_settings),
+        )
+}

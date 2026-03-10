@@ -36,6 +36,12 @@ const router = createRouter({
       ],
     },
     {
+      path: '/key-settings',
+      name: 'key-settings',
+      component: () => import('@/views/KeySettingsView.vue'),
+      meta: { requiresApiKey: true },
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),
@@ -65,14 +71,29 @@ router.beforeEach(async (to) => {
     // If we can't check, continue
   }
 
-  // Auth guard — check the matched route chain for requiresAuth
-  if (to.matched.some((r) => r.meta.requiresAuth) && !auth.isAuthenticated) {
+  // Admin routes require admin session (not API key session)
+  if (to.matched.some((r) => r.meta.requiresAuth)) {
+    if (!auth.isAdminSession) {
+      if (auth.isApiKeySession) {
+        return { name: 'key-settings' }
+      }
+      return { name: 'login' }
+    }
+  }
+
+  // API key routes require API key session
+  if (to.matched.some((r) => r.meta.requiresApiKey) && !auth.isApiKeySession) {
     return { name: 'login' }
   }
 
   // Redirect away from login/setup if already authenticated
-  if ((to.name === 'login' || to.name === 'setup') && auth.isAuthenticated) {
-    return { name: 'dashboard' }
+  if (to.name === 'login' || to.name === 'setup') {
+    if (auth.isAdminSession) {
+      return { name: 'dashboard' }
+    }
+    if (auth.isApiKeySession) {
+      return { name: 'key-settings' }
+    }
   }
 })
 

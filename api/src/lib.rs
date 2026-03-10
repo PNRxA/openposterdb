@@ -193,9 +193,17 @@ pub fn build_app(state: Arc<AppState>) -> Router {
             handlers::middleware::require_auth,
         ));
 
+    let key_self_routes = routes::api_keys::api_key_self_routes().layer(
+        middleware::from_fn_with_state(
+            state.clone(),
+            handlers::middleware::require_api_key_auth,
+        ),
+    );
+
     let compressed_routes = Router::new()
         .merge(routes::auth::auth_routes())
         .merge(admin_routes)
+        .merge(key_self_routes)
         .layer(CompressionLayer::new());
 
     let poster_route = {

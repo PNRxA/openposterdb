@@ -21,10 +21,17 @@ static DUMMY_HASH: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
 const ACCESS_TOKEN_EXPIRY_MINUTES: i64 = 15;
 const REFRESH_TOKEN_EXPIRY_DAYS: i64 = 7;
 const REFRESH_TOKEN_MAX_AGE_SECS: i64 = REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
+const API_KEY_SESSION_EXPIRY_HOURS: i64 = 24;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: String,
+    pub exp: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ApiKeyClaims {
+    pub key_id: i32,
     pub exp: usize,
 }
 
@@ -93,6 +100,12 @@ fn generate_refresh_token() -> String {
 pub(crate) fn hash_refresh_token(token: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(token.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+pub fn hash_api_key(raw: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(raw.as_bytes());
     format!("{:x}", hasher.finalize())
 }
 
@@ -312,6 +325,51 @@ pub async fn logout(
     );
 
     Ok((headers, Json(json!({ "ok": true }))))
+}
+
+// --- API key login (issues a short-lived JWT for self-service UI) ---
+
+fn create_api_key_token(key_id: i32, secret: &[u8]) -> Result<String, AppError> {
+    let exp = chrono::Utc::now()
+        .checked_add_signed(chrono::Duration::hours(API_KEY_SESSION_EXPIRY_HOURS))
+        .ok_or_else(|| AppError::BadRequest("Failed to compute token expiry".into()))?
+        .timestamp() as usize;
+
+    let claims = ApiKeyClaims { key_id, exp };
+
+    encode(
+        &JwtHeader::default(),
+        &claims,
+        &EncodingKey::from_secret(secret),
+    )
+    .map_err(|e| {
+        tracing::error!("Failed to create API key JWT: {e}");
+        AppError::BadRequest("Authentication failed".into())
+    })
+}
+
+#[derive(Deserialize)]
+pub struct KeyLoginRequest {
+    api_key: String,
+}
+
+pub async fn key_login(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<KeyLoginRequest>,
+) -> Result<Json<Value>, AppError> {
+    let key_hash = hash_api_key(&req.api_key);
+
+    let key = db::find_api_key_by_hash(&state.db, &key_hash)
+        .await?
+        .ok_or(AppError::Unauthorized)?;
+
+    let token = create_api_key_token(key.id, &state.jwt_secret)?;
+
+    Ok(Json(json!({
+        "token": token,
+        "name": key.name,
+        "key_prefix": key.key_prefix,
+    })))
 }
 
 #[cfg(test)]
