@@ -224,6 +224,36 @@ describe('api', () => {
     expect(url).not.toContain('poster_position')
   })
 
+  it('adminApi.previewPoster includes label_style when provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.previewPoster(3, 'imdb,rt', 'bottom-center', 'horizontal', 'icon')
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toContain('label_style=icon')
+  })
+
+  it('adminApi.previewLogo includes label_style when provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.previewLogo(3, 'imdb,rt', 'horizontal', 'icon')
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toContain('label_style=icon')
+  })
+
+  it('adminApi.previewBackdrop includes label_style when provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.previewBackdrop(3, 'imdb,rt', 'vertical', 'icon')
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toContain('label_style=icon')
+  })
+
   it('adminApi.getLogos calls GET with correct URL', async () => {
     const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
     vi.stubGlobal('fetch', fetchMock)

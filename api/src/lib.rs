@@ -117,13 +117,16 @@ pub const SCHEMA_SQL: &[&str] = &[
         fanart_lang            TEXT NOT NULL DEFAULT 'en',
         fanart_textless        INTEGER NOT NULL DEFAULT 0,
         ratings_limit          INTEGER NOT NULL DEFAULT 3,
-        ratings_order          TEXT NOT NULL DEFAULT 'mal,imdb,lb,rt,rta,mc,tmdb,trakt',
+        ratings_order          TEXT NOT NULL DEFAULT 'mal,imdb,lb,rt,mc,rta,tmdb,trakt',
         poster_position        TEXT NOT NULL DEFAULT 'bottom-center',
-        logo_ratings_limit     INTEGER NOT NULL DEFAULT 3,
-        backdrop_ratings_limit INTEGER NOT NULL DEFAULT 3,
+        logo_ratings_limit     INTEGER NOT NULL DEFAULT 5,
+        backdrop_ratings_limit INTEGER NOT NULL DEFAULT 5,
         poster_badge_style     TEXT NOT NULL DEFAULT 'horizontal',
-        logo_badge_style       TEXT NOT NULL DEFAULT 'horizontal',
-        backdrop_badge_style   TEXT NOT NULL DEFAULT 'vertical'
+        logo_badge_style       TEXT NOT NULL DEFAULT 'vertical',
+        backdrop_badge_style   TEXT NOT NULL DEFAULT 'vertical',
+        poster_label_style     TEXT NOT NULL DEFAULT 'icon',
+        logo_label_style       TEXT NOT NULL DEFAULT 'icon',
+        backdrop_label_style   TEXT NOT NULL DEFAULT 'icon'
     )",
 ];
 
@@ -160,11 +163,23 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
         "duplicate column",
     ),
     (
-        "ALTER TABLE api_key_settings ADD COLUMN logo_badge_style TEXT NOT NULL DEFAULT 'horizontal'",
+        "ALTER TABLE api_key_settings ADD COLUMN logo_badge_style TEXT NOT NULL DEFAULT 'vertical'",
         "duplicate column",
     ),
     (
         "ALTER TABLE api_key_settings ADD COLUMN backdrop_badge_style TEXT NOT NULL DEFAULT 'vertical'",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN poster_label_style TEXT NOT NULL DEFAULT 'icon'",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN logo_label_style TEXT NOT NULL DEFAULT 'icon'",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN backdrop_label_style TEXT NOT NULL DEFAULT 'icon'",
         "duplicate column",
     ),
 ];

@@ -193,4 +193,29 @@ test.describe('settings', () => {
     await expect(page.locator('h1')).toContainText('Settings')
     await expect(page.getByTestId('poster-position-select')).toHaveValue('left')
   })
+
+  test('label style dropdowns are visible with default icon', async ({ page }) => {
+    const labelSelects = page.locator('select').filter({ has: page.locator('option[value="icon"]') })
+    // There should be 3 label style selects (poster, logo, backdrop)
+    await expect(labelSelects).toHaveCount(3)
+
+    // All should default to "icon"
+    for (const select of await labelSelects.all()) {
+      await expect(select).toHaveValue('icon')
+    }
+  })
+
+  test('label style persists after change and reload', async ({ page }) => {
+    // Find the first label style select (poster) and change to text
+    const labelSelects = page.locator('select').filter({ has: page.locator('option[value="icon"]') })
+    await labelSelects.first().selectOption('text')
+
+    await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 })
+
+    await page.reload()
+    await expect(page.locator('h1')).toContainText('Settings')
+
+    const reloadedSelects = page.locator('select').filter({ has: page.locator('option[value="icon"]') })
+    await expect(reloadedSelects.first()).toHaveValue('text')
+  })
 })

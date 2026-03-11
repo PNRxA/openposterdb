@@ -19,6 +19,9 @@ export interface PosterSettings {
   poster_badge_style: string
   logo_badge_style: string
   backdrop_badge_style: string
+  poster_label_style: string
+  logo_label_style: string
+  backdrop_label_style: string
 }
 
 const ALL_RATING_SOURCES = [
@@ -38,9 +41,9 @@ const props = defineProps<{
   loadSettings: () => Promise<PosterSettings | null>
   saveSettings: (s: SaveSettingsPayload) => Promise<string | null>
   resetSettings?: () => Promise<boolean>
-  fetchPreview: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string) => Promise<Response>
-  fetchLogoPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string) => Promise<Response>
-  fetchBackdropPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string) => Promise<Response>
+  fetchPreview: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string) => Promise<Response>
+  fetchLogoPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string) => Promise<Response>
+  fetchBackdropPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string) => Promise<Response>
 }>()
 
 const editSource = ref(props.settings.poster_source)
@@ -54,6 +57,9 @@ const editBackdropRatingsLimit = ref(props.settings.backdrop_ratings_limit ?? 3)
 const editPosterBadgeStyle = ref(props.settings.poster_badge_style || 'horizontal')
 const editLogoBadgeStyle = ref(props.settings.logo_badge_style || 'horizontal')
 const editBackdropBadgeStyle = ref(props.settings.backdrop_badge_style || 'vertical')
+const editPosterLabelStyle = ref(props.settings.poster_label_style || 'text')
+const editLogoLabelStyle = ref(props.settings.logo_label_style || 'text')
+const editBackdropLabelStyle = ref(props.settings.backdrop_label_style || 'text')
 const currentSettings = ref<PosterSettings>(props.settings)
 const saving = ref(false)
 const error = ref('')
@@ -95,7 +101,14 @@ watch(() => props.settings, (s) => {
   editPosterBadgeStyle.value = s.poster_badge_style || 'horizontal'
   editLogoBadgeStyle.value = s.logo_badge_style || 'horizontal'
   editBackdropBadgeStyle.value = s.backdrop_badge_style || 'vertical'
-  nextTick(() => { syncing = false })
+  editPosterLabelStyle.value = s.poster_label_style || 'text'
+  editLogoLabelStyle.value = s.logo_label_style || 'text'
+  editBackdropLabelStyle.value = s.backdrop_label_style || 'text'
+  nextTick(() => {
+    syncing = false
+    // Cancel any save timer queued by watchers during the sync
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
+  })
 })
 
 function revertEdits() {
@@ -112,6 +125,9 @@ function revertEdits() {
   editPosterBadgeStyle.value = s.poster_badge_style || 'horizontal'
   editLogoBadgeStyle.value = s.logo_badge_style || 'horizontal'
   editBackdropBadgeStyle.value = s.backdrop_badge_style || 'vertical'
+  editPosterLabelStyle.value = s.poster_label_style || 'text'
+  editLogoLabelStyle.value = s.logo_label_style || 'text'
+  editBackdropLabelStyle.value = s.backdrop_label_style || 'text'
   nextTick(() => { syncing = false })
 }
 
@@ -134,6 +150,9 @@ async function autoSave() {
       poster_badge_style: editPosterBadgeStyle.value,
       logo_badge_style: editLogoBadgeStyle.value,
       backdrop_badge_style: editBackdropBadgeStyle.value,
+      poster_label_style: editPosterLabelStyle.value,
+      logo_label_style: editLogoLabelStyle.value,
+      backdrop_label_style: editBackdropLabelStyle.value,
     })
     if (err) {
       error.value = err
@@ -158,7 +177,7 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null
 
 // Auto-save on any setting change (debounced)
 watch(
-  [editSource, editLang, editTextless, editRatingsLimit, editRatingsOrder, editPosterPosition, editLogoRatingsLimit, editBackdropRatingsLimit, editPosterBadgeStyle, editLogoBadgeStyle, editBackdropBadgeStyle],
+  [editSource, editLang, editTextless, editRatingsLimit, editRatingsOrder, editPosterPosition, editLogoRatingsLimit, editBackdropRatingsLimit, editPosterBadgeStyle, editLogoBadgeStyle, editBackdropBadgeStyle, editPosterLabelStyle, editLogoLabelStyle, editBackdropLabelStyle],
   () => {
     if (syncing) return
     if (saveTimer) clearTimeout(saveTimer)
@@ -169,6 +188,7 @@ watch(
 
 async function handleReset() {
   if (!props.resetSettings) return
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
   saving.value = true
   error.value = ''
   showCheck.value = false
@@ -178,6 +198,7 @@ async function handleReset() {
     if (ok) {
       const updated = await props.loadSettings()
       if (updated) {
+        syncing = true
         currentSettings.value = updated
         editSource.value = updated.poster_source
         editLang.value = updated.fanart_lang
@@ -190,6 +211,14 @@ async function handleReset() {
         editPosterBadgeStyle.value = updated.poster_badge_style || 'horizontal'
         editLogoBadgeStyle.value = updated.logo_badge_style || 'horizontal'
         editBackdropBadgeStyle.value = updated.backdrop_badge_style || 'vertical'
+        editPosterLabelStyle.value = updated.poster_label_style || 'text'
+        editLogoLabelStyle.value = updated.logo_label_style || 'text'
+        editBackdropLabelStyle.value = updated.backdrop_label_style || 'text'
+        nextTick(() => {
+          syncing = false
+          // Cancel any save timer queued by watchers during the sync
+          if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
+        })
       }
       showCheck.value = true
       checkTimeout = setTimeout(() => (showCheck.value = false), 1500)
@@ -231,15 +260,15 @@ function onPreviewLoad(state: PreviewState, e: Event) {
 
 async function fetchPreviewImage(
   state: PreviewState,
-  fetcher: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string) => Promise<Response>,
-  extraArgs?: { posterPosition?: string; badgeStyle?: string },
+  fetcher: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string) => Promise<Response>,
+  extraArgs?: { posterPosition?: string; badgeStyle?: string; labelStyle?: string },
 ) {
   state.loading = true
   state.error = false
   const generation = ++state.generation
 
   try {
-    const res = await fetcher(editRatingsLimit.value, editRatingsOrder.value.join(','), extraArgs?.posterPosition, extraArgs?.badgeStyle)
+    const res = await fetcher(editRatingsLimit.value, editRatingsOrder.value.join(','), extraArgs?.posterPosition, extraArgs?.badgeStyle, extraArgs?.labelStyle)
     if (generation !== state.generation) return
     if (!res.ok) {
       state.error = true
@@ -263,18 +292,18 @@ let logoPreviewTimer: ReturnType<typeof setTimeout> | null = null
 let backdropPreviewTimer: ReturnType<typeof setTimeout> | null = null
 
 function updatePosterPreview() {
-  fetchPreviewImage(posterPreview.value, props.fetchPreview, { posterPosition: editPosterPosition.value, badgeStyle: editPosterBadgeStyle.value })
+  fetchPreviewImage(posterPreview.value, props.fetchPreview, { posterPosition: editPosterPosition.value, badgeStyle: editPosterBadgeStyle.value, labelStyle: editPosterLabelStyle.value })
 }
 
 function updateLogoPreview() {
   if (props.fetchLogoPreview) {
-    fetchPreviewImage(logoPreview.value, (_limit, order) => props.fetchLogoPreview!(editLogoRatingsLimit.value, order, editLogoBadgeStyle.value))
+    fetchPreviewImage(logoPreview.value, (_limit, order) => props.fetchLogoPreview!(editLogoRatingsLimit.value, order, editLogoBadgeStyle.value, editLogoLabelStyle.value))
   }
 }
 
 function updateBackdropPreview() {
   if (props.fetchBackdropPreview) {
-    fetchPreviewImage(backdropPreview.value, (_limit, order) => props.fetchBackdropPreview!(editBackdropRatingsLimit.value, order, editBackdropBadgeStyle.value))
+    fetchPreviewImage(backdropPreview.value, (_limit, order) => props.fetchBackdropPreview!(editBackdropRatingsLimit.value, order, editBackdropBadgeStyle.value, editBackdropLabelStyle.value))
   }
 }
 
@@ -296,21 +325,21 @@ watch([editRatingsOrder], () => {
 }, { deep: true })
 
 // Poster-only settings
-watch([editRatingsLimit, editPosterPosition, editPosterBadgeStyle], () => {
+watch([editRatingsLimit, editPosterPosition, editPosterBadgeStyle, editPosterLabelStyle], () => {
   if (syncing) return
   if (posterPreviewTimer) clearTimeout(posterPreviewTimer)
   posterPreviewTimer = setTimeout(updatePosterPreview, 500)
 })
 
 // Logo-only settings
-watch([editLogoRatingsLimit, editLogoBadgeStyle], () => {
+watch([editLogoRatingsLimit, editLogoBadgeStyle, editLogoLabelStyle], () => {
   if (syncing) return
   if (logoPreviewTimer) clearTimeout(logoPreviewTimer)
   logoPreviewTimer = setTimeout(updateLogoPreview, 500)
 })
 
 // Backdrop-only settings
-watch([editBackdropRatingsLimit, editBackdropBadgeStyle], () => {
+watch([editBackdropRatingsLimit, editBackdropBadgeStyle, editBackdropLabelStyle], () => {
   if (syncing) return
   if (backdropPreviewTimer) clearTimeout(backdropPreviewTimer)
   backdropPreviewTimer = setTimeout(updateBackdropPreview, 500)
@@ -467,6 +496,16 @@ const selectClass = 'flex h-9 w-full max-w-xs rounded-md border border-input bg-
               <option value="vertical">Vertical</option>
             </select>
           </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Label style</label>
+            <select
+              v-model="editPosterLabelStyle"
+              :class="selectClass"
+            >
+              <option value="text">Text</option>
+              <option value="icon">Icon</option>
+            </select>
+          </div>
           <div class="space-y-1">
             <div class="flex items-center gap-3">
               <label :for="inputId('ratings-limit')" class="text-sm font-medium">Max ratings</label>
@@ -517,6 +556,16 @@ const selectClass = 'flex h-9 w-full max-w-xs rounded-md border border-input bg-
               <option value="vertical">Vertical</option>
             </select>
           </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Label style</label>
+            <select
+              v-model="editLogoLabelStyle"
+              :class="selectClass"
+            >
+              <option value="text">Text</option>
+              <option value="icon">Icon</option>
+            </select>
+          </div>
           <div class="flex items-center gap-3">
             <label :for="inputId('logo-ratings-limit')" class="text-sm font-medium">Max ratings</label>
             <Input
@@ -562,6 +611,16 @@ const selectClass = 'flex h-9 w-full max-w-xs rounded-md border border-input bg-
             >
               <option value="horizontal">Horizontal</option>
               <option value="vertical">Vertical</option>
+            </select>
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Label style</label>
+            <select
+              v-model="editBackdropLabelStyle"
+              :class="selectClass"
+            >
+              <option value="text">Text</option>
+              <option value="icon">Icon</option>
             </select>
           </div>
           <div class="flex items-center gap-3">

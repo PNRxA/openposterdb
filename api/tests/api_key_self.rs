@@ -193,7 +193,7 @@ async fn get_own_settings_returns_defaults() {
     assert_eq!(json["is_default"], true);
     assert_eq!(json["fanart_available"], true);
     assert_eq!(json["ratings_limit"], 3);
-    assert_eq!(json["ratings_order"], "mal,imdb,lb,rt,rta,mc,tmdb,trakt");
+    assert_eq!(json["ratings_order"], "mal,imdb,lb,rt,mc,rta,tmdb,trakt");
 }
 
 // --- PUT /api/key/me/settings ---

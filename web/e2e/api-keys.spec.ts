@@ -113,19 +113,58 @@ test.describe('api keys', () => {
     await expect(page.locator('input[type="number"]').first()).toHaveValue('5')
   })
 
+  test('per-key label style dropdowns are visible with default icon', async ({ page }) => {
+    await createKeyAndOpenSettings(page)
+
+    const labelSelects = page.locator('select').filter({ has: page.locator('option[value="icon"]') })
+    // There should be 3 label style selects (poster, logo, backdrop)
+    await expect(labelSelects).toHaveCount(3)
+
+    for (const select of await labelSelects.all()) {
+      await expect(select).toHaveValue('icon')
+    }
+  })
+
+  test('per-key label style persists after auto-save', async ({ page }) => {
+    const keyName = await createKeyAndOpenSettings(page)
+
+    // Change poster label style to text (default is icon)
+    const labelSelects = page.locator('select').filter({ has: page.locator('option[value="icon"]') })
+    await labelSelects.first().selectOption('text')
+
+    // Wait for auto-save confirmation
+    await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 })
+
+    // Collapse and re-expand settings to verify persistence
+    const keyRow = page.getByText(keyName).locator('..').locator('..')
+    await keyRow.locator('button:not(:has-text("Delete"))').first().click()
+    await expect(page.locator('text=Rating Display')).not.toBeVisible()
+
+    await keyRow.locator('button:not(:has-text("Delete"))').first().click()
+    await expect(page.locator('text=Rating Display')).toBeVisible()
+
+    const reloadedSelects = page.locator('select').filter({ has: page.locator('option[value="icon"]') })
+    await expect(reloadedSelects.first()).toHaveValue('text')
+  })
+
   test('delete a key removes it from list', async ({ page }) => {
     // Create a key
     await page.fill('input[placeholder*="Key name"]', 'to-delete')
     await page.click('button:has-text("Create")')
-    await expect(page.locator('text=to-delete')).toBeVisible()
+    await expect(page.getByText('to-delete', { exact: true })).toBeVisible()
+
+    // Dismiss the key banner if present
+    const dismissBtn = page.locator('button:has-text("Dismiss")')
+    if (await dismissBtn.isVisible()) await dismissBtn.click()
 
     // Accept the confirm dialog
     page.on('dialog', (dialog) => dialog.accept())
 
-    // Click delete on the key
-    await page.locator('text=to-delete').locator('..').locator('..').locator('button:has-text("Delete")').click()
+    // Click delete on the key's row
+    const keyRow = page.getByText('to-delete', { exact: true }).locator('xpath=ancestor::div[contains(@class,"rounded-md")]')
+    await keyRow.locator('button:has-text("Delete")').click()
 
     // Key should be gone
-    await expect(page.locator('text=to-delete')).not.toBeVisible()
+    await expect(page.getByText('to-delete', { exact: true })).not.toBeVisible()
   })
 })

@@ -7,7 +7,7 @@ A self-hosted, drop-in replacement for [RPDB (Rating Poster Database)](https://r
 
 ## Features
 
-- **Multi-source ratings** — Aggregates from OMDb (IMDb, RT, Metacritic) and MDBList (Trakt, Letterboxd, MAL)
+- **Multi-source ratings** — Aggregates from MDBList (IMDb, RT Critics, RT Audience, Metacritic, Trakt, Letterboxd, MAL) and optionally OMDb
 - **Alternative poster sources** — Use TMDB (default) or Fanart.tv with language preference and textless poster support
 - **Configurable per API key** — Override poster source, language, and textless settings per key, or set global defaults
 - **ID resolution** — Accepts IMDb, TMDB, or TVDB IDs
@@ -27,7 +27,7 @@ A self-hosted, drop-in replacement for [RPDB (Rating Poster Database)](https://r
 ```bash
 # Copy the example env to the project root and fill in your API keys
 cp api/.env.example .env
-# Edit .env — at minimum set TMDB_API_KEY, one of OMDB/MDBLIST, and JWT_SECRET
+# Edit .env — at minimum set TMDB_API_KEY, MDBLIST_API_KEY (or OMDB), and JWT_SECRET
 
 # Build and start
 docker compose up -d
@@ -40,7 +40,7 @@ docker compose up -d
 - Rust toolchain
 - Node.js 20.19+ (for admin UI)
 - A [TMDB API key](https://www.themoviedb.org/settings/api)
-- At least one of: [OMDb API key](https://www.omdbapi.com/apikey.aspx), [MDBList API key](https://mdblist.com/preferences/)
+- At least one of: [MDBList API key](https://mdblist.com/preferences/) (preferred — covers all 7 rating sources), [OMDb API key](https://www.omdbapi.com/apikey.aspx)
 - Optional: [Fanart.tv API key](https://fanart.tv/get-an-api-key/) (for alternative poster source with language/textless support)
 
 
@@ -49,7 +49,7 @@ docker compose up -d
 ```bash
 cd api
 cp .env.example .env
-# Edit .env — at minimum set TMDB_API_KEY, one of OMDB/MDBLIST, and JWT_SECRET
+# Edit .env — at minimum set TMDB_API_KEY, MDBLIST_API_KEY (or OMDB), and JWT_SECRET
 cargo run --release
 ```
 
@@ -74,8 +74,8 @@ See [docker-compose.yml](docker-compose.yml) for the full compose configuration.
 |---|---|---|
 | `TMDB_API_KEY` | *required* | TMDB API v3 key |
 | `JWT_SECRET` | *required* | 32-byte hex string (`openssl rand -hex 32`) |
-| `OMDB_API_KEY` | — | OMDb key (IMDb, RT, Metacritic ratings) |
-| `MDBLIST_API_KEY` | — | MDBList key (Trakt, Letterboxd, MAL ratings) |
+| `MDBLIST_API_KEY` | — | MDBList key — preferred, covers all 7 rating sources (IMDb, RT Critics, RT Audience, Metacritic, Trakt, Letterboxd, MAL) |
+| `OMDB_API_KEY` | — | OMDb key (IMDb, RT Critics, Metacritic only) |
 | `LISTEN_ADDR` | `0.0.0.0:3000` | Server bind address |
 | `CACHE_DIR` | `./cache` | Poster and metadata cache directory |
 | `DB_DIR` | `./db` | SQLite database directory |

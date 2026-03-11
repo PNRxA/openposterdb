@@ -158,9 +158,78 @@ test.describe('key settings (self-service)', () => {
     await expect(page.getByTestId('poster-source-select')).toHaveValue('tmdb')
   })
 
+  test('reset to defaults does not trigger a spurious auto-save', async ({ page, request }) => {
+    const adminToken = await ensureAdmin(request)
+    await request.put('/api/admin/settings', {
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      data: { poster_source: 'tmdb' },
+    })
+
+    await loginWithApiKey(page, request)
+
+    // Change a setting so we have custom overrides
+    await page.getByTestId('poster-source-select').selectOption('fanart')
+    await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('text=Using defaults')).not.toBeVisible()
+
+    // Start tracking network requests after clicking reset
+    const requestsAfterReset: string[] = []
+    await page.route('**/api/self/settings', (route) => {
+      requestsAfterReset.push(route.request().method())
+      route.continue()
+    })
+
+    // Click reset
+    await page.locator('button:has-text("Reset to defaults")').click()
+
+    // Should show "Using defaults" badge
+    await expect(page.locator('text=Using defaults')).toBeVisible({ timeout: 10000 })
+
+    // Wait long enough for any debounced auto-save to fire (600ms debounce + margin)
+    await page.waitForTimeout(2000)
+
+    // Should have seen DELETE + GET, but no PUT
+    const putCount = requestsAfterReset.filter(m => m === 'PUT').length
+    expect(putCount).toBe(0)
+  })
+
   test('poster position dropdown is visible', async ({ page, request }) => {
     await loginWithApiKey(page, request)
 
     await expect(page.locator('text=Badge position')).toBeVisible()
+  })
+
+  test('label style dropdowns are visible', async ({ page, request }) => {
+    await loginWithApiKey(page, request)
+
+    const labelSelects = page.locator('select').filter({ has: page.locator('option[value="icon"]') })
+    // There should be 3 label style selects (poster, logo, backdrop)
+    await expect(labelSelects).toHaveCount(3)
+
+    // All should default to "icon"
+    for (const select of await labelSelects.all()) {
+      await expect(select).toHaveValue('icon')
+    }
+  })
+
+  test('label style persists after change and reload', async ({ page, request }) => {
+    await loginWithApiKey(page, request)
+
+    // Change poster label style to text
+    const labelSelects = page.locator('select').filter({ has: page.locator('option[value="icon"]') })
+    await labelSelects.first().selectOption('text')
+
+    // Wait for auto-save confirmation
+    await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 })
+
+    // Reload and verify persistence
+    await page.reload()
+    await expect(page.locator('h1')).toContainText('Poster Settings')
+
+    const reloadedSelects = page.locator('select').filter({ has: page.locator('option[value="icon"]') })
+    await expect(reloadedSelects.first()).toHaveValue('text')
   })
 })

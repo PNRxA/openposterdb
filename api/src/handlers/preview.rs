@@ -9,7 +9,7 @@ use std::sync::{Arc, LazyLock};
 use crate::cache;
 use crate::error::AppError;
 use crate::poster::generate;
-use crate::services::db::{validate_poster_position, validate_badge_style};
+use crate::services::db::{validate_poster_position, validate_badge_style, validate_label_style, default_label_style};
 use crate::services::ratings::{self, RatingBadge, RatingSource};
 use crate::AppState;
 
@@ -94,6 +94,8 @@ pub struct PreviewQuery {
     pub poster_position: String,
     #[serde(default)]
     pub badge_style: String,
+    #[serde(default = "default_label_style")]
+    pub label_style: String,
 }
 
 fn default_ratings_limit() -> i32 {
@@ -116,11 +118,14 @@ pub async fn preview_poster(
         validate_badge_style(&query.badge_style)?;
         &query.badge_style
     };
+    validate_label_style(&query.label_style)?;
+    let label_style = &query.label_style;
     let suffix = ratings::ratings_cache_suffix(&query.ratings_order, query.ratings_limit);
     let pos_suffix = crate::poster::serve::poster_position_cache_suffix(position);
     let bs_suffix = crate::poster::serve::badge_style_cache_suffix(badge_style);
-    let cache_key = format!("preview:{suffix}{pos_suffix}{bs_suffix}");
-    let cache_path = cache::preview_path(&state.config.cache_dir, cache::ImageType::Poster, &format!("{suffix}{pos_suffix}{bs_suffix}"), "jpg")?;
+    let ls_suffix = crate::poster::serve::label_style_cache_suffix(label_style);
+    let cache_key = format!("preview:{suffix}{pos_suffix}{bs_suffix}{ls_suffix}");
+    let cache_path = cache::preview_path(&state.config.cache_dir, cache::ImageType::Poster, &format!("{suffix}{pos_suffix}{bs_suffix}{ls_suffix}"), "jpg")?;
 
     // 1. Check in-memory cache
     if let Some(cached) = state.preview_cache.get(&cache_key).await {
@@ -143,8 +148,9 @@ pub async fn preview_poster(
     let quality = state.config.poster_quality;
     let position = position.to_string();
     let badge_style = badge_style.to_string();
+    let label_style = label_style.to_string();
     let buf = tokio::task::spawn_blocking(move || {
-        generate::render_poster_sync(poster_png, &badges, &font, quality, false, &position, &badge_style)
+        generate::render_poster_sync(poster_png, &badges, &font, quality, false, &position, &badge_style, &label_style)
     })
     .await
     .map_err(|e| AppError::Other(e.to_string()))??;
@@ -166,10 +172,13 @@ pub async fn preview_logo(
         validate_badge_style(&query.badge_style)?;
         &query.badge_style
     };
+    validate_label_style(&query.label_style)?;
+    let label_style = &query.label_style;
     let suffix = ratings::ratings_cache_suffix(&query.ratings_order, query.ratings_limit);
     let bs_suffix = crate::poster::serve::badge_style_cache_suffix(badge_style);
-    let cache_key = format!("preview-logo:{suffix}{bs_suffix}");
-    let cache_path = cache::preview_path(&state.config.cache_dir, cache::ImageType::Logo, &format!("{suffix}{bs_suffix}"), "png")?;
+    let ls_suffix = crate::poster::serve::label_style_cache_suffix(label_style);
+    let cache_key = format!("preview-logo:{suffix}{bs_suffix}{ls_suffix}");
+    let cache_path = cache::preview_path(&state.config.cache_dir, cache::ImageType::Logo, &format!("{suffix}{bs_suffix}{ls_suffix}"), "png")?;
 
     if let Some(cached) = state.preview_cache.get(&cache_key).await {
         return Ok(preview_png_response(cached));
@@ -187,9 +196,10 @@ pub async fn preview_logo(
     let logo_png: &'static Vec<u8> = &SAMPLE_LOGO_PNG;
     let font = state.font.clone();
     let badge_style = badge_style.to_string();
+    let label_style = label_style.to_string();
 
     let buf = tokio::task::spawn_blocking(move || {
-        generate::render_logo_sync(logo_png, &badges, &font, &badge_style)
+        generate::render_logo_sync(logo_png, &badges, &font, &badge_style, &label_style)
     })
     .await
     .map_err(|e| AppError::Other(e.to_string()))??;
@@ -211,10 +221,13 @@ pub async fn preview_backdrop(
         validate_badge_style(&query.badge_style)?;
         &query.badge_style
     };
+    validate_label_style(&query.label_style)?;
+    let label_style = &query.label_style;
     let suffix = ratings::ratings_cache_suffix(&query.ratings_order, query.ratings_limit);
     let bs_suffix = crate::poster::serve::badge_style_cache_suffix(badge_style);
-    let cache_key = format!("preview-backdrop:{suffix}{bs_suffix}");
-    let cache_path = cache::preview_path(&state.config.cache_dir, cache::ImageType::Backdrop, &format!("{suffix}{bs_suffix}"), "jpg")?;
+    let ls_suffix = crate::poster::serve::label_style_cache_suffix(label_style);
+    let cache_key = format!("preview-backdrop:{suffix}{bs_suffix}{ls_suffix}");
+    let cache_path = cache::preview_path(&state.config.cache_dir, cache::ImageType::Backdrop, &format!("{suffix}{bs_suffix}{ls_suffix}"), "jpg")?;
 
     if let Some(cached) = state.preview_cache.get(&cache_key).await {
         return Ok(preview_response(cached));
@@ -233,9 +246,10 @@ pub async fn preview_backdrop(
     let font = state.font.clone();
     let quality = state.config.poster_quality;
     let badge_style = badge_style.to_string();
+    let label_style = label_style.to_string();
 
     let buf = tokio::task::spawn_blocking(move || {
-        generate::render_backdrop_sync(backdrop_png, &badges, &font, quality, &badge_style)
+        generate::render_backdrop_sync(backdrop_png, &badges, &font, quality, &badge_style, &label_style)
     })
     .await
     .map_err(|e| AppError::Other(e.to_string()))??;
@@ -305,7 +319,7 @@ mod tests {
     fn sample_poster_renders_with_badges() {
         let font = ab_glyph::FontArc::try_from_slice(crate::FONT_BYTES).unwrap();
         let badges = sample_badges();
-        let result = generate::render_poster_sync(&SAMPLE_POSTER_PNG, &badges, &font, 85, false, "bottom-center", "horizontal");
+        let result = generate::render_poster_sync(&SAMPLE_POSTER_PNG, &badges, &font, 85, false, "bottom-center", "horizontal", "text");
         let buf = result.expect("rendering should succeed");
         // Valid JPEG
         assert_eq!(buf[0], 0xFF);
@@ -316,7 +330,7 @@ mod tests {
     #[test]
     fn sample_poster_renders_with_no_badges() {
         let font = ab_glyph::FontArc::try_from_slice(crate::FONT_BYTES).unwrap();
-        let result = generate::render_poster_sync(&SAMPLE_POSTER_PNG, &[], &font, 85, false, "bottom-center", "horizontal");
+        let result = generate::render_poster_sync(&SAMPLE_POSTER_PNG, &[], &font, 85, false, "bottom-center", "horizontal", "text");
         let buf = result.expect("rendering should succeed");
         assert_eq!(buf[0], 0xFF);
         assert_eq!(buf[1], 0xD8);
@@ -334,6 +348,7 @@ mod tests {
         assert_eq!(query.ratings_limit, 3);
         assert_eq!(query.ratings_order, "");
         assert_eq!(query.badge_style, "");
+        assert_eq!(query.label_style, "icon");
     }
 
     #[test]

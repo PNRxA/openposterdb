@@ -221,7 +221,7 @@ async fn get_key_settings_returns_defaults() {
     assert_eq!(json["fanart_textless"], false);
     assert_eq!(json["is_default"], true);
     assert_eq!(json["ratings_limit"], 3);
-    assert_eq!(json["ratings_order"], "mal,imdb,lb,rt,rta,mc,tmdb,trakt");
+    assert_eq!(json["ratings_order"], "mal,imdb,lb,rt,mc,rta,tmdb,trakt");
 }
 
 #[tokio::test]
@@ -528,10 +528,10 @@ async fn get_key_settings_returns_new_field_defaults() {
     let body = res.into_body().collect().await.unwrap().to_bytes();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(json["poster_position"], "bottom-center");
-    assert_eq!(json["logo_ratings_limit"], 3);
-    assert_eq!(json["backdrop_ratings_limit"], 3);
+    assert_eq!(json["logo_ratings_limit"], 5);
+    assert_eq!(json["backdrop_ratings_limit"], 5);
     assert_eq!(json["poster_badge_style"], "horizontal");
-    assert_eq!(json["logo_badge_style"], "horizontal");
+    assert_eq!(json["logo_badge_style"], "vertical");
     assert_eq!(json["backdrop_badge_style"], "vertical");
 }
 

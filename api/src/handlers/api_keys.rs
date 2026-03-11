@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 use super::auth::AuthUser;
 use super::middleware::ApiKeyUser;
 use crate::error::AppError;
-use crate::services::db::{self, validate_fanart_lang, validate_poster_source, validate_poster_position, validate_ratings_limit, validate_ratings_order, default_ratings_limit, default_ratings_order, default_poster_position, default_poster_badge_style, default_logo_badge_style, default_backdrop_badge_style, validate_badge_style};
+use crate::services::db::{self, validate_fanart_lang, validate_poster_source, validate_poster_position, validate_ratings_limit, validate_ratings_order, default_ratings_limit, default_logo_backdrop_ratings_limit, default_ratings_order, default_poster_position, default_poster_badge_style, default_logo_badge_style, default_backdrop_badge_style, validate_badge_style, default_label_style, validate_label_style};
 use crate::AppState;
 
 #[derive(Serialize)]
@@ -107,6 +107,9 @@ pub struct PosterSettingsResponse {
     pub poster_badge_style: String,
     pub logo_badge_style: String,
     pub backdrop_badge_style: String,
+    pub poster_label_style: String,
+    pub logo_label_style: String,
+    pub backdrop_label_style: String,
 }
 
 pub async fn get_settings(
@@ -131,6 +134,9 @@ pub async fn get_settings(
         poster_badge_style: settings.poster_badge_style,
         logo_badge_style: settings.logo_badge_style,
         backdrop_badge_style: settings.backdrop_badge_style,
+        poster_label_style: settings.poster_label_style,
+        logo_label_style: settings.logo_label_style,
+        backdrop_label_style: settings.backdrop_label_style,
     }))
 }
 
@@ -147,9 +153,9 @@ pub struct UpdateSettingsRequest {
     pub ratings_order: String,
     #[serde(default = "default_poster_position")]
     pub poster_position: String,
-    #[serde(default = "default_ratings_limit")]
+    #[serde(default = "default_logo_backdrop_ratings_limit")]
     pub logo_ratings_limit: i32,
-    #[serde(default = "default_ratings_limit")]
+    #[serde(default = "default_logo_backdrop_ratings_limit")]
     pub backdrop_ratings_limit: i32,
     #[serde(default = "default_poster_badge_style")]
     pub poster_badge_style: String,
@@ -157,6 +163,12 @@ pub struct UpdateSettingsRequest {
     pub logo_badge_style: String,
     #[serde(default = "default_backdrop_badge_style")]
     pub backdrop_badge_style: String,
+    #[serde(default = "default_label_style")]
+    pub poster_label_style: String,
+    #[serde(default = "default_label_style")]
+    pub logo_label_style: String,
+    #[serde(default = "default_label_style")]
+    pub backdrop_label_style: String,
 }
 
 pub async fn update_settings(
@@ -177,6 +189,9 @@ pub async fn update_settings(
     validate_badge_style(&req.poster_badge_style)?;
     validate_badge_style(&req.logo_badge_style)?;
     validate_badge_style(&req.backdrop_badge_style)?;
+    validate_label_style(&req.poster_label_style)?;
+    validate_label_style(&req.logo_label_style)?;
+    validate_label_style(&req.backdrop_label_style)?;
     db::upsert_api_key_settings(&state.db, db::UpsertApiKeySettings {
         api_key_id: id,
         poster_source: &req.poster_source,
@@ -190,6 +205,9 @@ pub async fn update_settings(
         poster_badge_style: &req.poster_badge_style,
         logo_badge_style: &req.logo_badge_style,
         backdrop_badge_style: &req.backdrop_badge_style,
+        poster_label_style: &req.poster_label_style,
+        logo_label_style: &req.logo_label_style,
+        backdrop_label_style: &req.backdrop_label_style,
     }).await?;
     state.settings_cache.invalidate(&id).await;
     Ok(Json(json!({ "ok": true })))
@@ -242,6 +260,9 @@ pub async fn get_own_settings(
         poster_badge_style: settings.poster_badge_style,
         logo_badge_style: settings.logo_badge_style,
         backdrop_badge_style: settings.backdrop_badge_style,
+        poster_label_style: settings.poster_label_style,
+        logo_label_style: settings.logo_label_style,
+        backdrop_label_style: settings.backdrop_label_style,
     }))
 }
 
@@ -261,6 +282,9 @@ pub async fn update_own_settings(
     validate_badge_style(&req.poster_badge_style)?;
     validate_badge_style(&req.logo_badge_style)?;
     validate_badge_style(&req.backdrop_badge_style)?;
+    validate_label_style(&req.poster_label_style)?;
+    validate_label_style(&req.logo_label_style)?;
+    validate_label_style(&req.backdrop_label_style)?;
     db::upsert_api_key_settings(&state.db, db::UpsertApiKeySettings {
         api_key_id: id,
         poster_source: &req.poster_source,
@@ -274,6 +298,9 @@ pub async fn update_own_settings(
         poster_badge_style: &req.poster_badge_style,
         logo_badge_style: &req.logo_badge_style,
         backdrop_badge_style: &req.backdrop_badge_style,
+        poster_label_style: &req.poster_label_style,
+        logo_label_style: &req.logo_label_style,
+        backdrop_label_style: &req.backdrop_label_style,
     }).await?;
     state.settings_cache.invalidate(&id).await;
     Ok(Json(json!({ "ok": true })))

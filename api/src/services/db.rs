@@ -15,8 +15,12 @@ pub fn default_ratings_limit() -> i32 {
     3
 }
 
+pub fn default_logo_backdrop_ratings_limit() -> i32 {
+    5
+}
+
 pub fn default_ratings_order() -> String {
-    "mal,imdb,lb,rt,rta,mc,tmdb,trakt".to_string()
+    "mal,imdb,lb,rt,mc,rta,tmdb,trakt".to_string()
 }
 
 pub fn default_poster_position() -> String {
@@ -28,11 +32,15 @@ pub fn default_poster_badge_style() -> String {
 }
 
 pub fn default_logo_badge_style() -> String {
-    "horizontal".to_string()
+    "vertical".to_string()
 }
 
 pub fn default_backdrop_badge_style() -> String {
     "vertical".to_string()
+}
+
+pub fn default_label_style() -> String {
+    "icon".to_string()
 }
 
 /// Validate that poster_source is a known value.
@@ -85,6 +93,15 @@ pub fn validate_badge_style(style: &str) -> Result<(), AppError> {
         "horizontal" | "vertical" => Ok(()),
         _ => Err(AppError::BadRequest(
             "badge_style must be 'horizontal' or 'vertical'".into(),
+        )),
+    }
+}
+
+pub fn validate_label_style(style: &str) -> Result<(), AppError> {
+    match style {
+        "text" | "icon" => Ok(()),
+        _ => Err(AppError::BadRequest(
+            "label_style must be 'text' or 'icon'".into(),
         )),
     }
 }
@@ -343,6 +360,23 @@ mod tests {
     fn validate_badge_style_rejects_invalid() {
         assert!(validate_badge_style("diagonal").is_err());
         assert!(validate_badge_style("").is_err());
+    }
+
+    #[test]
+    fn validate_label_style_accepts_valid() {
+        assert!(validate_label_style("text").is_ok());
+        assert!(validate_label_style("icon").is_ok());
+    }
+
+    #[test]
+    fn validate_label_style_rejects_invalid() {
+        assert!(validate_label_style("emoji").is_err());
+        assert!(validate_label_style("").is_err());
+    }
+
+    #[test]
+    fn default_label_style_returns_icon() {
+        assert_eq!(default_label_style(), "icon");
     }
 }
 
@@ -716,6 +750,9 @@ pub struct UpsertApiKeySettings<'a> {
     pub poster_badge_style: &'a str,
     pub logo_badge_style: &'a str,
     pub backdrop_badge_style: &'a str,
+    pub poster_label_style: &'a str,
+    pub logo_label_style: &'a str,
+    pub backdrop_label_style: &'a str,
 }
 
 pub async fn upsert_api_key_settings(
@@ -735,6 +772,9 @@ pub async fn upsert_api_key_settings(
         poster_badge_style: Set(params.poster_badge_style.to_string()),
         logo_badge_style: Set(params.logo_badge_style.to_string()),
         backdrop_badge_style: Set(params.backdrop_badge_style.to_string()),
+        poster_label_style: Set(params.poster_label_style.to_string()),
+        logo_label_style: Set(params.logo_label_style.to_string()),
+        backdrop_label_style: Set(params.backdrop_label_style.to_string()),
     };
     api_key_settings::Entity::insert(model)
         .on_conflict(
@@ -751,6 +791,9 @@ pub async fn upsert_api_key_settings(
                     api_key_settings::Column::PosterBadgeStyle,
                     api_key_settings::Column::LogoBadgeStyle,
                     api_key_settings::Column::BackdropBadgeStyle,
+                    api_key_settings::Column::PosterLabelStyle,
+                    api_key_settings::Column::LogoLabelStyle,
+                    api_key_settings::Column::BackdropLabelStyle,
                 ])
                 .to_owned(),
         )
@@ -787,6 +830,9 @@ pub struct PosterSettings {
     pub poster_badge_style: String,
     pub logo_badge_style: String,
     pub backdrop_badge_style: String,
+    pub poster_label_style: String,
+    pub logo_label_style: String,
+    pub backdrop_label_style: String,
 }
 
 impl Default for PosterSettings {
@@ -796,14 +842,17 @@ impl Default for PosterSettings {
             fanart_lang: "en".to_string(),
             fanart_textless: false,
             ratings_limit: 3,
-            ratings_order: "mal,imdb,lb,rt,rta,mc,tmdb,trakt".to_string(),
+            ratings_order: "mal,imdb,lb,rt,mc,rta,tmdb,trakt".to_string(),
             is_default: true,
             poster_position: "bottom-center".to_string(),
-            logo_ratings_limit: 3,
-            backdrop_ratings_limit: 3,
+            logo_ratings_limit: 5,
+            backdrop_ratings_limit: 5,
             poster_badge_style: "horizontal".to_string(),
-            logo_badge_style: "horizontal".to_string(),
+            logo_badge_style: "vertical".to_string(),
             backdrop_badge_style: "vertical".to_string(),
+            poster_label_style: "icon".to_string(),
+            logo_label_style: "icon".to_string(),
+            backdrop_label_style: "icon".to_string(),
         }
     }
 }
@@ -860,6 +909,18 @@ pub fn parse_global_poster_settings(globals: &HashMap<String, String>) -> Poster
             .get("backdrop_badge_style")
             .cloned()
             .unwrap_or(defaults.backdrop_badge_style),
+        poster_label_style: globals
+            .get("poster_label_style")
+            .cloned()
+            .unwrap_or(defaults.poster_label_style),
+        logo_label_style: globals
+            .get("logo_label_style")
+            .cloned()
+            .unwrap_or(defaults.logo_label_style),
+        backdrop_label_style: globals
+            .get("backdrop_label_style")
+            .cloned()
+            .unwrap_or(defaults.backdrop_label_style),
     }
 }
 
@@ -884,6 +945,9 @@ pub async fn get_effective_poster_settings(
                 poster_badge_style: s.poster_badge_style,
                 logo_badge_style: s.logo_badge_style,
                 backdrop_badge_style: s.backdrop_badge_style,
+                poster_label_style: s.poster_label_style,
+                logo_label_style: s.logo_label_style,
+                backdrop_label_style: s.backdrop_label_style,
             };
         }
         Ok(None) => {} // no per-key override, fall through

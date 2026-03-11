@@ -8,9 +8,9 @@ services:
       TMDB_API_KEY: ${TMDB_API_KEY:?Set TMDB_API_KEY in .env}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env — generate with: openssl rand -hex 32}
 
-      # At least one ratings source is required
-      OMDB_API_KEY: ${OMDB_API_KEY:-}
+      # At least one ratings source is required — MDBList is preferred (covers all 7 rating sources)
       MDBLIST_API_KEY: ${MDBLIST_API_KEY:-}
+      OMDB_API_KEY: ${OMDB_API_KEY:-}
 
       # Optional — enables Fanart.tv as alternative poster source; required for logo/backdrop endpoints
       FANART_API_KEY: ${FANART_API_KEY:-}

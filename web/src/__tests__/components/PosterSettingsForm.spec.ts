@@ -19,6 +19,9 @@ const defaultSettings: PosterSettings = {
   poster_badge_style: 'horizontal',
   logo_badge_style: 'horizontal',
   backdrop_badge_style: 'vertical',
+  poster_label_style: 'text',
+  logo_label_style: 'text',
+  backdrop_label_style: 'text',
 }
 
 function makeFetchPreview() {
@@ -70,7 +73,7 @@ describe('PosterSettingsForm', () => {
     mountForm({}, fetchPreview)
     await flushPromises()
 
-    expect(fetchPreview).toHaveBeenCalledWith(3, 'mal,imdb,lb,rt,rta,mc,tmdb,trakt', 'bottom-center', 'horizontal')
+    expect(fetchPreview).toHaveBeenCalledWith(3, 'mal,imdb,lb,rt,rta,mc,tmdb,trakt', 'bottom-center', 'horizontal', 'text')
   })
 
   it('calls fetchPreview with correct params for custom settings', async () => {
@@ -78,7 +81,7 @@ describe('PosterSettingsForm', () => {
     mountForm({ ratings_limit: 5, ratings_order: 'imdb,rt,tmdb' }, fetchPreview)
     await flushPromises()
 
-    expect(fetchPreview).toHaveBeenCalledWith(5, expect.stringContaining('imdb'), expect.any(String), expect.any(String))
+    expect(fetchPreview).toHaveBeenCalledWith(5, expect.stringContaining('imdb'), expect.any(String), expect.any(String), expect.any(String))
   })
 
   it('sets preview src from blob after fetch', async () => {
@@ -109,7 +112,7 @@ describe('PosterSettingsForm', () => {
     vi.advanceTimersByTime(600)
     await flushPromises()
 
-    expect(fetchPreview).toHaveBeenCalledWith(5, expect.any(String), expect.any(String), expect.any(String))
+    expect(fetchPreview).toHaveBeenCalledWith(5, expect.any(String), expect.any(String), expect.any(String), expect.any(String))
   })
 
   it('debounces rapid changes — only last value triggers fetch', async () => {
@@ -133,7 +136,7 @@ describe('PosterSettingsForm', () => {
 
     // Should only have been called once with the final value
     expect(fetchPreview).toHaveBeenCalledTimes(1)
-    expect(fetchPreview).toHaveBeenCalledWith(7, expect.any(String), expect.any(String), expect.any(String))
+    expect(fetchPreview).toHaveBeenCalledWith(7, expect.any(String), expect.any(String), expect.any(String), expect.any(String))
   })
 
   it('shows loading state while preview loads', async () => {
@@ -194,6 +197,6 @@ describe('PosterSettingsForm', () => {
     mountForm({ poster_position: 'left' }, fetchPreview)
     await flushPromises()
 
-    expect(fetchPreview).toHaveBeenCalledWith(3, expect.any(String), 'left', 'horizontal')
+    expect(fetchPreview).toHaveBeenCalledWith(3, expect.any(String), 'left', 'horizontal', 'text')
   })
 })
