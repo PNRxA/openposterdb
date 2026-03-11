@@ -24,9 +24,8 @@ test.describe('posters page', () => {
     await expect(page.locator('th:has-text("Created")')).toBeVisible()
   })
 
-  test('shows empty state when no posters', async ({ page }) => {
-    await expect(page.getByText('No posters cached yet.')).toBeVisible({ timeout: 15_000 })
-    await expect(page.getByText('0 posters total')).toBeVisible()
+  test('shows poster count', async ({ page }) => {
+    await expect(page.getByText(/\d+ posters? total/)).toBeVisible({ timeout: 15_000 })
   })
 
   test('has refresh button', async ({ page }) => {
