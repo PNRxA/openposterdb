@@ -43,6 +43,23 @@ pub fn default_label_style() -> String {
     "icon".to_string()
 }
 
+pub fn default_poster_badge_direction() -> String {
+    "default".to_string()
+}
+
+/// Resolve a badge direction of `"default"` to `"horizontal"` or `"vertical"`
+/// based on the poster position. Center positions use horizontal; everything
+/// else (left, right, corners) uses vertical. Non-default values pass through.
+pub fn resolve_badge_direction(direction: &str, position: &str) -> String {
+    if direction != "default" {
+        return direction.to_string();
+    }
+    match position {
+        "bottom-center" | "top-center" => "horizontal".to_string(),
+        _ => "vertical".to_string(),
+    }
+}
+
 /// Validate that poster_source is a known value.
 pub fn validate_poster_source(source: &str) -> Result<(), AppError> {
     if source == "tmdb" || source == "fanart" {
@@ -106,12 +123,22 @@ pub fn validate_label_style(style: &str) -> Result<(), AppError> {
     }
 }
 
+pub fn validate_badge_direction(dir: &str) -> Result<(), AppError> {
+    match dir {
+        "default" | "horizontal" | "vertical" => Ok(()),
+        _ => Err(AppError::BadRequest(
+            "badge_direction must be 'default', 'horizontal', or 'vertical'".into(),
+        )),
+    }
+}
+
 /// Validate that poster_position is a known value.
 pub fn validate_poster_position(pos: &str) -> Result<(), AppError> {
     match pos {
-        "bottom-center" | "top-center" | "left" | "right" => Ok(()),
+        "bottom-center" | "top-center" | "left" | "right"
+        | "top-left" | "top-right" | "bottom-left" | "bottom-right" => Ok(()),
         _ => Err(AppError::BadRequest(
-            "poster_position must be 'bottom-center', 'top-center', 'left', or 'right'".into(),
+            "poster_position must be 'bottom-center', 'top-center', 'left', 'right', 'top-left', 'top-right', 'bottom-left', or 'bottom-right'".into(),
         )),
     }
 }
@@ -325,6 +352,10 @@ mod tests {
         assert!(validate_poster_position("top-center").is_ok());
         assert!(validate_poster_position("left").is_ok());
         assert!(validate_poster_position("right").is_ok());
+        assert!(validate_poster_position("top-left").is_ok());
+        assert!(validate_poster_position("top-right").is_ok());
+        assert!(validate_poster_position("bottom-left").is_ok());
+        assert!(validate_poster_position("bottom-right").is_ok());
     }
 
     #[test]
@@ -332,7 +363,7 @@ mod tests {
         assert!(validate_poster_position("center").is_err());
         assert!(validate_poster_position("").is_err());
         assert!(validate_poster_position("bottom").is_err());
-        assert!(validate_poster_position("top-left").is_err());
+        assert!(validate_poster_position("middle").is_err());
     }
 
     #[test]
@@ -377,6 +408,50 @@ mod tests {
     #[test]
     fn default_label_style_returns_icon() {
         assert_eq!(default_label_style(), "icon");
+    }
+
+    #[test]
+    fn default_poster_badge_direction_returns_default() {
+        assert_eq!(default_poster_badge_direction(), "default");
+    }
+
+    #[test]
+    fn validate_badge_direction_accepts_default() {
+        assert!(validate_badge_direction("default").is_ok());
+        assert!(validate_badge_direction("horizontal").is_ok());
+        assert!(validate_badge_direction("vertical").is_ok());
+    }
+
+    #[test]
+    fn validate_badge_direction_rejects_invalid() {
+        assert!(validate_badge_direction("diagonal").is_err());
+        assert!(validate_badge_direction("").is_err());
+    }
+
+    #[test]
+    fn resolve_badge_direction_default_center_positions() {
+        assert_eq!(resolve_badge_direction("default", "bottom-center"), "horizontal");
+        assert_eq!(resolve_badge_direction("default", "top-center"), "horizontal");
+    }
+
+    #[test]
+    fn resolve_badge_direction_default_side_positions() {
+        assert_eq!(resolve_badge_direction("default", "left"), "vertical");
+        assert_eq!(resolve_badge_direction("default", "right"), "vertical");
+    }
+
+    #[test]
+    fn resolve_badge_direction_default_corner_positions() {
+        assert_eq!(resolve_badge_direction("default", "top-left"), "vertical");
+        assert_eq!(resolve_badge_direction("default", "top-right"), "vertical");
+        assert_eq!(resolve_badge_direction("default", "bottom-left"), "vertical");
+        assert_eq!(resolve_badge_direction("default", "bottom-right"), "vertical");
+    }
+
+    #[test]
+    fn resolve_badge_direction_explicit_passes_through() {
+        assert_eq!(resolve_badge_direction("horizontal", "left"), "horizontal");
+        assert_eq!(resolve_badge_direction("vertical", "bottom-center"), "vertical");
     }
 }
 
@@ -753,6 +828,7 @@ pub struct UpsertApiKeySettings<'a> {
     pub poster_label_style: &'a str,
     pub logo_label_style: &'a str,
     pub backdrop_label_style: &'a str,
+    pub poster_badge_direction: &'a str,
 }
 
 pub async fn upsert_api_key_settings(
@@ -775,6 +851,7 @@ pub async fn upsert_api_key_settings(
         poster_label_style: Set(params.poster_label_style.to_string()),
         logo_label_style: Set(params.logo_label_style.to_string()),
         backdrop_label_style: Set(params.backdrop_label_style.to_string()),
+        poster_badge_direction: Set(params.poster_badge_direction.to_string()),
     };
     api_key_settings::Entity::insert(model)
         .on_conflict(
@@ -794,6 +871,7 @@ pub async fn upsert_api_key_settings(
                     api_key_settings::Column::PosterLabelStyle,
                     api_key_settings::Column::LogoLabelStyle,
                     api_key_settings::Column::BackdropLabelStyle,
+                    api_key_settings::Column::PosterBadgeDirection,
                 ])
                 .to_owned(),
         )
@@ -833,6 +911,7 @@ pub struct PosterSettings {
     pub poster_label_style: String,
     pub logo_label_style: String,
     pub backdrop_label_style: String,
+    pub poster_badge_direction: String,
 }
 
 impl Default for PosterSettings {
@@ -853,6 +932,7 @@ impl Default for PosterSettings {
             poster_label_style: "icon".to_string(),
             logo_label_style: "icon".to_string(),
             backdrop_label_style: "icon".to_string(),
+            poster_badge_direction: "default".to_string(),
         }
     }
 }
@@ -921,6 +1001,10 @@ pub fn parse_global_poster_settings(globals: &HashMap<String, String>) -> Poster
             .get("backdrop_label_style")
             .cloned()
             .unwrap_or(defaults.backdrop_label_style),
+        poster_badge_direction: globals
+            .get("poster_badge_direction")
+            .cloned()
+            .unwrap_or(defaults.poster_badge_direction),
     }
 }
 
@@ -948,6 +1032,7 @@ pub async fn get_effective_poster_settings(
                 poster_label_style: s.poster_label_style,
                 logo_label_style: s.logo_label_style,
                 backdrop_label_style: s.backdrop_label_style,
+                poster_badge_direction: s.poster_badge_direction,
             };
         }
         Ok(None) => {} // no per-key override, fall through

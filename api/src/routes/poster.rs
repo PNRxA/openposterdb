@@ -118,7 +118,7 @@ async fn serve_poster(
     settings: &db::PosterSettings,
     use_fallback: bool,
 ) -> Response {
-    match serve::handle_inner(state, id_type_str, id_value_jpg, settings).await {
+    match serve::handle_inner(state, id_type_str, id_value_jpg, settings.clone()).await {
         Ok(bytes) => serve::jpeg_response(bytes),
         Err(e) => {
             if use_fallback {

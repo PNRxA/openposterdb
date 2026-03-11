@@ -202,6 +202,27 @@ test.describe('key settings (self-service)', () => {
     await expect(page.locator('text=Badge position')).toBeVisible()
   })
 
+  test('badge direction dropdown is visible with default', async ({ page, request }) => {
+    await loginWithApiKey(page, request)
+
+    const dirSelect = page.getByTestId('poster-badge-direction-select')
+    await expect(dirSelect).toBeVisible()
+    await expect(dirSelect).toHaveValue('default')
+  })
+
+  test('badge direction persists after change and reload', async ({ page, request }) => {
+    await loginWithApiKey(page, request)
+
+    const dirSelect = page.getByTestId('poster-badge-direction-select')
+    await dirSelect.selectOption('horizontal')
+
+    await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 })
+
+    await page.reload()
+    await expect(page.locator('h1')).toContainText('Poster Settings')
+    await expect(page.getByTestId('poster-badge-direction-select')).toHaveValue('horizontal')
+  })
+
   test('label style dropdowns are visible', async ({ page, request }) => {
     await loginWithApiKey(page, request)
 

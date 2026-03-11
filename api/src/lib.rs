@@ -126,7 +126,8 @@ pub const SCHEMA_SQL: &[&str] = &[
         backdrop_badge_style   TEXT NOT NULL DEFAULT 'vertical',
         poster_label_style     TEXT NOT NULL DEFAULT 'icon',
         logo_label_style       TEXT NOT NULL DEFAULT 'icon',
-        backdrop_label_style   TEXT NOT NULL DEFAULT 'icon'
+        backdrop_label_style   TEXT NOT NULL DEFAULT 'icon',
+        poster_badge_direction TEXT NOT NULL DEFAULT 'default'
     )",
 ];
 
@@ -180,6 +181,10 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
     ),
     (
         "ALTER TABLE api_key_settings ADD COLUMN backdrop_label_style TEXT NOT NULL DEFAULT 'icon'",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN poster_badge_direction TEXT NOT NULL DEFAULT 'default'",
         "duplicate column",
     ),
 ];

@@ -9,7 +9,7 @@ use std::sync::{Arc, LazyLock};
 use crate::cache;
 use crate::error::AppError;
 use crate::poster::generate;
-use crate::services::db::{validate_poster_position, validate_badge_style, validate_label_style, default_label_style};
+use crate::services::db::{validate_poster_position, validate_badge_style, validate_label_style, default_label_style, validate_badge_direction, default_poster_badge_direction, resolve_badge_direction};
 use crate::services::ratings::{self, RatingBadge, RatingSource};
 use crate::AppState;
 
@@ -96,6 +96,8 @@ pub struct PreviewQuery {
     pub badge_style: String,
     #[serde(default = "default_label_style")]
     pub label_style: String,
+    #[serde(default = "default_poster_badge_direction")]
+    pub badge_direction: String,
 }
 
 fn default_ratings_limit() -> i32 {
@@ -120,12 +122,15 @@ pub async fn preview_poster(
     };
     validate_label_style(&query.label_style)?;
     let label_style = &query.label_style;
+    validate_badge_direction(&query.badge_direction)?;
+    let badge_direction = resolve_badge_direction(&query.badge_direction, position);
     let suffix = ratings::ratings_cache_suffix(&query.ratings_order, query.ratings_limit);
     let pos_suffix = crate::poster::serve::poster_position_cache_suffix(position);
     let bs_suffix = crate::poster::serve::badge_style_cache_suffix(badge_style);
     let ls_suffix = crate::poster::serve::label_style_cache_suffix(label_style);
-    let cache_key = format!("preview:{suffix}{pos_suffix}{bs_suffix}{ls_suffix}");
-    let cache_path = cache::preview_path(&state.config.cache_dir, cache::ImageType::Poster, &format!("{suffix}{pos_suffix}{bs_suffix}{ls_suffix}"), "jpg")?;
+    let bd_suffix = crate::poster::serve::badge_direction_cache_suffix(&badge_direction);
+    let cache_key = format!("preview:{suffix}{pos_suffix}{bs_suffix}{ls_suffix}{bd_suffix}");
+    let cache_path = cache::preview_path(&state.config.cache_dir, cache::ImageType::Poster, &format!("{suffix}{pos_suffix}{bs_suffix}{ls_suffix}{bd_suffix}"), "jpg")?;
 
     // 1. Check in-memory cache
     if let Some(cached) = state.preview_cache.get(&cache_key).await {
@@ -150,7 +155,7 @@ pub async fn preview_poster(
     let badge_style = badge_style.to_string();
     let label_style = label_style.to_string();
     let buf = tokio::task::spawn_blocking(move || {
-        generate::render_poster_sync(poster_png, &badges, &font, quality, false, &position, &badge_style, &label_style)
+        generate::render_poster_sync(poster_png, &badges, &font, quality, false, &position, &badge_style, &label_style, &badge_direction)
     })
     .await
     .map_err(|e| AppError::Other(e.to_string()))??;
@@ -319,7 +324,7 @@ mod tests {
     fn sample_poster_renders_with_badges() {
         let font = ab_glyph::FontArc::try_from_slice(crate::FONT_BYTES).unwrap();
         let badges = sample_badges();
-        let result = generate::render_poster_sync(&SAMPLE_POSTER_PNG, &badges, &font, 85, false, "bottom-center", "horizontal", "text");
+        let result = generate::render_poster_sync(&SAMPLE_POSTER_PNG, &badges, &font, 85, false, "bottom-center", "horizontal", "text", "horizontal");
         let buf = result.expect("rendering should succeed");
         // Valid JPEG
         assert_eq!(buf[0], 0xFF);
@@ -330,7 +335,7 @@ mod tests {
     #[test]
     fn sample_poster_renders_with_no_badges() {
         let font = ab_glyph::FontArc::try_from_slice(crate::FONT_BYTES).unwrap();
-        let result = generate::render_poster_sync(&SAMPLE_POSTER_PNG, &[], &font, 85, false, "bottom-center", "horizontal", "text");
+        let result = generate::render_poster_sync(&SAMPLE_POSTER_PNG, &[], &font, 85, false, "bottom-center", "horizontal", "text", "horizontal");
         let buf = result.expect("rendering should succeed");
         assert_eq!(buf[0], 0xFF);
         assert_eq!(buf[1], 0xD8);
@@ -349,6 +354,7 @@ mod tests {
         assert_eq!(query.ratings_order, "");
         assert_eq!(query.badge_style, "");
         assert_eq!(query.label_style, "icon");
+        assert_eq!(query.badge_direction, "default");
     }
 
     #[test]

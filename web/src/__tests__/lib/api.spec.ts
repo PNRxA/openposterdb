@@ -234,6 +234,26 @@ describe('api', () => {
     expect(url).toContain('label_style=icon')
   })
 
+  it('adminApi.previewPoster includes badge_direction when provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.previewPoster(3, 'imdb,rt', 'bottom-center', 'horizontal', 'icon', 'vertical')
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toContain('badge_direction=vertical')
+  })
+
+  it('adminApi.previewPoster omits badge_direction when not provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.previewPoster(3, 'imdb,rt')
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).not.toContain('badge_direction')
+  })
+
   it('adminApi.previewLogo includes label_style when provided', async () => {
     const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
     vi.stubGlobal('fetch', fetchMock)

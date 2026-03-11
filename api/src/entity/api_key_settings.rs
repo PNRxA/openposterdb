@@ -19,6 +19,7 @@ pub struct Model {
     pub poster_label_style: String,
     pub logo_label_style: String,
     pub backdrop_label_style: String,
+    pub poster_badge_direction: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -22,6 +22,7 @@ export interface PosterSettings {
   poster_label_style: string
   logo_label_style: string
   backdrop_label_style: string
+  poster_badge_direction: string
 }
 
 const ALL_RATING_SOURCES = [
@@ -41,7 +42,7 @@ const props = defineProps<{
   loadSettings: () => Promise<PosterSettings | null>
   saveSettings: (s: SaveSettingsPayload) => Promise<string | null>
   resetSettings?: () => Promise<boolean>
-  fetchPreview: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string) => Promise<Response>
+  fetchPreview: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string) => Promise<Response>
   fetchLogoPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string) => Promise<Response>
   fetchBackdropPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string) => Promise<Response>
 }>()
@@ -60,6 +61,7 @@ const editBackdropBadgeStyle = ref(props.settings.backdrop_badge_style || 'verti
 const editPosterLabelStyle = ref(props.settings.poster_label_style || 'text')
 const editLogoLabelStyle = ref(props.settings.logo_label_style || 'text')
 const editBackdropLabelStyle = ref(props.settings.backdrop_label_style || 'text')
+const editPosterBadgeDirection = ref(props.settings.poster_badge_direction || 'default')
 const currentSettings = ref<PosterSettings>(props.settings)
 const saving = ref(false)
 const error = ref('')
@@ -104,6 +106,7 @@ watch(() => props.settings, (s) => {
   editPosterLabelStyle.value = s.poster_label_style || 'text'
   editLogoLabelStyle.value = s.logo_label_style || 'text'
   editBackdropLabelStyle.value = s.backdrop_label_style || 'text'
+  editPosterBadgeDirection.value = s.poster_badge_direction || 'default'
   nextTick(() => {
     syncing = false
     // Cancel any save timer queued by watchers during the sync
@@ -128,6 +131,7 @@ function revertEdits() {
   editPosterLabelStyle.value = s.poster_label_style || 'text'
   editLogoLabelStyle.value = s.logo_label_style || 'text'
   editBackdropLabelStyle.value = s.backdrop_label_style || 'text'
+  editPosterBadgeDirection.value = s.poster_badge_direction || 'default'
   nextTick(() => { syncing = false })
 }
 
@@ -153,6 +157,7 @@ async function autoSave() {
       poster_label_style: editPosterLabelStyle.value,
       logo_label_style: editLogoLabelStyle.value,
       backdrop_label_style: editBackdropLabelStyle.value,
+      poster_badge_direction: editPosterBadgeDirection.value,
     })
     if (err) {
       error.value = err
@@ -177,7 +182,7 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null
 
 // Auto-save on any setting change (debounced)
 watch(
-  [editSource, editLang, editTextless, editRatingsLimit, editRatingsOrder, editPosterPosition, editLogoRatingsLimit, editBackdropRatingsLimit, editPosterBadgeStyle, editLogoBadgeStyle, editBackdropBadgeStyle, editPosterLabelStyle, editLogoLabelStyle, editBackdropLabelStyle],
+  [editSource, editLang, editTextless, editRatingsLimit, editRatingsOrder, editPosterPosition, editLogoRatingsLimit, editBackdropRatingsLimit, editPosterBadgeStyle, editLogoBadgeStyle, editBackdropBadgeStyle, editPosterLabelStyle, editLogoLabelStyle, editBackdropLabelStyle, editPosterBadgeDirection],
   () => {
     if (syncing) return
     if (saveTimer) clearTimeout(saveTimer)
@@ -214,6 +219,7 @@ async function handleReset() {
         editPosterLabelStyle.value = updated.poster_label_style || 'text'
         editLogoLabelStyle.value = updated.logo_label_style || 'text'
         editBackdropLabelStyle.value = updated.backdrop_label_style || 'text'
+        editPosterBadgeDirection.value = updated.poster_badge_direction || 'default'
         nextTick(() => {
           syncing = false
           // Cancel any save timer queued by watchers during the sync
@@ -260,15 +266,15 @@ function onPreviewLoad(state: PreviewState, e: Event) {
 
 async function fetchPreviewImage(
   state: PreviewState,
-  fetcher: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string) => Promise<Response>,
-  extraArgs?: { posterPosition?: string; badgeStyle?: string; labelStyle?: string },
+  fetcher: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string) => Promise<Response>,
+  extraArgs?: { posterPosition?: string; badgeStyle?: string; labelStyle?: string; badgeDirection?: string },
 ) {
   state.loading = true
   state.error = false
   const generation = ++state.generation
 
   try {
-    const res = await fetcher(editRatingsLimit.value, editRatingsOrder.value.join(','), extraArgs?.posterPosition, extraArgs?.badgeStyle, extraArgs?.labelStyle)
+    const res = await fetcher(editRatingsLimit.value, editRatingsOrder.value.join(','), extraArgs?.posterPosition, extraArgs?.badgeStyle, extraArgs?.labelStyle, extraArgs?.badgeDirection)
     if (generation !== state.generation) return
     if (!res.ok) {
       state.error = true
@@ -292,7 +298,7 @@ let logoPreviewTimer: ReturnType<typeof setTimeout> | null = null
 let backdropPreviewTimer: ReturnType<typeof setTimeout> | null = null
 
 function updatePosterPreview() {
-  fetchPreviewImage(posterPreview.value, props.fetchPreview, { posterPosition: editPosterPosition.value, badgeStyle: editPosterBadgeStyle.value, labelStyle: editPosterLabelStyle.value })
+  fetchPreviewImage(posterPreview.value, props.fetchPreview, { posterPosition: editPosterPosition.value, badgeStyle: editPosterBadgeStyle.value, labelStyle: editPosterLabelStyle.value, badgeDirection: editPosterBadgeDirection.value })
 }
 
 function updateLogoPreview() {
@@ -325,7 +331,7 @@ watch([editRatingsOrder], () => {
 }, { deep: true })
 
 // Poster-only settings
-watch([editRatingsLimit, editPosterPosition, editPosterBadgeStyle, editPosterLabelStyle], () => {
+watch([editRatingsLimit, editPosterPosition, editPosterBadgeStyle, editPosterLabelStyle, editPosterBadgeDirection], () => {
   if (syncing) return
   if (posterPreviewTimer) clearTimeout(posterPreviewTimer)
   posterPreviewTimer = setTimeout(updatePosterPreview, 500)
@@ -484,6 +490,22 @@ const selectClass = 'flex h-9 w-full max-w-xs rounded-md border border-input bg-
               <option value="top-center">Top Center</option>
               <option value="left">Left</option>
               <option value="right">Right</option>
+              <option value="top-left">Top Left</option>
+              <option value="top-right">Top Right</option>
+              <option value="bottom-left">Bottom Left</option>
+              <option value="bottom-right">Bottom Right</option>
+            </select>
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Badge direction</label>
+            <select
+              v-model="editPosterBadgeDirection"
+              data-testid="poster-badge-direction-select"
+              :class="selectClass"
+            >
+              <option value="default">Default</option>
+              <option value="horizontal">Horizontal</option>
+              <option value="vertical">Vertical</option>
             </select>
           </div>
           <div class="space-y-2">

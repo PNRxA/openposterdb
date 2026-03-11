@@ -8,7 +8,7 @@ use crate::cache::{self, MemCacheEntry};
 use crate::error::AppError;
 use crate::id::{self, IdType, MediaType};
 use crate::poster::generate;
-use crate::services::db::PosterSettings;
+use crate::services::db::{resolve_badge_direction, PosterSettings};
 use crate::services::fanart::{FanartClient, FanartImages, FanartPoster, PosterMatch};
 use crate::services::ratings;
 use crate::AppState;
@@ -103,37 +103,47 @@ pub fn label_style_cache_suffix(style: &str) -> String {
     format!("_ls-{style}")
 }
 
+/// Returns a cache key suffix for badge direction.
+pub fn badge_direction_cache_suffix(dir: &str) -> String {
+    format!("_bd-{dir}")
+}
+
 pub async fn handle_inner(
     state: &AppState,
     id_type_str: &str,
     id_value_jpg: &str,
-    settings: &PosterSettings,
+    mut settings: PosterSettings,
 ) -> Result<Bytes, AppError> {
     let id_type = IdType::parse(id_type_str)?;
     let id_value = id_value_jpg.strip_suffix(".jpg").unwrap_or(id_value_jpg);
+
+    // Resolve "default" badge direction early, before cache key construction
+    settings.poster_badge_direction = resolve_badge_direction(&settings.poster_badge_direction, &settings.poster_position);
 
     let use_fanart = settings.poster_source == "fanart";
 
     // Try the fanart path first; falls through to TMDB on miss
     if use_fanart {
-        if let Some(bytes) = try_fanart_path(state, id_type_str, id_value, id_type, settings).await? {
+        if let Some(bytes) = try_fanart_path(state, id_type_str, id_value, id_type, &settings).await? {
             return Ok(bytes);
         }
     }
 
     // TMDB path (default, or fanart fallback)
-    let settings = if use_fanart {
-        &PosterSettings::default()
-    } else {
-        settings
-    };
+    if use_fanart {
+        let mut defaults = PosterSettings::default();
+        defaults.poster_badge_direction = resolve_badge_direction(&defaults.poster_badge_direction, &defaults.poster_position);
+        settings = defaults;
+    }
+    let settings = &settings;
     let ratings_suffix = ratings::ratings_cache_suffix(&settings.ratings_order, settings.ratings_limit);
     let pos_suffix = poster_position_cache_suffix(&settings.poster_position);
     let bs_suffix = badge_style_cache_suffix(&settings.poster_badge_style);
     let ls_suffix = label_style_cache_suffix(&settings.poster_label_style);
-    let cache_value = format!("{id_value}{ratings_suffix}{pos_suffix}{bs_suffix}{ls_suffix}");
+    let bd_suffix = badge_direction_cache_suffix(&settings.poster_badge_direction);
+    let cache_value = format!("{id_value}{ratings_suffix}{pos_suffix}{bs_suffix}{ls_suffix}{bd_suffix}");
     let cache_path = cache::typed_cache_path(&state.config.cache_dir, cache::ImageType::Poster, id_type_str, &cache_value)?;
-    let cache_key = format!("{id_type_str}/{id_value}{ratings_suffix}{pos_suffix}{bs_suffix}{ls_suffix}");
+    let cache_key = format!("{id_type_str}/{id_value}{ratings_suffix}{pos_suffix}{bs_suffix}{ls_suffix}{bd_suffix}");
 
     // Check in-memory poster cache first
     if let Some(entry) = state.poster_mem_cache.get(&cache_key).await {
@@ -301,10 +311,11 @@ fn fanart_variant_paths(
     pos_suffix: &str,
     bs_suffix: &str,
     ls_suffix: &str,
+    bd_suffix: &str,
 ) -> Result<(String, std::path::PathBuf), AppError> {
-    let cache_key = format!("{id_type_str}/{id_value}{variant}{ratings_suffix}{pos_suffix}{bs_suffix}{ls_suffix}");
+    let cache_key = format!("{id_type_str}/{id_value}{variant}{ratings_suffix}{pos_suffix}{bs_suffix}{ls_suffix}{bd_suffix}");
     let path_variant = variant.replace(':', "_");
-    let cache_path_base = format!("{id_value}{path_variant}{ratings_suffix}{pos_suffix}{bs_suffix}{ls_suffix}");
+    let cache_path_base = format!("{id_value}{path_variant}{ratings_suffix}{pos_suffix}{bs_suffix}{ls_suffix}{bd_suffix}");
     let cache_path = cache::typed_cache_path(cache_dir, cache::ImageType::Poster, id_type_str, &cache_path_base)?;
     Ok((cache_key, cache_path))
 }
@@ -339,6 +350,7 @@ async fn try_fanart_path(
     let pos_suffix = poster_position_cache_suffix(&settings.poster_position);
     let bs_suffix = badge_style_cache_suffix(&settings.poster_badge_style);
     let ls_suffix = label_style_cache_suffix(&settings.poster_label_style);
+    let bd_suffix = badge_direction_cache_suffix(&settings.poster_badge_direction);
 
     // Check cached variants (textless first if requested, then language)
     let mut variants_to_check: Vec<String> = Vec::new();
@@ -351,7 +363,7 @@ async fn try_fanart_path(
 
     for variant in &variants_to_check {
         let (cache_key, cache_path) =
-            fanart_variant_paths(&state.config.cache_dir, id_type_str, id_value, variant, &ratings_suffix, &pos_suffix, &bs_suffix, &ls_suffix)?;
+            fanart_variant_paths(&state.config.cache_dir, id_type_str, id_value, variant, &ratings_suffix, &pos_suffix, &bs_suffix, &ls_suffix, &bd_suffix)?;
         if let Some(bytes) =
             check_fanart_cache_variant(state, &cache_key, &cache_path, id_type, id_value, settings).await?
         {
@@ -374,7 +386,7 @@ async fn try_fanart_path(
                 PosterMatch::Language => format!(":fanart:{}", settings.fanart_lang),
             };
             let (cache_key, cache_path) =
-                fanart_variant_paths(&state.config.cache_dir, id_type_str, id_value, &actual_variant, &ratings_suffix, &pos_suffix, &bs_suffix, &ls_suffix)?;
+                fanart_variant_paths(&state.config.cache_dir, id_type_str, id_value, &actual_variant, &ratings_suffix, &pos_suffix, &bs_suffix, &ls_suffix, &bd_suffix)?;
             let _ = cache::write(&cache_path, &bytes).await;
             let _ = cache::upsert_meta_db(&state.db, &cache_key, rd.as_deref(), cache::ImageType::Poster).await;
             let bytes = Bytes::from(bytes);
@@ -612,6 +624,7 @@ async fn generate_poster_with_source(
         poster_position: settings.poster_position.clone(),
         badge_style: settings.poster_badge_style.clone(),
         label_style: settings.poster_label_style.clone(),
+        badge_direction: settings.poster_badge_direction.clone(),
     })
     .await?;
 
@@ -995,6 +1008,10 @@ mod tests {
         assert_eq!(poster_position_cache_suffix("top-center"), "_pos-top-center");
         assert_eq!(poster_position_cache_suffix("left"), "_pos-left");
         assert_eq!(poster_position_cache_suffix("right"), "_pos-right");
+        assert_eq!(poster_position_cache_suffix("top-left"), "_pos-top-left");
+        assert_eq!(poster_position_cache_suffix("top-right"), "_pos-top-right");
+        assert_eq!(poster_position_cache_suffix("bottom-left"), "_pos-bottom-left");
+        assert_eq!(poster_position_cache_suffix("bottom-right"), "_pos-bottom-right");
     }
 
     #[test]

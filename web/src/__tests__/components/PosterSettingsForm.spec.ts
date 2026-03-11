@@ -22,6 +22,7 @@ const defaultSettings: PosterSettings = {
   poster_label_style: 'text',
   logo_label_style: 'text',
   backdrop_label_style: 'text',
+  poster_badge_direction: 'default',
 }
 
 function makeFetchPreview() {
@@ -73,7 +74,7 @@ describe('PosterSettingsForm', () => {
     mountForm({}, fetchPreview)
     await flushPromises()
 
-    expect(fetchPreview).toHaveBeenCalledWith(3, 'mal,imdb,lb,rt,rta,mc,tmdb,trakt', 'bottom-center', 'horizontal', 'text')
+    expect(fetchPreview).toHaveBeenCalledWith(3, 'mal,imdb,lb,rt,rta,mc,tmdb,trakt', 'bottom-center', 'horizontal', 'text', 'default')
   })
 
   it('calls fetchPreview with correct params for custom settings', async () => {
@@ -81,7 +82,7 @@ describe('PosterSettingsForm', () => {
     mountForm({ ratings_limit: 5, ratings_order: 'imdb,rt,tmdb' }, fetchPreview)
     await flushPromises()
 
-    expect(fetchPreview).toHaveBeenCalledWith(5, expect.stringContaining('imdb'), expect.any(String), expect.any(String), expect.any(String))
+    expect(fetchPreview).toHaveBeenCalledWith(5, expect.stringContaining('imdb'), expect.any(String), expect.any(String), expect.any(String), expect.any(String))
   })
 
   it('sets preview src from blob after fetch', async () => {
@@ -112,7 +113,7 @@ describe('PosterSettingsForm', () => {
     vi.advanceTimersByTime(600)
     await flushPromises()
 
-    expect(fetchPreview).toHaveBeenCalledWith(5, expect.any(String), expect.any(String), expect.any(String), expect.any(String))
+    expect(fetchPreview).toHaveBeenCalledWith(5, expect.any(String), expect.any(String), expect.any(String), expect.any(String), expect.any(String))
   })
 
   it('debounces rapid changes — only last value triggers fetch', async () => {
@@ -136,7 +137,7 @@ describe('PosterSettingsForm', () => {
 
     // Should only have been called once with the final value
     expect(fetchPreview).toHaveBeenCalledTimes(1)
-    expect(fetchPreview).toHaveBeenCalledWith(7, expect.any(String), expect.any(String), expect.any(String), expect.any(String))
+    expect(fetchPreview).toHaveBeenCalledWith(7, expect.any(String), expect.any(String), expect.any(String), expect.any(String), expect.any(String))
   })
 
   it('shows loading state while preview loads', async () => {
@@ -197,6 +198,20 @@ describe('PosterSettingsForm', () => {
     mountForm({ poster_position: 'left' }, fetchPreview)
     await flushPromises()
 
-    expect(fetchPreview).toHaveBeenCalledWith(3, expect.any(String), 'left', 'horizontal', 'text')
+    expect(fetchPreview).toHaveBeenCalledWith(3, expect.any(String), 'left', 'horizontal', 'text', 'default')
+  })
+
+  it('renders badge direction dropdown', () => {
+    const wrapper = mountForm()
+    const select = wrapper.find('[data-testid="poster-badge-direction-select"]')
+    expect(select.exists()).toBe(true)
+  })
+
+  it('calls fetchPreview with badge direction', async () => {
+    const fetchPreview = makeFetchPreview()
+    mountForm({ poster_badge_direction: 'vertical' }, fetchPreview)
+    await flushPromises()
+
+    expect(fetchPreview).toHaveBeenCalledWith(3, expect.any(String), 'bottom-center', 'horizontal', 'text', 'vertical')
   })
 })

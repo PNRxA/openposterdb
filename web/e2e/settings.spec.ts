@@ -194,6 +194,30 @@ test.describe('settings', () => {
     await expect(page.getByTestId('poster-position-select')).toHaveValue('left')
   })
 
+  test('badge direction dropdown is visible with default', async ({ page }) => {
+    const dirSelect = page.getByTestId('poster-badge-direction-select')
+    await expect(dirSelect).toBeVisible()
+    await expect(dirSelect).toHaveValue('default')
+  })
+
+  test('badge direction persists after change and reload', async ({ page }) => {
+    const dirSelect = page.getByTestId('poster-badge-direction-select')
+    await dirSelect.selectOption('vertical')
+
+    await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 })
+
+    await page.reload()
+    await expect(page.locator('h1')).toContainText('Settings')
+    await expect(page.getByTestId('poster-badge-direction-select')).toHaveValue('vertical')
+  })
+
+  test('new poster position options are available', async ({ page }) => {
+    const posSelect = page.getByTestId('poster-position-select')
+    for (const value of ['top-left', 'top-right', 'bottom-left', 'bottom-right']) {
+      await expect(posSelect.locator(`option[value="${value}"]`)).toBeAttached()
+    }
+  })
+
   test('label style dropdowns are visible with default icon', async ({ page }) => {
     const labelSelects = page.locator('select').filter({ has: page.locator('option[value="icon"]') })
     // There should be 3 label style selects (poster, logo, backdrop)

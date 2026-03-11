@@ -71,6 +71,7 @@ describe('selfApi', () => {
       poster_label_style: 'text',
       logo_label_style: 'text',
       backdrop_label_style: 'text',
+      poster_badge_direction: 'default',
     })
 
     const [url, options] = fetchMock.mock.calls[0]
@@ -92,6 +93,7 @@ describe('selfApi', () => {
       poster_label_style: 'text',
       logo_label_style: 'text',
       backdrop_label_style: 'text',
+      poster_badge_direction: 'default',
     })
   })
 
@@ -146,6 +148,16 @@ describe('selfApi', () => {
 
     const [url] = fetchMock.mock.calls[0]
     expect(url).toContain('label_style=icon')
+  })
+
+  it('previewPoster includes badge_direction when provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await selfApi.previewPoster(3, 'imdb,rt', 'bottom-center', 'horizontal', 'icon', 'vertical')
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toContain('badge_direction=vertical')
   })
 
   it('previewLogo includes label_style when provided', async () => {

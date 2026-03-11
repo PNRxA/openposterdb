@@ -79,6 +79,7 @@ export interface SaveSettingsPayload {
   poster_label_style: string
   logo_label_style: string
   backdrop_label_style: string
+  poster_badge_direction: string
 }
 
 /** Build a URL path with query parameters, omitting entries with nullish values. */
@@ -117,8 +118,8 @@ export const adminApi = {
     get(`/api/admin/backdrops/${key}`),
   fetchBackdrop: (idType: string, idValue: string): Promise<Response> =>
     post(`/api/admin/backdrops/${idType}/${idValue}/fetch`),
-  previewPoster: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string): Promise<Response> =>
-    get(buildUrl('/api/admin/preview/poster', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, poster_position: posterPosition, badge_style: badgeStyle, label_style: labelStyle })),
+  previewPoster: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string): Promise<Response> =>
+    get(buildUrl('/api/admin/preview/poster', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, poster_position: posterPosition, badge_style: badgeStyle, label_style: labelStyle, badge_direction: badgeDirection })),
   previewLogo: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string): Promise<Response> =>
     get(buildUrl('/api/admin/preview/logo', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, badge_style: badgeStyle, label_style: labelStyle })),
   previewBackdrop: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string): Promise<Response> =>
@@ -154,8 +155,8 @@ export const selfApi = {
     }),
   resetSettings: (): Promise<Response> =>
     keyRequest('/api/key/me/settings', { method: 'DELETE' }),
-  previewPoster: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string): Promise<Response> =>
-    keyRequest(buildUrl('/api/key/me/preview/poster', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, poster_position: posterPosition, badge_style: badgeStyle, label_style: labelStyle })),
+  previewPoster: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string): Promise<Response> =>
+    keyRequest(buildUrl('/api/key/me/preview/poster', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, poster_position: posterPosition, badge_style: badgeStyle, label_style: labelStyle, badge_direction: badgeDirection })),
   previewLogo: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string): Promise<Response> =>
     keyRequest(buildUrl('/api/key/me/preview/logo', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, badge_style: badgeStyle, label_style: labelStyle })),
   previewBackdrop: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string): Promise<Response> =>

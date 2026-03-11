@@ -63,6 +63,7 @@ async function toggleFreeApiKey() {
     poster_label_style: settings.value.poster_label_style,
     logo_label_style: settings.value.logo_label_style,
     backdrop_label_style: settings.value.backdrop_label_style,
+    poster_badge_direction: settings.value.poster_badge_direction,
     free_api_key_enabled: newVal,
   })
   if (res.ok) {

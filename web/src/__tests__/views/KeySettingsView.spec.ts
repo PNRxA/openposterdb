@@ -70,6 +70,10 @@ const sampleSettings = {
   poster_badge_style: 'horizontal',
   logo_badge_style: 'horizontal',
   backdrop_badge_style: 'vertical',
+  poster_label_style: 'text',
+  logo_label_style: 'text',
+  backdrop_label_style: 'text',
+  poster_badge_direction: 'default',
 }
 
 describe('KeySettingsView', () => {
