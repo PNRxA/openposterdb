@@ -17,7 +17,7 @@ vi.mock('@/lib/api', () => ({
 }))
 
 const defaultSettings = {
-  poster_source: 'tmdb',
+  poster_source: 't',
   fanart_lang: 'en',
   fanart_textless: false,
   fanart_available: true,
@@ -85,7 +85,7 @@ describe('SettingsView', () => {
       json: () =>
         Promise.resolve({
           ...defaultSettings,
-          poster_source: 'fanart',
+          poster_source: 'f',
           fanart_lang: 'de',
           fanart_textless: true,
         }),
@@ -95,7 +95,7 @@ describe('SettingsView', () => {
     await flushPromises()
 
     const select = wrapper.find('select')
-    expect(select.element.value).toBe('fanart')
+    expect(select.element.value).toBe('f')
   })
 
   it('shows fanart options only when fanart is selected', async () => {
@@ -107,7 +107,7 @@ describe('SettingsView', () => {
     expect(wrapper.text()).not.toContain('Prefer textless')
 
     // Switch to fanart
-    await wrapper.find('select').setValue('fanart')
+    await wrapper.find('select').setValue('f')
     await flushPromises()
 
     expect(wrapper.text()).toContain('Language')
@@ -127,7 +127,7 @@ describe('SettingsView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    const fanartOption = wrapper.find('option[value="fanart"]')
+    const fanartOption = wrapper.find('option[value="f"]')
     expect(fanartOption.attributes('disabled')).toBeDefined()
     expect(fanartOption.text()).toContain('no API key')
   })
@@ -140,13 +140,13 @@ describe('SettingsView', () => {
     await flushPromises()
 
     // Change poster source to trigger auto-save
-    await wrapper.find('select').setValue('fanart')
+    await wrapper.find('select').setValue('f')
     vi.advanceTimersByTime(700)
     await flushPromises()
 
     expect(mockAdminApi.updateSettings).toHaveBeenCalledWith(
       expect.objectContaining({
-        poster_source: 'fanart',
+        poster_source: 'f',
         fanart_lang: 'en',
         fanart_textless: false,
       }),
@@ -161,7 +161,7 @@ describe('SettingsView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    await wrapper.find('select').setValue('fanart')
+    await wrapper.find('select').setValue('f')
     vi.advanceTimersByTime(700)
     await flushPromises()
 
@@ -179,7 +179,7 @@ describe('SettingsView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    await wrapper.find('select').setValue('fanart')
+    await wrapper.find('select').setValue('f')
     vi.advanceTimersByTime(700)
     await flushPromises()
 
@@ -204,7 +204,7 @@ describe('SettingsView', () => {
     await flushPromises()
 
     // Change something to trigger auto-save
-    await wrapper.find('select').setValue('fanart')
+    await wrapper.find('select').setValue('f')
     vi.advanceTimersByTime(700)
     await flushPromises()
 
@@ -224,7 +224,7 @@ describe('SettingsView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    await wrapper.find('select').setValue('fanart')
+    await wrapper.find('select').setValue('f')
     vi.advanceTimersByTime(700)
     await flushPromises()
 
@@ -303,7 +303,7 @@ describe('SettingsView', () => {
     await flushPromises()
 
     // Change something to trigger auto-save
-    await wrapper.find('select').setValue('fanart')
+    await wrapper.find('select').setValue('f')
     vi.advanceTimersByTime(700)
     await flushPromises()
 

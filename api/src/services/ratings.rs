@@ -31,6 +31,20 @@ impl RatingSource {
         }
     }
 
+    /// Single-char identifier used only in cache key suffixes (never parsed back).
+    pub fn cache_char(&self) -> char {
+        match self {
+            Self::Mal => 'm',
+            Self::Imdb => 'i',
+            Self::Letterboxd => 'l',
+            Self::Rt => 'r',
+            Self::RtAudience => 'a',
+            Self::Metacritic => 'c',
+            Self::Tmdb => 't',
+            Self::Trakt => 'k',
+        }
+    }
+
     pub fn key(&self) -> &'static str {
         match self {
             Self::Imdb => "imdb",
@@ -230,26 +244,29 @@ const CANONICAL_ORDER: &[&str] = &["mal", "imdb", "lb", "rt", "rta", "mc", "tmdb
 ///
 /// Parses `order` into known `RatingSource` keys, appends any missing sources
 /// in canonical order for determinism, then truncates to `limit` if positive.
-/// Returns a string like `@mal,imdb,lb`.
+/// Returns a compact string like `@mil` (single-char per source, no commas).
 pub fn ratings_cache_suffix(order: &str, limit: i32) -> String {
-    let mut keys: Vec<&str> = order
+    let mut sources: Vec<RatingSource> = order
         .split(',')
         .map(|k| k.trim())
-        .filter(|k| RatingSource::from_key(k).is_some())
+        .filter_map(RatingSource::from_key)
         .collect();
 
     // Append missing sources in canonical order
     for &canonical in CANONICAL_ORDER {
-        if !keys.contains(&canonical) {
-            keys.push(canonical);
+        if let Some(src) = RatingSource::from_key(canonical) {
+            if !sources.contains(&src) {
+                sources.push(src);
+            }
         }
     }
 
     if limit > 0 {
-        keys.truncate(limit as usize);
+        sources.truncate(limit as usize);
     }
 
-    format!("@{}", keys.join(","))
+    let chars: String = sources.iter().map(|s| s.cache_char()).collect();
+    format!("@{chars}")
 }
 
 /// Reorder and/or limit rating badges based on user preferences.
@@ -390,40 +407,63 @@ mod tests {
     }
 
     #[test]
+    fn cache_char_unique_per_source() {
+        let sources = [
+            (RatingSource::Mal, 'm'),
+            (RatingSource::Imdb, 'i'),
+            (RatingSource::Letterboxd, 'l'),
+            (RatingSource::Rt, 'r'),
+            (RatingSource::RtAudience, 'a'),
+            (RatingSource::Metacritic, 'c'),
+            (RatingSource::Tmdb, 't'),
+            (RatingSource::Trakt, 'k'),
+        ];
+        for (src, expected) in &sources {
+            assert_eq!(src.cache_char(), *expected, "cache_char mismatch for {:?}", src);
+        }
+        // All chars must be unique
+        let chars: Vec<char> = sources.iter().map(|(s, _)| s.cache_char()).collect();
+        let mut deduped = chars.clone();
+        deduped.sort();
+        deduped.dedup();
+        assert_eq!(chars.len(), deduped.len(), "cache_char values are not unique");
+    }
+
+    #[test]
     fn ratings_cache_suffix_default_order_limit_3() {
         let suffix = ratings_cache_suffix("mal,imdb,lb,rt,rta,mc,tmdb,trakt", 3);
-        assert_eq!(suffix, "@mal,imdb,lb");
+        assert_eq!(suffix, "@mil");
     }
 
     #[test]
     fn ratings_cache_suffix_custom_order() {
         let suffix = ratings_cache_suffix("trakt,imdb,rt", 3);
-        assert_eq!(suffix, "@trakt,imdb,rt");
+        assert_eq!(suffix, "@kir");
     }
 
     #[test]
     fn ratings_cache_suffix_partial_order_normalized() {
         // Only two sources specified — missing ones appended in canonical order
         let suffix = ratings_cache_suffix("imdb,rt", 0);
-        assert_eq!(suffix, "@imdb,rt,mal,lb,rta,mc,tmdb,trakt");
+        assert_eq!(suffix, "@irmlactk");
     }
 
     #[test]
     fn ratings_cache_suffix_limit_zero_includes_all() {
         let suffix = ratings_cache_suffix("mal,imdb,lb,rt,rta,mc,tmdb,trakt", 0);
-        assert_eq!(suffix, "@mal,imdb,lb,rt,rta,mc,tmdb,trakt");
+        assert_eq!(suffix, "@milractk");
     }
 
     #[test]
     fn ratings_cache_suffix_empty_order() {
         let suffix = ratings_cache_suffix("", 3);
-        assert_eq!(suffix, "@mal,imdb,lb");
+        assert_eq!(suffix, "@mil");
     }
 
     #[test]
     fn ratings_cache_suffix_invalid_sources_ignored() {
         let suffix = ratings_cache_suffix("imdb,bogus,rt,fake", 3);
-        assert_eq!(suffix, "@imdb,rt,mal");
+        assert_eq!(suffix, "@irm");
     }
 
     #[test]

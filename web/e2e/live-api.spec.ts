@@ -215,7 +215,7 @@ test.describe('live API - free API key', () => {
     // Enable free API key
     await request.put('/api/admin/settings', {
       headers: { Authorization: `Bearer ${jwt}` },
-      data: { poster_source: 'tmdb', free_api_key_enabled: true },
+      data: { poster_source: 't', free_api_key_enabled: true },
     })
 
     const res = await request.get(`/t0-free-rpdb/imdb/poster-default/${TEST_IMDB_ID}.jpg`, {

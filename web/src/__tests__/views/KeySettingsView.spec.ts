@@ -57,7 +57,7 @@ function mountView() {
 }
 
 const sampleSettings = {
-  poster_source: 'tmdb',
+  poster_source: 't',
   fanart_lang: 'en',
   fanart_textless: false,
   fanart_available: true,

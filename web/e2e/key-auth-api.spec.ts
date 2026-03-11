@@ -90,7 +90,7 @@ test.describe('API key auth - API level security', () => {
     expect(res.status()).toBe(200)
 
     const body = await res.json()
-    expect(body.poster_source).toBe('tmdb')
+    expect(body.poster_source).toBe('t')
     expect(body.is_default).toBe(true)
   })
 
@@ -99,7 +99,7 @@ test.describe('API key auth - API level security', () => {
 
     const putRes = await request.put('/api/key/me/settings', {
       headers: { Authorization: `Bearer ${sessionToken}` },
-      data: { poster_source: 'fanart', fanart_lang: 'ja', fanart_textless: true },
+      data: { poster_source: 'f', fanart_lang: 'ja', fanart_textless: true },
     })
     expect(putRes.status()).toBe(200)
 
@@ -107,7 +107,7 @@ test.describe('API key auth - API level security', () => {
       headers: { Authorization: `Bearer ${sessionToken}` },
     })
     const body = await getRes.json()
-    expect(body.poster_source).toBe('fanart')
+    expect(body.poster_source).toBe('f')
     expect(body.fanart_lang).toBe('ja')
     expect(body.fanart_textless).toBe(true)
     expect(body.is_default).toBe(false)
@@ -119,7 +119,7 @@ test.describe('API key auth - API level security', () => {
     // Set custom
     await request.put('/api/key/me/settings', {
       headers: { Authorization: `Bearer ${sessionToken}` },
-      data: { poster_source: 'fanart', fanart_lang: 'de', fanart_textless: true },
+      data: { poster_source: 'f', fanart_lang: 'de', fanart_textless: true },
     })
 
     // Reset
@@ -133,7 +133,7 @@ test.describe('API key auth - API level security', () => {
       headers: { Authorization: `Bearer ${sessionToken}` },
     })
     const body = await getRes.json()
-    expect(body.poster_source).toBe('tmdb')
+    expect(body.poster_source).toBe('t')
     expect(body.is_default).toBe(true)
   })
 

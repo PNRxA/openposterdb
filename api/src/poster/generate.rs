@@ -4,6 +4,7 @@ use image::{imageops, DynamicImage, RgbaImage};
 use crate::cache;
 use crate::error::AppError;
 use crate::poster::badge;
+use crate::services::db::STYLE_VERTICAL;
 use crate::services::ratings::RatingBadge;
 use crate::services::tmdb::TmdbClient;
 
@@ -197,14 +198,14 @@ pub fn render_poster_sync(
 
     if !badges.is_empty() {
         let badge_images: Vec<RgbaImage> = match badge_style {
-            "v" => badges.iter().map(|b| badge::render_vertical_badge(b, font, label_style)).collect(),
+            STYLE_VERTICAL => badges.iter().map(|b| badge::render_vertical_badge(b, font, label_style)).collect(),
             _ => badge::render_badges_uniform(badges, font, label_style),
         };
 
-        if badge_direction == "v" {
+        if badge_direction == STYLE_VERTICAL {
             overlay_vertical_stack(&mut canvas, &badge_images, poster_position);
         } else {
-            let max_per_row = if badge_style == "v" { MAX_VERT_BADGES_PER_ROW } else { MAX_BADGES_PER_ROW };
+            let max_per_row = if badge_style == STYLE_VERTICAL { MAX_VERT_BADGES_PER_ROW } else { MAX_BADGES_PER_ROW };
             overlay_horizontal_rows(&mut canvas, &badge_images, poster_position, max_per_row);
         }
     }

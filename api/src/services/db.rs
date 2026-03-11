@@ -7,6 +7,43 @@ use crate::entity::{admin_user, api_key, api_key_settings, global_settings, refr
 use crate::error::AppError;
 use crate::services::ratings::RatingSource;
 
+// --- Setting value constants ---
+
+/// Poster source: TMDB
+pub const SOURCE_TMDB: &str = "t";
+/// Poster source: Fanart.tv
+pub const SOURCE_FANART: &str = "f";
+
+/// Badge style / badge direction: horizontal
+pub const STYLE_HORIZONTAL: &str = "h";
+/// Badge style / badge direction: vertical
+pub const STYLE_VERTICAL: &str = "v";
+
+/// Badge direction: auto (resolves based on position)
+pub const DIRECTION_DEFAULT: &str = "d";
+
+/// Label style: icon
+pub const LABEL_ICON: &str = "i";
+/// Label style: text
+pub const LABEL_TEXT: &str = "t";
+
+/// Poster position: bottom-center (default)
+pub const POS_BOTTOM_CENTER: &str = "bc";
+/// Poster position: top-center
+pub const POS_TOP_CENTER: &str = "tc";
+/// Poster position: left
+pub const POS_LEFT: &str = "l";
+/// Poster position: right
+pub const POS_RIGHT: &str = "r";
+/// Poster position: top-left
+pub const POS_TOP_LEFT: &str = "tl";
+/// Poster position: top-right
+pub const POS_TOP_RIGHT: &str = "tr";
+/// Poster position: bottom-left
+pub const POS_BOTTOM_LEFT: &str = "bl";
+/// Poster position: bottom-right
+pub const POS_BOTTOM_RIGHT: &str = "br";
+
 pub fn default_fanart_lang() -> String {
     "en".to_string()
 }
@@ -24,49 +61,49 @@ pub fn default_ratings_order() -> String {
 }
 
 pub fn default_poster_position() -> String {
-    "bc".to_string()
+    POS_BOTTOM_CENTER.to_string()
 }
 
 pub fn default_poster_badge_style() -> String {
-    "h".to_string()
+    STYLE_HORIZONTAL.to_string()
 }
 
 pub fn default_logo_badge_style() -> String {
-    "v".to_string()
+    STYLE_VERTICAL.to_string()
 }
 
 pub fn default_backdrop_badge_style() -> String {
-    "v".to_string()
+    STYLE_VERTICAL.to_string()
 }
 
 pub fn default_label_style() -> String {
-    "i".to_string()
+    LABEL_ICON.to_string()
 }
 
 pub fn default_poster_badge_direction() -> String {
-    "d".to_string()
+    DIRECTION_DEFAULT.to_string()
 }
 
 /// Resolve a badge direction of `"default"` to `"h"` or `"v"`
 /// based on the poster position. Center positions use horizontal; everything
 /// else (left, right, corners) uses vertical. Non-default values pass through.
 pub fn resolve_badge_direction(direction: &str, position: &str) -> String {
-    if direction != "d" {
+    if direction != DIRECTION_DEFAULT {
         return direction.to_string();
     }
     match position {
-        "bc" | "tc" => "h".to_string(),
-        _ => "v".to_string(),
+        POS_BOTTOM_CENTER | POS_TOP_CENTER => STYLE_HORIZONTAL.to_string(),
+        _ => STYLE_VERTICAL.to_string(),
     }
 }
 
 /// Validate that poster_source is a known value.
 pub fn validate_poster_source(source: &str) -> Result<(), AppError> {
-    if source == "tmdb" || source == "fanart" {
+    if source == SOURCE_TMDB || source == SOURCE_FANART {
         Ok(())
     } else {
         Err(AppError::BadRequest(
-            "poster_source must be 'tmdb' or 'fanart'".into(),
+            format!("poster_source must be '{SOURCE_TMDB}' or '{SOURCE_FANART}'"),
         ))
     }
 }
@@ -107,27 +144,27 @@ pub fn validate_ratings_order(order: &str) -> Result<(), AppError> {
 
 pub fn validate_badge_style(style: &str) -> Result<(), AppError> {
     match style {
-        "h" | "v" => Ok(()),
+        STYLE_HORIZONTAL | STYLE_VERTICAL => Ok(()),
         _ => Err(AppError::BadRequest(
-            "badge_style must be 'h' or 'v'".into(),
+            format!("badge_style must be '{STYLE_HORIZONTAL}' or '{STYLE_VERTICAL}'"),
         )),
     }
 }
 
 pub fn validate_label_style(style: &str) -> Result<(), AppError> {
     match style {
-        "t" | "i" => Ok(()),
+        LABEL_TEXT | LABEL_ICON => Ok(()),
         _ => Err(AppError::BadRequest(
-            "label_style must be 't' or 'i'".into(),
+            format!("label_style must be '{LABEL_TEXT}' or '{LABEL_ICON}'"),
         )),
     }
 }
 
 pub fn validate_badge_direction(dir: &str) -> Result<(), AppError> {
     match dir {
-        "d" | "h" | "v" => Ok(()),
+        DIRECTION_DEFAULT | STYLE_HORIZONTAL | STYLE_VERTICAL => Ok(()),
         _ => Err(AppError::BadRequest(
-            "badge_direction must be 'd', 'h', or 'v'".into(),
+            format!("badge_direction must be '{DIRECTION_DEFAULT}', '{STYLE_HORIZONTAL}', or '{STYLE_VERTICAL}'"),
         )),
     }
 }
@@ -135,10 +172,10 @@ pub fn validate_badge_direction(dir: &str) -> Result<(), AppError> {
 /// Validate that poster_position is a known value.
 pub fn validate_poster_position(pos: &str) -> Result<(), AppError> {
     match pos {
-        "bc" | "tc" | "l" | "r"
-        | "tl" | "tr" | "bl" | "br" => Ok(()),
+        POS_BOTTOM_CENTER | POS_TOP_CENTER | POS_LEFT | POS_RIGHT
+        | POS_TOP_LEFT | POS_TOP_RIGHT | POS_BOTTOM_LEFT | POS_BOTTOM_RIGHT => Ok(()),
         _ => Err(AppError::BadRequest(
-            "poster_position must be 'bc', 'tc', 'l', 'r', 'tl', 'tr', 'bl', or 'br'".into(),
+            format!("poster_position must be '{POS_BOTTOM_CENTER}', '{POS_TOP_CENTER}', '{POS_LEFT}', '{POS_RIGHT}', '{POS_TOP_LEFT}', '{POS_TOP_RIGHT}', '{POS_BOTTOM_LEFT}', or '{POS_BOTTOM_RIGHT}'"),
         )),
     }
 }
@@ -344,6 +381,20 @@ mod tests {
         assert!(validate_fanart_lang("en\0").is_err());
         assert!(validate_fanart_lang("a b").is_err());
         assert!(validate_fanart_lang("en/de").is_err());
+    }
+
+    #[test]
+    fn validate_poster_source_accepts_valid() {
+        assert!(validate_poster_source("t").is_ok());
+        assert!(validate_poster_source("f").is_ok());
+    }
+
+    #[test]
+    fn validate_poster_source_rejects_invalid() {
+        assert!(validate_poster_source("tmdb").is_err());
+        assert!(validate_poster_source("fanart").is_err());
+        assert!(validate_poster_source("").is_err());
+        assert!(validate_poster_source("x").is_err());
     }
 
     #[test]
@@ -917,22 +968,22 @@ pub struct PosterSettings {
 impl Default for PosterSettings {
     fn default() -> Self {
         Self {
-            poster_source: "tmdb".to_string(),
-            fanart_lang: "en".to_string(),
+            poster_source: SOURCE_TMDB.to_string(),
+            fanart_lang: default_fanart_lang(),
             fanart_textless: false,
-            ratings_limit: 3,
-            ratings_order: "mal,imdb,lb,rt,mc,rta,tmdb,trakt".to_string(),
+            ratings_limit: default_ratings_limit(),
+            ratings_order: default_ratings_order(),
             is_default: true,
-            poster_position: "bc".to_string(),
-            logo_ratings_limit: 5,
-            backdrop_ratings_limit: 5,
-            poster_badge_style: "h".to_string(),
-            logo_badge_style: "v".to_string(),
-            backdrop_badge_style: "v".to_string(),
-            poster_label_style: "i".to_string(),
-            logo_label_style: "i".to_string(),
-            backdrop_label_style: "i".to_string(),
-            poster_badge_direction: "d".to_string(),
+            poster_position: default_poster_position(),
+            logo_ratings_limit: default_logo_backdrop_ratings_limit(),
+            backdrop_ratings_limit: default_logo_backdrop_ratings_limit(),
+            poster_badge_style: default_poster_badge_style(),
+            logo_badge_style: default_logo_badge_style(),
+            backdrop_badge_style: default_backdrop_badge_style(),
+            poster_label_style: default_label_style(),
+            logo_label_style: default_label_style(),
+            backdrop_label_style: default_label_style(),
+            poster_badge_direction: default_poster_badge_direction(),
         }
     }
 }

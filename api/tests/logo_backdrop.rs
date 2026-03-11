@@ -34,7 +34,7 @@ async fn set_free_api_key_enabled(app: &axum::Router, token: &str, enabled: bool
         .header("content-type", "application/json")
         .header("authorization", format!("Bearer {token}"))
         .body(json_body(serde_json::json!({
-            "poster_source": "tmdb",
+            "poster_source": "t",
             "free_api_key_enabled": enabled
         })))
         .unwrap();

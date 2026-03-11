@@ -897,7 +897,7 @@ async fn free_api_key_cannot_login_via_security() {
         .header("content-type", "application/json")
         .header("authorization", format!("Bearer {token}"))
         .body(json_body(serde_json::json!({
-            "poster_source": "tmdb",
+            "poster_source": "t",
             "free_api_key_enabled": true
         })))
         .unwrap();

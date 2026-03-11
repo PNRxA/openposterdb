@@ -45,7 +45,7 @@ test.describe('key settings (self-service)', () => {
         Authorization: `Bearer ${adminToken}`,
         'Content-Type': 'application/json',
       },
-      data: { poster_source: 'tmdb' },
+      data: { poster_source: 't' },
     })
 
     await loginWithApiKey(page, request)
@@ -56,14 +56,14 @@ test.describe('key settings (self-service)', () => {
     // Settings form should be present with defaults
     const select = page.getByTestId('poster-source-select')
     await expect(select).toBeVisible()
-    await expect(select).toHaveValue('tmdb')
+    await expect(select).toHaveValue('t')
   })
 
   test('auto-saves and shows confirmation', async ({ page, request }) => {
     await loginWithApiKey(page, request)
 
     // Change a setting to trigger auto-save
-    await page.getByTestId('poster-source-select').selectOption('fanart')
+    await page.getByTestId('poster-source-select').selectOption('f')
 
     // Wait for auto-save confirmation
     await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 })
@@ -77,7 +77,7 @@ test.describe('key settings (self-service)', () => {
         Authorization: `Bearer ${adminToken}`,
         'Content-Type': 'application/json',
       },
-      data: { poster_source: 'tmdb' },
+      data: { poster_source: 't' },
     })
 
     await loginWithApiKey(page, request)
@@ -86,7 +86,7 @@ test.describe('key settings (self-service)', () => {
     await expect(page.locator('label:has-text("Language")')).not.toBeVisible()
 
     // Select fanart
-    await page.getByTestId('poster-source-select').selectOption('fanart')
+    await page.getByTestId('poster-source-select').selectOption('f')
 
     // Now language and textless should appear
     await expect(page.locator('label:has-text("Language")')).toBeVisible()
@@ -97,7 +97,7 @@ test.describe('key settings (self-service)', () => {
     await loginWithApiKey(page, request)
 
     // Change to fanart
-    await page.getByTestId('poster-source-select').selectOption('fanart')
+    await page.getByTestId('poster-source-select').selectOption('f')
 
     // Wait for auto-save confirmation
     await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 })
@@ -107,7 +107,7 @@ test.describe('key settings (self-service)', () => {
     await expect(page.locator('h1')).toContainText('Poster Settings')
 
     // Settings should persist
-    await expect(page.getByTestId('poster-source-select')).toHaveValue('fanart')
+    await expect(page.getByTestId('poster-source-select')).toHaveValue('f')
   })
 
   test('rating display section is visible', async ({ page, request }) => {
@@ -135,16 +135,16 @@ test.describe('key settings (self-service)', () => {
         Authorization: `Bearer ${adminToken}`,
         'Content-Type': 'application/json',
       },
-      data: { poster_source: 'tmdb' },
+      data: { poster_source: 't' },
     })
 
     await loginWithApiKey(page, request)
 
     // Global is now "tmdb", key has no overrides → should show "tmdb"
-    await expect(page.getByTestId('poster-source-select')).toHaveValue('tmdb')
+    await expect(page.getByTestId('poster-source-select')).toHaveValue('t')
 
     // Change to fanart — auto-save triggers
-    await page.getByTestId('poster-source-select').selectOption('fanart')
+    await page.getByTestId('poster-source-select').selectOption('f')
     await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 })
 
     // Wait for "Using defaults" badge to disappear (confirms custom settings saved)
@@ -155,7 +155,7 @@ test.describe('key settings (self-service)', () => {
 
     // Should be back to global default ("tmdb")
     await expect(page.locator('text=Using defaults')).toBeVisible({ timeout: 10000 })
-    await expect(page.getByTestId('poster-source-select')).toHaveValue('tmdb')
+    await expect(page.getByTestId('poster-source-select')).toHaveValue('t')
   })
 
   test('reset to defaults does not trigger a spurious auto-save', async ({ page, request }) => {
@@ -165,13 +165,13 @@ test.describe('key settings (self-service)', () => {
         Authorization: `Bearer ${adminToken}`,
         'Content-Type': 'application/json',
       },
-      data: { poster_source: 'tmdb' },
+      data: { poster_source: 't' },
     })
 
     await loginWithApiKey(page, request)
 
     // Change a setting so we have custom overrides
-    await page.getByTestId('poster-source-select').selectOption('fanart')
+    await page.getByTestId('poster-source-select').selectOption('f')
     await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 })
     await expect(page.locator('text=Using defaults')).not.toBeVisible()
 

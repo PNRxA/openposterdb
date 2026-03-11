@@ -175,7 +175,7 @@ async fn preview_cache_survives_settings_update() {
         .header("authorization", format!("Bearer {token}"))
         .body(Body::from(
             serde_json::json!({
-                "poster_source": "tmdb",
+                "poster_source": "t",
                 "ratings_limit": 5,
                 "ratings_order": "imdb,rt,mc,tmdb,trakt,mal,lb,rta"
             })

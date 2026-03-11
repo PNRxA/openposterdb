@@ -113,7 +113,7 @@ pub const SCHEMA_SQL: &[&str] = &[
     )",
     "CREATE TABLE IF NOT EXISTS api_key_settings (
         api_key_id             INTEGER PRIMARY KEY REFERENCES api_keys(id) ON DELETE CASCADE,
-        poster_source          TEXT NOT NULL DEFAULT 'tmdb',
+        poster_source          TEXT NOT NULL DEFAULT 't',
         fanart_lang            TEXT NOT NULL DEFAULT 'en',
         fanart_textless        INTEGER NOT NULL DEFAULT 0,
         ratings_limit          INTEGER NOT NULL DEFAULT 3,
@@ -152,11 +152,11 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
         "duplicate column",
     ),
     (
-        "ALTER TABLE api_key_settings ADD COLUMN logo_ratings_limit INTEGER NOT NULL DEFAULT 3",
+        "ALTER TABLE api_key_settings ADD COLUMN logo_ratings_limit INTEGER NOT NULL DEFAULT 5",
         "duplicate column",
     ),
     (
-        "ALTER TABLE api_key_settings ADD COLUMN backdrop_ratings_limit INTEGER NOT NULL DEFAULT 3",
+        "ALTER TABLE api_key_settings ADD COLUMN backdrop_ratings_limit INTEGER NOT NULL DEFAULT 5",
         "duplicate column",
     ),
     (

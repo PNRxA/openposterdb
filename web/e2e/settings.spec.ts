@@ -15,7 +15,7 @@ test.describe('settings', () => {
     // Reset settings to defaults so tests start from a known state
     await request.put('/api/admin/settings', {
       headers: { Authorization: `Bearer ${token}` },
-      data: { poster_source: 'tmdb' },
+      data: { poster_source: 't' },
     })
 
     await page.goto('/login')
@@ -37,11 +37,11 @@ test.describe('settings', () => {
   test('displays poster source dropdown defaulting to TMDB', async ({ page }) => {
     const select = page.getByTestId('poster-source-select')
     await expect(select).toBeVisible()
-    await expect(select).toHaveValue('tmdb')
+    await expect(select).toHaveValue('t')
   })
 
   test('fanart option is enabled when API key is configured', async ({ page }) => {
-    const fanartOption = page.locator('option[value="fanart"]')
+    const fanartOption = page.locator('option[value="f"]')
     await expect(fanartOption).toBeEnabled()
     await expect(fanartOption).not.toContainText('no API key')
   })
@@ -52,7 +52,7 @@ test.describe('settings', () => {
     await expect(page.locator('label:has-text("Prefer textless")')).not.toBeVisible()
 
     // Select fanart
-    await page.getByTestId('poster-source-select').selectOption('fanart')
+    await page.getByTestId('poster-source-select').selectOption('f')
 
     // Now language and textless should appear
     await expect(page.locator('label:has-text("Language")')).toBeVisible()
@@ -61,7 +61,7 @@ test.describe('settings', () => {
 
   test('auto-saves and shows confirmation', async ({ page }) => {
     // Change a setting to trigger auto-save
-    await page.getByTestId('poster-source-select').selectOption('fanart')
+    await page.getByTestId('poster-source-select').selectOption('f')
 
     // Wait for debounced auto-save + confirmation
     await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 })
@@ -69,7 +69,7 @@ test.describe('settings', () => {
 
   test('settings persist after auto-save and reload', async ({ page }) => {
     // Select fanart and configure
-    await page.getByTestId('poster-source-select').selectOption('fanart')
+    await page.getByTestId('poster-source-select').selectOption('f')
 
     // Wait for auto-save confirmation
     await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 })
@@ -79,7 +79,7 @@ test.describe('settings', () => {
     await expect(page.locator('h1')).toContainText('Settings')
 
     // Settings should be preserved
-    await expect(page.getByTestId('poster-source-select')).toHaveValue('fanart')
+    await expect(page.getByTestId('poster-source-select')).toHaveValue('f')
   })
 
   test('refresh button is visible and clickable', async ({ page }) => {

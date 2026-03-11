@@ -187,7 +187,7 @@ async fn get_own_settings_returns_defaults() {
 
     let body = res.into_body().collect().await.unwrap().to_bytes();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(json["poster_source"], "tmdb");
+    assert_eq!(json["poster_source"], "t");
     assert_eq!(json["fanart_lang"], "en");
     assert_eq!(json["fanart_textless"], false);
     assert_eq!(json["is_default"], true);
@@ -210,7 +210,7 @@ async fn update_own_settings_and_read_back() {
         .header("content-type", "application/json")
         .header("authorization", format!("Bearer {session_token}"))
         .body(json_body(serde_json::json!({
-            "poster_source": "fanart",
+            "poster_source": "f",
             "fanart_lang": "ja",
             "fanart_textless": true
         })))
@@ -231,7 +231,7 @@ async fn update_own_settings_and_read_back() {
 
     let body = res.into_body().collect().await.unwrap().to_bytes();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(json["poster_source"], "fanart");
+    assert_eq!(json["poster_source"], "f");
     assert_eq!(json["fanart_lang"], "ja");
     assert_eq!(json["fanart_textless"], true);
     assert_eq!(json["is_default"], false);
@@ -267,7 +267,7 @@ async fn update_own_settings_rejects_invalid_lang() {
         .header("content-type", "application/json")
         .header("authorization", format!("Bearer {session_token}"))
         .body(json_body(serde_json::json!({
-            "poster_source": "fanart",
+            "poster_source": "f",
             "fanart_lang": "x"
         })))
         .unwrap();
@@ -290,7 +290,7 @@ async fn reset_own_settings_restores_defaults() {
         .header("content-type", "application/json")
         .header("authorization", format!("Bearer {session_token}"))
         .body(json_body(serde_json::json!({
-            "poster_source": "fanart",
+            "poster_source": "f",
             "fanart_lang": "de",
             "fanart_textless": true
         })))
@@ -316,7 +316,7 @@ async fn reset_own_settings_restores_defaults() {
     let res = app.oneshot(req).await.unwrap();
     let body = res.into_body().collect().await.unwrap().to_bytes();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(json["poster_source"], "tmdb");
+    assert_eq!(json["poster_source"], "t");
     assert_eq!(json["is_default"], true);
 }
 
@@ -537,7 +537,7 @@ async fn key_session_only_sees_own_settings() {
         .header("content-type", "application/json")
         .header("authorization", format!("Bearer {token_a}"))
         .body(json_body(serde_json::json!({
-            "poster_source": "fanart",
+            "poster_source": "f",
             "fanart_lang": "ja",
             "fanart_textless": true
         })))
@@ -566,7 +566,7 @@ async fn key_session_only_sees_own_settings() {
     assert_eq!(res.status(), StatusCode::OK);
     let body = res.into_body().collect().await.unwrap().to_bytes();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(json["poster_source"], "tmdb", "key B should not see key A's settings");
+    assert_eq!(json["poster_source"], "t", "key B should not see key A's settings");
     assert_eq!(json["is_default"], true);
 
     // Key A's info endpoint returns key A's name
@@ -605,7 +605,7 @@ async fn update_own_settings_with_ratings_and_read_back() {
         .header("content-type", "application/json")
         .header("authorization", format!("Bearer {session_token}"))
         .body(json_body(serde_json::json!({
-            "poster_source": "tmdb",
+            "poster_source": "t",
             "ratings_limit": 5,
             "ratings_order": "mal,imdb,trakt,rt,rta"
         })))
@@ -639,7 +639,7 @@ async fn update_own_settings_rejects_invalid_ratings_limit() {
         .header("content-type", "application/json")
         .header("authorization", format!("Bearer {session_token}"))
         .body(json_body(serde_json::json!({
-            "poster_source": "tmdb",
+            "poster_source": "t",
             "ratings_limit": 99
         })))
         .unwrap();
@@ -658,7 +658,7 @@ async fn update_own_settings_rejects_invalid_ratings_order() {
         .header("content-type", "application/json")
         .header("authorization", format!("Bearer {session_token}"))
         .body(json_body(serde_json::json!({
-            "poster_source": "tmdb",
+            "poster_source": "t",
             "ratings_order": "imdb,nope"
         })))
         .unwrap();

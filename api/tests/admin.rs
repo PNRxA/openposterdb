@@ -175,7 +175,7 @@ async fn get_settings_returns_defaults() {
 
     let body = res.into_body().collect().await.unwrap().to_bytes();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(json["poster_source"], "tmdb");
+    assert_eq!(json["poster_source"], "t");
     assert_eq!(json["fanart_lang"], "en");
     assert_eq!(json["fanart_textless"], false);
     assert_eq!(json["fanart_available"], true);
@@ -196,7 +196,7 @@ async fn update_settings_and_read_back() {
         .header("authorization", format!("Bearer {token}"))
         .body(Body::from(
             serde_json::json!({
-                "poster_source": "fanart",
+                "poster_source": "f",
                 "fanart_lang": "de",
                 "fanart_textless": true
             })
@@ -217,7 +217,7 @@ async fn update_settings_and_read_back() {
 
     let body = res.into_body().collect().await.unwrap().to_bytes();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(json["poster_source"], "fanart");
+    assert_eq!(json["poster_source"], "f");
     assert_eq!(json["fanart_lang"], "de");
     assert_eq!(json["fanart_textless"], true);
 }
@@ -256,7 +256,7 @@ async fn update_settings_rejects_invalid_lang() {
         .header("authorization", format!("Bearer {token}"))
         .body(Body::from(
             serde_json::json!({
-                "poster_source": "fanart",
+                "poster_source": "f",
                 "fanart_lang": "../../etc"
             })
             .to_string(),
@@ -278,7 +278,7 @@ async fn update_settings_with_ratings_and_read_back() {
         .header("authorization", format!("Bearer {token}"))
         .body(Body::from(
             serde_json::json!({
-                "poster_source": "tmdb",
+                "poster_source": "t",
                 "ratings_limit": 3,
                 "ratings_order": "mal,imdb,rta"
             })
@@ -314,7 +314,7 @@ async fn update_settings_rejects_invalid_ratings_limit() {
         .header("authorization", format!("Bearer {token}"))
         .body(Body::from(
             serde_json::json!({
-                "poster_source": "tmdb",
+                "poster_source": "t",
                 "ratings_limit": 9
             })
             .to_string(),
@@ -392,7 +392,7 @@ async fn update_settings_rejects_invalid_ratings_order() {
         .header("authorization", format!("Bearer {token}"))
         .body(Body::from(
             serde_json::json!({
-                "poster_source": "tmdb",
+                "poster_source": "t",
                 "ratings_order": "imdb,bogus"
             })
             .to_string(),
@@ -599,7 +599,7 @@ async fn update_settings_with_poster_position_and_read_back() {
         .header("authorization", format!("Bearer {token}"))
         .body(Body::from(
             serde_json::json!({
-                "poster_source": "tmdb",
+                "poster_source": "t",
                 "poster_position": "l",
                 "logo_ratings_limit": 5,
                 "backdrop_ratings_limit": 2
@@ -637,7 +637,7 @@ async fn update_settings_rejects_invalid_poster_position() {
         .header("authorization", format!("Bearer {token}"))
         .body(Body::from(
             serde_json::json!({
-                "poster_source": "tmdb",
+                "poster_source": "t",
                 "poster_position": "invalid"
             })
             .to_string(),

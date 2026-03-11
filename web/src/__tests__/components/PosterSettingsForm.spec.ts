@@ -7,7 +7,7 @@ import type { PosterSettings } from '@/components/PosterSettingsForm.vue'
 vi.mock('@/lib/api', () => ({}))
 
 const defaultSettings: PosterSettings = {
-  poster_source: 'tmdb',
+  poster_source: 't',
   fanart_lang: 'en',
   fanart_textless: false,
   fanart_available: true,

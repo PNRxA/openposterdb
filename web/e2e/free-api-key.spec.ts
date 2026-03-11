@@ -65,7 +65,7 @@ test.describe('free API key', () => {
     await request.put('/api/admin/settings', {
       headers: { Authorization: `Bearer ${token}` },
       data: {
-        poster_source: 'tmdb',
+        poster_source: 't',
         free_api_key_enabled: true,
       },
     })
@@ -83,7 +83,7 @@ test.describe('free API key', () => {
     await request.put('/api/admin/settings', {
       headers: { Authorization: `Bearer ${token}` },
       data: {
-        poster_source: 'tmdb',
+        poster_source: 't',
         free_api_key_enabled: false,
       },
     })
@@ -99,7 +99,7 @@ test.describe('free API key', () => {
     await request.put('/api/admin/settings', {
       headers: { Authorization: `Bearer ${token}` },
       data: {
-        poster_source: 'tmdb',
+        poster_source: 't',
         free_api_key_enabled: true,
       },
     })
@@ -118,7 +118,7 @@ test.describe('free API key', () => {
     await request.put('/api/admin/settings', {
       headers: { Authorization: `Bearer ${token}` },
       data: {
-        poster_source: 'tmdb',
+        poster_source: 't',
         free_api_key_enabled: true,
       },
     })
@@ -135,7 +135,7 @@ test.describe('free API key', () => {
     await request.put('/api/admin/settings', {
       headers: { Authorization: `Bearer ${token}` },
       data: {
-        poster_source: 'tmdb',
+        poster_source: 't',
         free_api_key_enabled: false,
       },
     })

@@ -4,6 +4,7 @@ use imageproc::drawing::{draw_filled_rect_mut, draw_text_mut};
 use imageproc::rect::Rect;
 
 use crate::poster::icons;
+use crate::services::db::LABEL_ICON;
 use crate::services::ratings::RatingBadge;
 
 const BADGE_HEIGHT: u32 = 50;
@@ -22,6 +23,7 @@ fn icon_scaled_width(icon: &RgbaImage, target_height: u32) -> u32 {
     }
 }
 
+#[cfg(test)]
 pub fn render_badge(badge: &RatingBadge, font: &FontArc, label_style: &str) -> RgbaImage {
     render_badge_with_widths(badge, font, None, None, label_style)
 }
@@ -57,7 +59,7 @@ pub fn render_badges_uniform(badges: &[RatingBadge], font: &FontArc, label_style
 
     let fonts = BadgeFonts::new(font);
 
-    let max_label_width = if label_style == "i" {
+    let max_label_width = if label_style == LABEL_ICON {
         // For icon mode, use the max icon width (scaled to icon height)
         badges.iter()
             .map(|b| icon_scaled_width(icons::icon_for_source(&b.source), ICON_HEIGHT))
@@ -79,6 +81,7 @@ pub fn render_badges_uniform(badges: &[RatingBadge], font: &FontArc, label_style
         .collect()
 }
 
+#[cfg(test)]
 fn render_badge_with_widths(
     badge: &RatingBadge,
     font: &FontArc,
@@ -97,7 +100,7 @@ fn render_badge_inner(
     uniform_value_width: Option<u32>,
     label_style: &str,
 ) -> RgbaImage {
-    let use_icon = label_style == "i";
+    let use_icon = label_style == LABEL_ICON;
 
     let label = badge.source.label();
     let value = &badge.value;
@@ -137,7 +140,11 @@ fn render_badge_inner(
     if use_icon {
         let icon = icons::icon_for_source(&badge.source);
         let icon_w = icon_scaled_width(icon, ICON_HEIGHT);
-        let scaled_icon = imageops::resize(icon, icon_w, ICON_HEIGHT, imageops::FilterType::Lanczos3);
+        let scaled_icon = if icon.height() == ICON_HEIGHT {
+            icon.clone()
+        } else {
+            imageops::resize(icon, icon_w, ICON_HEIGHT, imageops::FilterType::Lanczos3)
+        };
         let ix = BADGE_PADDING_H + (label_width.saturating_sub(icon_w)) / 2;
         let iy = (BADGE_HEIGHT.saturating_sub(ICON_HEIGHT)) / 2;
         imageops::overlay(&mut img, &scaled_icon, ix as i64, iy as i64);
@@ -181,7 +188,7 @@ const VERT_VALUE_FONT_SIZE: f32 = 28.0;
 /// Render a vertical badge: source label on top, rating value below.
 /// Used for left/right poster positions.
 pub fn render_vertical_badge(badge: &RatingBadge, font: &FontArc, label_style: &str) -> RgbaImage {
-    let use_icon = label_style == "i";
+    let use_icon = label_style == LABEL_ICON;
     let label_scale = PxScale::from(VERT_LABEL_FONT_SIZE);
     let value_scale = PxScale::from(VERT_VALUE_FONT_SIZE);
 
@@ -223,7 +230,11 @@ pub fn render_vertical_badge(badge: &RatingBadge, font: &FontArc, label_style: &
     if use_icon {
         let icon = icons::icon_for_source(&badge.source);
         let icon_w = icon_scaled_width(icon, ICON_HEIGHT);
-        let scaled_icon = imageops::resize(icon, icon_w, ICON_HEIGHT, imageops::FilterType::Lanczos3);
+        let scaled_icon = if icon.height() == ICON_HEIGHT {
+            icon.clone()
+        } else {
+            imageops::resize(icon, icon_w, ICON_HEIGHT, imageops::FilterType::Lanczos3)
+        };
         let ix = (VERT_BADGE_WIDTH.saturating_sub(icon_w)) / 2;
         let iy = (value_area_y.saturating_sub(ICON_HEIGHT)) / 2;
         imageops::overlay(&mut img, &scaled_icon, ix as i64, iy as i64);

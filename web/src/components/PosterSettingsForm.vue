@@ -56,7 +56,7 @@ const editPosterPosition = ref(props.settings.poster_position || 'bc')
 const editLogoRatingsLimit = ref(props.settings.logo_ratings_limit ?? 3)
 const editBackdropRatingsLimit = ref(props.settings.backdrop_ratings_limit ?? 3)
 const editPosterBadgeStyle = ref(props.settings.poster_badge_style || 'h')
-const editLogoBadgeStyle = ref(props.settings.logo_badge_style || 'h')
+const editLogoBadgeStyle = ref(props.settings.logo_badge_style || 'v')
 const editBackdropBadgeStyle = ref(props.settings.backdrop_badge_style || 'v')
 const editPosterLabelStyle = ref(props.settings.poster_label_style || 'i')
 const editLogoLabelStyle = ref(props.settings.logo_label_style || 'i')
@@ -73,7 +73,7 @@ function applySettings(s: PosterSettings) {
   editLogoRatingsLimit.value = s.logo_ratings_limit ?? 3
   editBackdropRatingsLimit.value = s.backdrop_ratings_limit ?? 3
   editPosterBadgeStyle.value = s.poster_badge_style || 'h'
-  editLogoBadgeStyle.value = s.logo_badge_style || 'h'
+  editLogoBadgeStyle.value = s.logo_badge_style || 'v'
   editBackdropBadgeStyle.value = s.backdrop_badge_style || 'v'
   editPosterLabelStyle.value = s.poster_label_style || 'i'
   editLogoLabelStyle.value = s.logo_label_style || 'i'
@@ -364,14 +364,14 @@ const selectClass = 'flex h-9 w-full max-w-xs rounded-md border border-input bg-
         data-testid="poster-source-select"
         :class="selectClass"
       >
-        <option value="tmdb">TMDB</option>
-        <option value="fanart" :disabled="!currentSettings.fanart_available">
+        <option value="t">TMDB</option>
+        <option value="f" :disabled="!currentSettings.fanart_available">
           Fanart.tv{{ !currentSettings.fanart_available ? ' (no API key)' : '' }}
         </option>
       </select>
     </div>
 
-    <template v-if="editSource === 'fanart'">
+    <template v-if="editSource === 'f'">
       <div class="space-y-2">
         <label class="text-sm font-medium">Language</label>
         <Input
