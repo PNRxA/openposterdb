@@ -47,9 +47,9 @@ impl ImageType {
 
     pub fn db_value(self) -> &'static str {
         match self {
-            ImageType::Poster => "poster",
-            ImageType::Logo => "logo",
-            ImageType::Backdrop => "backdrop",
+            ImageType::Poster => "p",
+            ImageType::Logo => "l",
+            ImageType::Backdrop => "b",
         }
     }
 }
@@ -63,6 +63,9 @@ pub fn typed_cache_path(
 ) -> Result<PathBuf, AppError> {
     if !is_safe_path_component(id_value) {
         return Err(AppError::BadRequest("invalid id value".into()));
+    }
+    if !is_safe_path_component(id_type) {
+        return Err(AppError::BadRequest("invalid id type".into()));
     }
     let ext = image_type.ext();
     Ok(Path::new(cache_dir)

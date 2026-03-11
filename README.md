@@ -5,6 +5,44 @@
 
 A self-hosted, drop-in replacement for [RPDB (Rating Poster Database)](https://ratingposterdb.com). Generates movie and TV show posters, logos, and backdrops with rating badges from multiple sources overlaid on them. Fetches art from TMDB (or optionally [Fanart.tv](https://fanart.tv)), aggregates ratings from IMDb, Rotten Tomatoes, Metacritic, Trakt, Letterboxd, MyAnimeList, and composites color-coded badges onto the image.
 
+## API Endpoints
+
+### Poster
+
+```
+GET /{api_key}/{id_type}/poster-default/{id_value}.jpg
+```
+
+- Returns JPEG with rating badges overlaid on the poster
+- Uses TMDB (default) or Fanart.tv as the poster source
+
+### Logo
+
+```
+GET /{api_key}/{id_type}/logo-default/{id_value}.png
+```
+
+- Returns transparent PNG with rating badges stacked below the logo
+- Requires `FANART_API_KEY` (returns 501 if not configured)
+
+### Backdrop
+
+```
+GET /{api_key}/{id_type}/backdrop-default/{id_value}.jpg
+```
+
+- Returns JPEG with rating badges stacked vertically in the top-right corner
+- Requires `FANART_API_KEY` (returns 501 if not configured)
+
+**Common parameters:**
+
+- `id_type`: `imdb`, `tmdb`, `tvdb`
+- `id_value`: e.g. `tt1234567`, `movie-123`, `series-456`
+- `?fallback=true`: return a placeholder image instead of an error on failure
+- RPDB-compatible — use `http://localhost:3000` as the base URL (drop-in replacement for `https://api.ratingposterdb.com`)
+
+Management endpoints (auth, keys, settings) are under `/api/` and return JSON.
+
 ## Features
 
 - **Multi-source ratings** — Aggregates from MDBList (IMDb, RT Critics, RT Audience, Metacritic, Trakt, Letterboxd, MAL) and optionally OMDb
@@ -90,40 +128,115 @@ See [docker-compose.yml](docker-compose.yml) for the full compose configuration.
 | `ADMIN_USERNAME` | — | Seed admin username on first run |
 | `ADMIN_PASSWORD` | — | Seed admin password on first run |
 
-## API Endpoints
+## Cache Architecture
 
-### Poster
+Images are cached in three layers: in-memory (moka), filesystem, and SQLite metadata. Cache keys encode all the settings that affect the rendered output so that different configurations produce separate cached files.
 
-```
-GET /{api_key}/{id_type}/poster-default/{id_value}.jpg
-```
-
-- Returns JPEG with rating badges overlaid on the poster
-- Uses TMDB (default) or Fanart.tv as the poster source
-
-### Logo
+### Filesystem Layout
 
 ```
-GET /{api_key}/{id_type}/logo-default/{id_value}.png
+{CACHE_DIR}/
+├── base/
+│   ├── posters/          # Raw TMDB poster downloads (original filename)
+│   └── fanart/           # Raw fanart.tv downloads ({fanart_id}.{ext})
+├── posters/{id_type}/    # Rendered poster JPEGs
+├── logos/{id_type}/       # Rendered logo PNGs
+├── backdrops/{id_type}/   # Rendered backdrop JPEGs
+└── preview/{subdir}/      # Preview images for the settings UI
 ```
 
-- Returns transparent PNG with rating badges stacked below the logo
-- Requires `FANART_API_KEY` (returns 501 if not configured)
+### Cache Key Format
 
-### Backdrop
+Cache keys uniquely identify a rendered image. They are used as keys in the in-memory cache and stored in the `poster_meta` SQLite table.
+
+**Poster:**
+```
+{id_type}/{id_value}{ratings_suffix}{pos_suffix}{style_suffix}{label_suffix}{direction_suffix}
+```
+
+**Fanart poster:**
+```
+{id_type}/{id_value}{variant}{ratings_suffix}{pos_suffix}{style_suffix}{label_suffix}{direction_suffix}
+```
+
+**Logo / Backdrop:**
+```
+{id_type}/{id_value}{kind_prefix}{variant}{ratings_suffix}{style_suffix}{label_suffix}
+```
+
+### Suffix Reference
+
+| Suffix | Format | Example | Description |
+|---|---|---|---|
+| Ratings | `@{keys}` | `@mal,imdb,lb` | Ordered rating sources (truncated to limit) |
+| Position | `.p{pos}` | `.pbc`, `.pl` | Poster badge position (`bc`, `tc`, `l`, `r`, `tl`, `tr`, `bl`, `br`) |
+| Badge style | `.s{style}` | `.sh`, `.sv` | `h` = horizontal, `v` = vertical |
+| Label style | `.l{style}` | `.lt`, `.li` | `t` = text labels, `i` = icon labels |
+| Badge direction | `.d{dir}` | `.dh`, `.dv` | `h` = horizontal, `v` = vertical (resolved from `d` = default) |
+
+### Image Kind Prefixes
+
+Logos and backdrops include a kind prefix in their cache keys to distinguish them from posters:
+
+| Kind | Prefix |
+|---|---|
+| Poster | *(none)* |
+| Logo | `:l` |
+| Backdrop | `:b` |
+
+### Fanart Variant Markers
+
+When the poster source is fanart.tv, the cache key includes a variant marker indicating which fanart tier was used:
+
+| Variant | Marker | Description |
+|---|---|---|
+| Textless | `:f:tl` | Fanart image with no text overlay |
+| Language | `:f:{lang}` | Fanart image matching language (e.g. `:f:en`) |
+| Negative (textless) | `:f:tl:neg` | No textless image available (stored in negative cache) |
+| Negative (language) | `:f:{lang}:neg` | No language image available |
+
+### Database Values
+
+The `poster_meta` table tracks metadata for cached images:
+
+| Field | Short Value | Meaning |
+|---|---|---|
+| `image_type` | `p` | Poster |
+| `image_type` | `l` | Logo |
+| `image_type` | `b` | Backdrop |
+
+### Settings Short Values
+
+Settings are stored as short single-character or two-character codes:
+
+| Setting | Values | Meaning |
+|---|---|---|
+| `badge_style` | `h`, `v` | Horizontal, Vertical |
+| `label_style` | `t`, `i` | Text, Icon |
+| `badge_direction` | `d`, `h`, `v` | Default (auto-resolved by position), Horizontal, Vertical |
+| `poster_position` | `bc`, `tc`, `l`, `r`, `tl`, `tr`, `bl`, `br` | Bottom-center, Top-center, Left, Right, corners |
+
+### Example Cache Keys
 
 ```
-GET /{api_key}/{id_type}/backdrop-default/{id_value}.jpg
+# TMDB poster, 3 ratings (mal,imdb,lb), bottom-center, horizontal badges, icon labels, horizontal direction
+imdb/tt0111161@mal,imdb,lb.pbc.sh.li.dh
+
+# Fanart textless poster
+imdb/tt0111161:f:tl@mal,imdb,lb.pbc.sh.li.dh
+
+# Logo with 3 ratings, horizontal badges, text labels
+imdb/tt0111161:l:f:en@mal,imdb,lb.sh.lt
+
+# Backdrop with vertical badges, icon labels
+imdb/tt0111161:b@mal,imdb,lb.sv.li
 ```
 
-- Returns JPEG with rating badges stacked vertically in the top-right corner
-- Requires `FANART_API_KEY` (returns 501 if not configured)
+### Staleness and Background Refresh
 
-**Common parameters:**
+Cache entries are checked for staleness based on the film's release date:
+- **Unreleased / unknown**: uses `RATINGS_STALE_SECS` (default 24h)
+- **Recent films**: linearly increasing stale time from `RATINGS_STALE_SECS` to `RATINGS_MAX_AGE_SECS`
+- **Old films** (age > `RATINGS_MAX_AGE_SECS`): never stale (ratings are stable)
 
-- `id_type`: `imdb`, `tmdb`, `tvdb`
-- `id_value`: e.g. `tt1234567`, `movie-123`, `series-456`
-- `?fallback=true`: return a placeholder image instead of an error on failure
-- RPDB-compatible — use `http://localhost:3000` as the base URL (drop-in replacement for `https://api.ratingposterdb.com`)
-
-Management endpoints (auth, keys, settings) are under `/api/` and return JSON.
+When a stale entry is served, a background refresh is spawned to regenerate it without blocking the response. Request coalescing ensures concurrent requests for the same image share a single generation task.

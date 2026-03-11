@@ -241,7 +241,7 @@ async fn preview_respects_poster_position() {
     let (app, _state) = common::setup_test_app().await;
     let token = common::setup_admin(&app).await;
 
-    let res = app.clone().oneshot(authed_get("/api/admin/preview/poster?poster_position=left", &token)).await.unwrap();
+    let res = app.clone().oneshot(authed_get("/api/admin/preview/poster?poster_position=l", &token)).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
     assert_eq!(res.headers().get("content-type").unwrap(), "image/jpeg");
 
@@ -256,10 +256,10 @@ async fn preview_cache_differs_for_different_positions() {
     let (app, _state) = common::setup_test_app().await;
     let token = common::setup_admin(&app).await;
 
-    let res1 = app.clone().oneshot(authed_get("/api/admin/preview/poster?ratings_limit=2&ratings_order=imdb,rt&poster_position=bottom-center", &token)).await.unwrap();
+    let res1 = app.clone().oneshot(authed_get("/api/admin/preview/poster?ratings_limit=2&ratings_order=imdb,rt&poster_position=bc", &token)).await.unwrap();
     let body1 = res1.into_body().collect().await.unwrap().to_bytes();
 
-    let res2 = app.clone().oneshot(authed_get("/api/admin/preview/poster?ratings_limit=2&ratings_order=imdb,rt&poster_position=left", &token)).await.unwrap();
+    let res2 = app.clone().oneshot(authed_get("/api/admin/preview/poster?ratings_limit=2&ratings_order=imdb,rt&poster_position=l", &token)).await.unwrap();
     let body2 = res2.into_body().collect().await.unwrap().to_bytes();
 
     assert_eq!(body1[0], 0xFF);

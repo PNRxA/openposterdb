@@ -118,16 +118,16 @@ pub const SCHEMA_SQL: &[&str] = &[
         fanart_textless        INTEGER NOT NULL DEFAULT 0,
         ratings_limit          INTEGER NOT NULL DEFAULT 3,
         ratings_order          TEXT NOT NULL DEFAULT 'mal,imdb,lb,rt,mc,rta,tmdb,trakt',
-        poster_position        TEXT NOT NULL DEFAULT 'bottom-center',
+        poster_position        TEXT NOT NULL DEFAULT 'bc',
         logo_ratings_limit     INTEGER NOT NULL DEFAULT 5,
         backdrop_ratings_limit INTEGER NOT NULL DEFAULT 5,
-        poster_badge_style     TEXT NOT NULL DEFAULT 'horizontal',
-        logo_badge_style       TEXT NOT NULL DEFAULT 'vertical',
-        backdrop_badge_style   TEXT NOT NULL DEFAULT 'vertical',
-        poster_label_style     TEXT NOT NULL DEFAULT 'icon',
-        logo_label_style       TEXT NOT NULL DEFAULT 'icon',
-        backdrop_label_style   TEXT NOT NULL DEFAULT 'icon',
-        poster_badge_direction TEXT NOT NULL DEFAULT 'default'
+        poster_badge_style     TEXT NOT NULL DEFAULT 'h',
+        logo_badge_style       TEXT NOT NULL DEFAULT 'v',
+        backdrop_badge_style   TEXT NOT NULL DEFAULT 'v',
+        poster_label_style     TEXT NOT NULL DEFAULT 'i',
+        logo_label_style       TEXT NOT NULL DEFAULT 'i',
+        backdrop_label_style   TEXT NOT NULL DEFAULT 'i',
+        poster_badge_direction TEXT NOT NULL DEFAULT 'd'
     )",
 ];
 
@@ -148,7 +148,7 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
         "duplicate column",
     ),
     (
-        "ALTER TABLE api_key_settings ADD COLUMN poster_position TEXT NOT NULL DEFAULT 'bottom-center'",
+        "ALTER TABLE api_key_settings ADD COLUMN poster_position TEXT NOT NULL DEFAULT 'bc'",
         "duplicate column",
     ),
     (
@@ -160,31 +160,31 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
         "duplicate column",
     ),
     (
-        "ALTER TABLE api_key_settings ADD COLUMN poster_badge_style TEXT NOT NULL DEFAULT 'horizontal'",
+        "ALTER TABLE api_key_settings ADD COLUMN poster_badge_style TEXT NOT NULL DEFAULT 'h'",
         "duplicate column",
     ),
     (
-        "ALTER TABLE api_key_settings ADD COLUMN logo_badge_style TEXT NOT NULL DEFAULT 'vertical'",
+        "ALTER TABLE api_key_settings ADD COLUMN logo_badge_style TEXT NOT NULL DEFAULT 'v'",
         "duplicate column",
     ),
     (
-        "ALTER TABLE api_key_settings ADD COLUMN backdrop_badge_style TEXT NOT NULL DEFAULT 'vertical'",
+        "ALTER TABLE api_key_settings ADD COLUMN backdrop_badge_style TEXT NOT NULL DEFAULT 'v'",
         "duplicate column",
     ),
     (
-        "ALTER TABLE api_key_settings ADD COLUMN poster_label_style TEXT NOT NULL DEFAULT 'icon'",
+        "ALTER TABLE api_key_settings ADD COLUMN poster_label_style TEXT NOT NULL DEFAULT 'i'",
         "duplicate column",
     ),
     (
-        "ALTER TABLE api_key_settings ADD COLUMN logo_label_style TEXT NOT NULL DEFAULT 'icon'",
+        "ALTER TABLE api_key_settings ADD COLUMN logo_label_style TEXT NOT NULL DEFAULT 'i'",
         "duplicate column",
     ),
     (
-        "ALTER TABLE api_key_settings ADD COLUMN backdrop_label_style TEXT NOT NULL DEFAULT 'icon'",
+        "ALTER TABLE api_key_settings ADD COLUMN backdrop_label_style TEXT NOT NULL DEFAULT 'i'",
         "duplicate column",
     ),
     (
-        "ALTER TABLE api_key_settings ADD COLUMN poster_badge_direction TEXT NOT NULL DEFAULT 'default'",
+        "ALTER TABLE api_key_settings ADD COLUMN poster_badge_direction TEXT NOT NULL DEFAULT 'd'",
         "duplicate column",
     ),
 ];

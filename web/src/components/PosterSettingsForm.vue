@@ -52,16 +52,34 @@ const editLang = ref(props.settings.fanart_lang)
 const editTextless = ref(props.settings.fanart_textless)
 const editRatingsLimit = ref(props.settings.ratings_limit)
 const editRatingsOrder = ref<string[]>(parseOrder(props.settings.ratings_order))
-const editPosterPosition = ref(props.settings.poster_position || 'bottom-center')
+const editPosterPosition = ref(props.settings.poster_position || 'bc')
 const editLogoRatingsLimit = ref(props.settings.logo_ratings_limit ?? 3)
 const editBackdropRatingsLimit = ref(props.settings.backdrop_ratings_limit ?? 3)
-const editPosterBadgeStyle = ref(props.settings.poster_badge_style || 'horizontal')
-const editLogoBadgeStyle = ref(props.settings.logo_badge_style || 'horizontal')
-const editBackdropBadgeStyle = ref(props.settings.backdrop_badge_style || 'vertical')
-const editPosterLabelStyle = ref(props.settings.poster_label_style || 'text')
-const editLogoLabelStyle = ref(props.settings.logo_label_style || 'text')
-const editBackdropLabelStyle = ref(props.settings.backdrop_label_style || 'text')
-const editPosterBadgeDirection = ref(props.settings.poster_badge_direction || 'default')
+const editPosterBadgeStyle = ref(props.settings.poster_badge_style || 'h')
+const editLogoBadgeStyle = ref(props.settings.logo_badge_style || 'h')
+const editBackdropBadgeStyle = ref(props.settings.backdrop_badge_style || 'v')
+const editPosterLabelStyle = ref(props.settings.poster_label_style || 'i')
+const editLogoLabelStyle = ref(props.settings.logo_label_style || 'i')
+const editBackdropLabelStyle = ref(props.settings.backdrop_label_style || 'i')
+const editPosterBadgeDirection = ref(props.settings.poster_badge_direction || 'd')
+
+function applySettings(s: PosterSettings) {
+  editSource.value = s.poster_source
+  editLang.value = s.fanart_lang
+  editTextless.value = s.fanart_textless
+  editRatingsLimit.value = s.ratings_limit
+  editRatingsOrder.value = parseOrder(s.ratings_order)
+  editPosterPosition.value = s.poster_position || 'bc'
+  editLogoRatingsLimit.value = s.logo_ratings_limit ?? 3
+  editBackdropRatingsLimit.value = s.backdrop_ratings_limit ?? 3
+  editPosterBadgeStyle.value = s.poster_badge_style || 'h'
+  editLogoBadgeStyle.value = s.logo_badge_style || 'h'
+  editBackdropBadgeStyle.value = s.backdrop_badge_style || 'v'
+  editPosterLabelStyle.value = s.poster_label_style || 'i'
+  editLogoLabelStyle.value = s.logo_label_style || 'i'
+  editBackdropLabelStyle.value = s.backdrop_label_style || 'i'
+  editPosterBadgeDirection.value = s.poster_badge_direction || 'd'
+}
 const currentSettings = ref<PosterSettings>(props.settings)
 const saving = ref(false)
 const error = ref('')
@@ -92,21 +110,7 @@ function getRatingSource(key: string) {
 watch(() => props.settings, (s) => {
   syncing = true
   currentSettings.value = s
-  editSource.value = s.poster_source
-  editLang.value = s.fanart_lang
-  editTextless.value = s.fanart_textless
-  editRatingsLimit.value = s.ratings_limit
-  editRatingsOrder.value = parseOrder(s.ratings_order)
-  editPosterPosition.value = s.poster_position || 'bottom-center'
-  editLogoRatingsLimit.value = s.logo_ratings_limit ?? 3
-  editBackdropRatingsLimit.value = s.backdrop_ratings_limit ?? 3
-  editPosterBadgeStyle.value = s.poster_badge_style || 'horizontal'
-  editLogoBadgeStyle.value = s.logo_badge_style || 'horizontal'
-  editBackdropBadgeStyle.value = s.backdrop_badge_style || 'vertical'
-  editPosterLabelStyle.value = s.poster_label_style || 'text'
-  editLogoLabelStyle.value = s.logo_label_style || 'text'
-  editBackdropLabelStyle.value = s.backdrop_label_style || 'text'
-  editPosterBadgeDirection.value = s.poster_badge_direction || 'default'
+  applySettings(s)
   nextTick(() => {
     syncing = false
     // Cancel any save timer queued by watchers during the sync
@@ -116,22 +120,7 @@ watch(() => props.settings, (s) => {
 
 function revertEdits() {
   syncing = true
-  const s = currentSettings.value
-  editSource.value = s.poster_source
-  editLang.value = s.fanart_lang
-  editTextless.value = s.fanart_textless
-  editRatingsLimit.value = s.ratings_limit
-  editRatingsOrder.value = parseOrder(s.ratings_order)
-  editPosterPosition.value = s.poster_position || 'bottom-center'
-  editLogoRatingsLimit.value = s.logo_ratings_limit ?? 3
-  editBackdropRatingsLimit.value = s.backdrop_ratings_limit ?? 3
-  editPosterBadgeStyle.value = s.poster_badge_style || 'horizontal'
-  editLogoBadgeStyle.value = s.logo_badge_style || 'horizontal'
-  editBackdropBadgeStyle.value = s.backdrop_badge_style || 'vertical'
-  editPosterLabelStyle.value = s.poster_label_style || 'text'
-  editLogoLabelStyle.value = s.logo_label_style || 'text'
-  editBackdropLabelStyle.value = s.backdrop_label_style || 'text'
-  editPosterBadgeDirection.value = s.poster_badge_direction || 'default'
+  applySettings(currentSettings.value)
   nextTick(() => { syncing = false })
 }
 
@@ -205,21 +194,7 @@ async function handleReset() {
       if (updated) {
         syncing = true
         currentSettings.value = updated
-        editSource.value = updated.poster_source
-        editLang.value = updated.fanart_lang
-        editTextless.value = updated.fanart_textless
-        editRatingsLimit.value = updated.ratings_limit
-        editRatingsOrder.value = parseOrder(updated.ratings_order)
-        editPosterPosition.value = updated.poster_position || 'bottom-center'
-        editLogoRatingsLimit.value = updated.logo_ratings_limit ?? 3
-        editBackdropRatingsLimit.value = updated.backdrop_ratings_limit ?? 3
-        editPosterBadgeStyle.value = updated.poster_badge_style || 'horizontal'
-        editLogoBadgeStyle.value = updated.logo_badge_style || 'horizontal'
-        editBackdropBadgeStyle.value = updated.backdrop_badge_style || 'vertical'
-        editPosterLabelStyle.value = updated.poster_label_style || 'text'
-        editLogoLabelStyle.value = updated.logo_label_style || 'text'
-        editBackdropLabelStyle.value = updated.backdrop_label_style || 'text'
-        editPosterBadgeDirection.value = updated.poster_badge_direction || 'default'
+        applySettings(updated)
         nextTick(() => {
           syncing = false
           // Cancel any save timer queued by watchers during the sync
@@ -486,14 +461,14 @@ const selectClass = 'flex h-9 w-full max-w-xs rounded-md border border-input bg-
               data-testid="poster-position-select"
               :class="selectClass"
             >
-              <option value="bottom-center">Bottom Center</option>
-              <option value="top-center">Top Center</option>
-              <option value="left">Left</option>
-              <option value="right">Right</option>
-              <option value="top-left">Top Left</option>
-              <option value="top-right">Top Right</option>
-              <option value="bottom-left">Bottom Left</option>
-              <option value="bottom-right">Bottom Right</option>
+              <option value="bc">Bottom Center</option>
+              <option value="tc">Top Center</option>
+              <option value="l">Left</option>
+              <option value="r">Right</option>
+              <option value="tl">Top Left</option>
+              <option value="tr">Top Right</option>
+              <option value="bl">Bottom Left</option>
+              <option value="br">Bottom Right</option>
             </select>
           </div>
           <div class="space-y-2">
@@ -503,9 +478,9 @@ const selectClass = 'flex h-9 w-full max-w-xs rounded-md border border-input bg-
               data-testid="poster-badge-direction-select"
               :class="selectClass"
             >
-              <option value="default">Default</option>
-              <option value="horizontal">Horizontal</option>
-              <option value="vertical">Vertical</option>
+              <option value="d">Default</option>
+              <option value="h">Horizontal</option>
+              <option value="v">Vertical</option>
             </select>
           </div>
           <div class="space-y-2">
@@ -514,8 +489,8 @@ const selectClass = 'flex h-9 w-full max-w-xs rounded-md border border-input bg-
               v-model="editPosterBadgeStyle"
               :class="selectClass"
             >
-              <option value="horizontal">Horizontal</option>
-              <option value="vertical">Vertical</option>
+              <option value="h">Horizontal</option>
+              <option value="v">Vertical</option>
             </select>
           </div>
           <div class="space-y-2">
@@ -524,8 +499,8 @@ const selectClass = 'flex h-9 w-full max-w-xs rounded-md border border-input bg-
               v-model="editPosterLabelStyle"
               :class="selectClass"
             >
-              <option value="text">Text</option>
-              <option value="icon">Icon</option>
+              <option value="t">Text</option>
+              <option value="i">Icon</option>
             </select>
           </div>
           <div class="space-y-1">
@@ -574,8 +549,8 @@ const selectClass = 'flex h-9 w-full max-w-xs rounded-md border border-input bg-
               v-model="editLogoBadgeStyle"
               :class="selectClass"
             >
-              <option value="horizontal">Horizontal</option>
-              <option value="vertical">Vertical</option>
+              <option value="h">Horizontal</option>
+              <option value="v">Vertical</option>
             </select>
           </div>
           <div class="space-y-2">
@@ -584,8 +559,8 @@ const selectClass = 'flex h-9 w-full max-w-xs rounded-md border border-input bg-
               v-model="editLogoLabelStyle"
               :class="selectClass"
             >
-              <option value="text">Text</option>
-              <option value="icon">Icon</option>
+              <option value="t">Text</option>
+              <option value="i">Icon</option>
             </select>
           </div>
           <div class="flex items-center gap-3">
@@ -631,8 +606,8 @@ const selectClass = 'flex h-9 w-full max-w-xs rounded-md border border-input bg-
               v-model="editBackdropBadgeStyle"
               :class="selectClass"
             >
-              <option value="horizontal">Horizontal</option>
-              <option value="vertical">Vertical</option>
+              <option value="h">Horizontal</option>
+              <option value="v">Vertical</option>
             </select>
           </div>
           <div class="space-y-2">
@@ -641,8 +616,8 @@ const selectClass = 'flex h-9 w-full max-w-xs rounded-md border border-input bg-
               v-model="editBackdropLabelStyle"
               :class="selectClass"
             >
-              <option value="text">Text</option>
-              <option value="icon">Icon</option>
+              <option value="t">Text</option>
+              <option value="i">Icon</option>
             </select>
           </div>
           <div class="flex items-center gap-3">

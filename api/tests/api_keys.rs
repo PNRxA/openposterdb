@@ -527,12 +527,12 @@ async fn get_key_settings_returns_new_field_defaults() {
 
     let body = res.into_body().collect().await.unwrap().to_bytes();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(json["poster_position"], "bottom-center");
+    assert_eq!(json["poster_position"], "bc");
     assert_eq!(json["logo_ratings_limit"], 5);
     assert_eq!(json["backdrop_ratings_limit"], 5);
-    assert_eq!(json["poster_badge_style"], "horizontal");
-    assert_eq!(json["logo_badge_style"], "vertical");
-    assert_eq!(json["backdrop_badge_style"], "vertical");
+    assert_eq!(json["poster_badge_style"], "h");
+    assert_eq!(json["logo_badge_style"], "v");
+    assert_eq!(json["backdrop_badge_style"], "v");
 }
 
 #[tokio::test]
@@ -559,7 +559,7 @@ async fn update_key_settings_with_poster_position_and_read_back() {
         .header("authorization", format!("Bearer {token}"))
         .body(json_body(serde_json::json!({
             "poster_source": "tmdb",
-            "poster_position": "right",
+            "poster_position": "r",
             "logo_ratings_limit": 1,
             "backdrop_ratings_limit": 0
         })))
@@ -577,7 +577,7 @@ async fn update_key_settings_with_poster_position_and_read_back() {
 
     let body = res.into_body().collect().await.unwrap().to_bytes();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(json["poster_position"], "right");
+    assert_eq!(json["poster_position"], "r");
     assert_eq!(json["logo_ratings_limit"], 1);
     assert_eq!(json["backdrop_ratings_limit"], 0);
     assert_eq!(json["is_default"], false);

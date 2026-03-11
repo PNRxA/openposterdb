@@ -207,32 +207,32 @@ test.describe('key settings (self-service)', () => {
 
     const dirSelect = page.getByTestId('poster-badge-direction-select')
     await expect(dirSelect).toBeVisible()
-    await expect(dirSelect).toHaveValue('default')
+    await expect(dirSelect).toHaveValue('d')
   })
 
   test('badge direction persists after change and reload', async ({ page, request }) => {
     await loginWithApiKey(page, request)
 
     const dirSelect = page.getByTestId('poster-badge-direction-select')
-    await dirSelect.selectOption('horizontal')
+    await dirSelect.selectOption('h')
 
     await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 })
 
     await page.reload()
     await expect(page.locator('h1')).toContainText('Poster Settings')
-    await expect(page.getByTestId('poster-badge-direction-select')).toHaveValue('horizontal')
+    await expect(page.getByTestId('poster-badge-direction-select')).toHaveValue('h')
   })
 
   test('label style dropdowns are visible', async ({ page, request }) => {
     await loginWithApiKey(page, request)
 
-    const labelSelects = page.locator('select').filter({ has: page.locator('option[value="icon"]') })
+    const labelSelects = page.locator('select').filter({ has: page.locator('option[value="i"]') })
     // There should be 3 label style selects (poster, logo, backdrop)
     await expect(labelSelects).toHaveCount(3)
 
     // All should default to "icon"
     for (const select of await labelSelects.all()) {
-      await expect(select).toHaveValue('icon')
+      await expect(select).toHaveValue('i')
     }
   })
 
@@ -240,8 +240,8 @@ test.describe('key settings (self-service)', () => {
     await loginWithApiKey(page, request)
 
     // Change poster label style to text
-    const labelSelects = page.locator('select').filter({ has: page.locator('option[value="icon"]') })
-    await labelSelects.first().selectOption('text')
+    const labelSelects = page.locator('select').filter({ has: page.locator('option[value="i"]') })
+    await labelSelects.first().selectOption('t')
 
     // Wait for auto-save confirmation
     await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 })
@@ -250,7 +250,7 @@ test.describe('key settings (self-service)', () => {
     await page.reload()
     await expect(page.locator('h1')).toContainText('Poster Settings')
 
-    const reloadedSelects = page.locator('select').filter({ has: page.locator('option[value="icon"]') })
-    await expect(reloadedSelects.first()).toHaveValue('text')
+    const reloadedSelects = page.locator('select').filter({ has: page.locator('option[value="i"]') })
+    await expect(reloadedSelects.first()).toHaveValue('t')
   })
 })

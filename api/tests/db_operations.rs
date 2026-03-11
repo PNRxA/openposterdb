@@ -424,9 +424,9 @@ async fn upsert_and_get_api_key_settings() {
 
     db::upsert_api_key_settings(&state.db, UpsertApiKeySettings {
         api_key_id: key_id, poster_source: "fanart", fanart_lang: "ja", fanart_textless: true,
-        ratings_limit: 0, ratings_order: "", poster_position: "bottom-center", logo_ratings_limit: 3, backdrop_ratings_limit: 3,
-        poster_badge_style: "horizontal", logo_badge_style: "horizontal", backdrop_badge_style: "vertical",
-        poster_label_style: "text", logo_label_style: "text", backdrop_label_style: "text", poster_badge_direction: "default",
+        ratings_limit: 0, ratings_order: "", poster_position: "bc", logo_ratings_limit: 3, backdrop_ratings_limit: 3,
+        poster_badge_style: "h", logo_badge_style: "h", backdrop_badge_style: "v",
+        poster_label_style: "t", logo_label_style: "t", backdrop_label_style: "t", poster_badge_direction: "d",
     }).await.unwrap();
 
     let settings = db::get_api_key_settings(&state.db, key_id).await.unwrap();
@@ -437,7 +437,7 @@ async fn upsert_and_get_api_key_settings() {
     assert!(s.fanart_textless);
     assert_eq!(s.ratings_limit, 0);
     assert_eq!(s.ratings_order, "");
-    assert_eq!(s.poster_badge_direction, "default");
+    assert_eq!(s.poster_badge_direction, "d");
 }
 
 #[tokio::test]
@@ -464,9 +464,9 @@ async fn upsert_api_key_settings_with_ratings() {
 
     db::upsert_api_key_settings(&state.db, UpsertApiKeySettings {
         api_key_id: key_id, poster_source: "tmdb", fanart_lang: "en", fanart_textless: false,
-        ratings_limit: 3, ratings_order: "mal,imdb,trakt", poster_position: "bottom-center", logo_ratings_limit: 3, backdrop_ratings_limit: 3,
-        poster_badge_style: "horizontal", logo_badge_style: "horizontal", backdrop_badge_style: "vertical",
-        poster_label_style: "text", logo_label_style: "text", backdrop_label_style: "text", poster_badge_direction: "default",
+        ratings_limit: 3, ratings_order: "mal,imdb,trakt", poster_position: "bc", logo_ratings_limit: 3, backdrop_ratings_limit: 3,
+        poster_badge_style: "h", logo_badge_style: "h", backdrop_badge_style: "v",
+        poster_label_style: "t", logo_label_style: "t", backdrop_label_style: "t", poster_badge_direction: "d",
     }).await.unwrap();
 
     let s = db::get_api_key_settings(&state.db, key_id).await.unwrap().unwrap();
@@ -524,9 +524,9 @@ async fn effective_settings_per_key_ratings_override_global() {
 
     db::upsert_api_key_settings(&state.db, UpsertApiKeySettings {
         api_key_id: key_id, poster_source: "tmdb", fanart_lang: "en", fanart_textless: false,
-        ratings_limit: 5, ratings_order: "mal,lb", poster_position: "bottom-center", logo_ratings_limit: 3, backdrop_ratings_limit: 3,
-        poster_badge_style: "horizontal", logo_badge_style: "horizontal", backdrop_badge_style: "vertical",
-        poster_label_style: "text", logo_label_style: "text", backdrop_label_style: "text", poster_badge_direction: "default",
+        ratings_limit: 5, ratings_order: "mal,lb", poster_position: "bc", logo_ratings_limit: 3, backdrop_ratings_limit: 3,
+        poster_badge_style: "h", logo_badge_style: "h", backdrop_badge_style: "v",
+        poster_label_style: "t", logo_label_style: "t", backdrop_label_style: "t", poster_badge_direction: "d",
     }).await.unwrap();
 
     let s = db::get_effective_poster_settings(&state.db, key_id, None).await;
@@ -559,15 +559,15 @@ async fn upsert_api_key_settings_overwrites() {
 
     db::upsert_api_key_settings(&state.db, UpsertApiKeySettings {
         api_key_id: key_id, poster_source: "tmdb", fanart_lang: "en", fanart_textless: false,
-        ratings_limit: 0, ratings_order: "", poster_position: "bottom-center", logo_ratings_limit: 3, backdrop_ratings_limit: 3,
-        poster_badge_style: "horizontal", logo_badge_style: "horizontal", backdrop_badge_style: "vertical",
-        poster_label_style: "text", logo_label_style: "text", backdrop_label_style: "text", poster_badge_direction: "default",
+        ratings_limit: 0, ratings_order: "", poster_position: "bc", logo_ratings_limit: 3, backdrop_ratings_limit: 3,
+        poster_badge_style: "h", logo_badge_style: "h", backdrop_badge_style: "v",
+        poster_label_style: "t", logo_label_style: "t", backdrop_label_style: "t", poster_badge_direction: "d",
     }).await.unwrap();
     db::upsert_api_key_settings(&state.db, UpsertApiKeySettings {
         api_key_id: key_id, poster_source: "fanart", fanart_lang: "de", fanart_textless: true,
-        ratings_limit: 0, ratings_order: "", poster_position: "bottom-center", logo_ratings_limit: 3, backdrop_ratings_limit: 3,
-        poster_badge_style: "horizontal", logo_badge_style: "horizontal", backdrop_badge_style: "vertical",
-        poster_label_style: "text", logo_label_style: "text", backdrop_label_style: "text", poster_badge_direction: "default",
+        ratings_limit: 0, ratings_order: "", poster_position: "bc", logo_ratings_limit: 3, backdrop_ratings_limit: 3,
+        poster_badge_style: "h", logo_badge_style: "h", backdrop_badge_style: "v",
+        poster_label_style: "t", logo_label_style: "t", backdrop_label_style: "t", poster_badge_direction: "d",
     }).await.unwrap();
 
     let s = db::get_api_key_settings(&state.db, key_id).await.unwrap().unwrap();
@@ -600,9 +600,9 @@ async fn delete_api_key_settings_removes() {
 
     db::upsert_api_key_settings(&state.db, UpsertApiKeySettings {
         api_key_id: key_id, poster_source: "fanart", fanart_lang: "en", fanart_textless: false,
-        ratings_limit: 0, ratings_order: "", poster_position: "bottom-center", logo_ratings_limit: 3, backdrop_ratings_limit: 3,
-        poster_badge_style: "horizontal", logo_badge_style: "horizontal", backdrop_badge_style: "vertical",
-        poster_label_style: "text", logo_label_style: "text", backdrop_label_style: "text", poster_badge_direction: "default",
+        ratings_limit: 0, ratings_order: "", poster_position: "bc", logo_ratings_limit: 3, backdrop_ratings_limit: 3,
+        poster_badge_style: "h", logo_badge_style: "h", backdrop_badge_style: "v",
+        poster_label_style: "t", logo_label_style: "t", backdrop_label_style: "t", poster_badge_direction: "d",
     }).await.unwrap();
     db::delete_api_key_settings(&state.db, key_id).await.unwrap();
 
@@ -676,9 +676,9 @@ async fn effective_settings_per_key_overrides_global() {
     // Set per-key to tmdb/ja
     db::upsert_api_key_settings(&state.db, UpsertApiKeySettings {
         api_key_id: key_id, poster_source: "tmdb", fanart_lang: "ja", fanart_textless: true,
-        ratings_limit: 0, ratings_order: "", poster_position: "bottom-center", logo_ratings_limit: 3, backdrop_ratings_limit: 3,
-        poster_badge_style: "horizontal", logo_badge_style: "horizontal", backdrop_badge_style: "vertical",
-        poster_label_style: "text", logo_label_style: "text", backdrop_label_style: "text", poster_badge_direction: "default",
+        ratings_limit: 0, ratings_order: "", poster_position: "bc", logo_ratings_limit: 3, backdrop_ratings_limit: 3,
+        poster_badge_style: "h", logo_badge_style: "h", backdrop_badge_style: "v",
+        poster_label_style: "t", logo_label_style: "t", backdrop_label_style: "t", poster_badge_direction: "d",
     }).await.unwrap();
 
     let s = db::get_effective_poster_settings(&state.db, key_id, None).await;
@@ -714,14 +714,14 @@ async fn upsert_api_key_settings_with_poster_position() {
 
     db::upsert_api_key_settings(&state.db, UpsertApiKeySettings {
         api_key_id: key_id, poster_source: "tmdb", fanart_lang: "en", fanart_textless: false,
-        ratings_limit: 3, ratings_order: "imdb,rt", poster_position: "left", logo_ratings_limit: 5, backdrop_ratings_limit: 1,
-        poster_badge_style: "horizontal", logo_badge_style: "horizontal", backdrop_badge_style: "vertical",
-        poster_label_style: "text", logo_label_style: "text", backdrop_label_style: "text", poster_badge_direction: "default",
+        ratings_limit: 3, ratings_order: "imdb,rt", poster_position: "l", logo_ratings_limit: 5, backdrop_ratings_limit: 1,
+        poster_badge_style: "h", logo_badge_style: "h", backdrop_badge_style: "v",
+        poster_label_style: "t", logo_label_style: "t", backdrop_label_style: "t", poster_badge_direction: "d",
     }).await.unwrap();
 
     let settings = db::get_api_key_settings(&state.db, key_id).await.unwrap();
     let s = settings.unwrap();
-    assert_eq!(s.poster_position, "left");
+    assert_eq!(s.poster_position, "l");
     assert_eq!(s.logo_ratings_limit, 5);
     assert_eq!(s.backdrop_ratings_limit, 1);
 }
@@ -752,20 +752,20 @@ async fn effective_settings_include_new_fields() {
 
     // Without per-key settings, effective should have defaults
     let s = db::get_effective_poster_settings(&state.db, key_id, None).await;
-    assert_eq!(s.poster_position, "bottom-center");
+    assert_eq!(s.poster_position, "bc");
     assert_eq!(s.logo_ratings_limit, 5);
     assert_eq!(s.backdrop_ratings_limit, 5);
 
     // Set per-key with custom values
     db::upsert_api_key_settings(&state.db, UpsertApiKeySettings {
         api_key_id: key_id, poster_source: "tmdb", fanart_lang: "en", fanart_textless: false,
-        ratings_limit: 3, ratings_order: "", poster_position: "right", logo_ratings_limit: 2, backdrop_ratings_limit: 0,
-        poster_badge_style: "horizontal", logo_badge_style: "horizontal", backdrop_badge_style: "vertical",
-        poster_label_style: "text", logo_label_style: "text", backdrop_label_style: "text", poster_badge_direction: "default",
+        ratings_limit: 3, ratings_order: "", poster_position: "r", logo_ratings_limit: 2, backdrop_ratings_limit: 0,
+        poster_badge_style: "h", logo_badge_style: "h", backdrop_badge_style: "v",
+        poster_label_style: "t", logo_label_style: "t", backdrop_label_style: "t", poster_badge_direction: "d",
     }).await.unwrap();
 
     let s = db::get_effective_poster_settings(&state.db, key_id, None).await;
-    assert_eq!(s.poster_position, "right");
+    assert_eq!(s.poster_position, "r");
     assert_eq!(s.logo_ratings_limit, 2);
     assert_eq!(s.backdrop_ratings_limit, 0);
 }

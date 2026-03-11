@@ -180,66 +180,66 @@ test.describe('settings', () => {
   test('poster position dropdown is visible with default', async ({ page }) => {
     await expect(page.locator('text=Badge position')).toBeVisible()
     const posSelect = page.getByTestId('poster-position-select')
-    await expect(posSelect).toHaveValue('bottom-center')
+    await expect(posSelect).toHaveValue('bc')
   })
 
   test('poster position persists after change and reload', async ({ page }) => {
     const posSelect = page.getByTestId('poster-position-select')
-    await posSelect.selectOption('left')
+    await posSelect.selectOption('l')
 
     await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 })
 
     await page.reload()
     await expect(page.locator('h1')).toContainText('Settings')
-    await expect(page.getByTestId('poster-position-select')).toHaveValue('left')
+    await expect(page.getByTestId('poster-position-select')).toHaveValue('l')
   })
 
   test('badge direction dropdown is visible with default', async ({ page }) => {
     const dirSelect = page.getByTestId('poster-badge-direction-select')
     await expect(dirSelect).toBeVisible()
-    await expect(dirSelect).toHaveValue('default')
+    await expect(dirSelect).toHaveValue('d')
   })
 
   test('badge direction persists after change and reload', async ({ page }) => {
     const dirSelect = page.getByTestId('poster-badge-direction-select')
-    await dirSelect.selectOption('vertical')
+    await dirSelect.selectOption('v')
 
     await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 })
 
     await page.reload()
     await expect(page.locator('h1')).toContainText('Settings')
-    await expect(page.getByTestId('poster-badge-direction-select')).toHaveValue('vertical')
+    await expect(page.getByTestId('poster-badge-direction-select')).toHaveValue('v')
   })
 
   test('new poster position options are available', async ({ page }) => {
     const posSelect = page.getByTestId('poster-position-select')
-    for (const value of ['top-left', 'top-right', 'bottom-left', 'bottom-right']) {
+    for (const value of ['tl', 'tr', 'bl', 'br']) {
       await expect(posSelect.locator(`option[value="${value}"]`)).toBeAttached()
     }
   })
 
   test('label style dropdowns are visible with default icon', async ({ page }) => {
-    const labelSelects = page.locator('select').filter({ has: page.locator('option[value="icon"]') })
+    const labelSelects = page.locator('select').filter({ has: page.locator('option[value="i"]') })
     // There should be 3 label style selects (poster, logo, backdrop)
     await expect(labelSelects).toHaveCount(3)
 
     // All should default to "icon"
     for (const select of await labelSelects.all()) {
-      await expect(select).toHaveValue('icon')
+      await expect(select).toHaveValue('i')
     }
   })
 
   test('label style persists after change and reload', async ({ page }) => {
     // Find the first label style select (poster) and change to text
-    const labelSelects = page.locator('select').filter({ has: page.locator('option[value="icon"]') })
-    await labelSelects.first().selectOption('text')
+    const labelSelects = page.locator('select').filter({ has: page.locator('option[value="i"]') })
+    await labelSelects.first().selectOption('t')
 
     await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 })
 
     await page.reload()
     await expect(page.locator('h1')).toContainText('Settings')
 
-    const reloadedSelects = page.locator('select').filter({ has: page.locator('option[value="icon"]') })
-    await expect(reloadedSelects.first()).toHaveValue('text')
+    const reloadedSelects = page.locator('select').filter({ has: page.locator('option[value="i"]') })
+    await expect(reloadedSelects.first()).toHaveValue('t')
   })
 })

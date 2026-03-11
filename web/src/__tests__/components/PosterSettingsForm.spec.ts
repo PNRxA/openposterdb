@@ -13,16 +13,16 @@ const defaultSettings: PosterSettings = {
   fanart_available: true,
   ratings_limit: 3,
   ratings_order: 'mal,imdb,lb,rt,rta,mc,tmdb,trakt',
-  poster_position: 'bottom-center',
+  poster_position: 'bc',
   logo_ratings_limit: 3,
   backdrop_ratings_limit: 3,
-  poster_badge_style: 'horizontal',
-  logo_badge_style: 'horizontal',
-  backdrop_badge_style: 'vertical',
-  poster_label_style: 'text',
-  logo_label_style: 'text',
-  backdrop_label_style: 'text',
-  poster_badge_direction: 'default',
+  poster_badge_style: 'h',
+  logo_badge_style: 'h',
+  backdrop_badge_style: 'v',
+  poster_label_style: 'i',
+  logo_label_style: 'i',
+  backdrop_label_style: 'i',
+  poster_badge_direction: 'd',
 }
 
 function makeFetchPreview() {
@@ -74,7 +74,7 @@ describe('PosterSettingsForm', () => {
     mountForm({}, fetchPreview)
     await flushPromises()
 
-    expect(fetchPreview).toHaveBeenCalledWith(3, 'mal,imdb,lb,rt,rta,mc,tmdb,trakt', 'bottom-center', 'horizontal', 'text', 'default')
+    expect(fetchPreview).toHaveBeenCalledWith(3, 'mal,imdb,lb,rt,rta,mc,tmdb,trakt', 'bc', 'h', 'i', 'd')
   })
 
   it('calls fetchPreview with correct params for custom settings', async () => {
@@ -188,17 +188,17 @@ describe('PosterSettingsForm', () => {
     const select = wrapper.findAll('select')
     const positionSelect = select.find(s => {
       const options = s.findAll('option')
-      return options.some(o => o.attributes('value') === 'left')
+      return options.some(o => o.attributes('value') === 'l')
     })
     expect(positionSelect).toBeDefined()
   })
 
   it('calls fetchPreview with posterPosition', async () => {
     const fetchPreview = makeFetchPreview()
-    mountForm({ poster_position: 'left' }, fetchPreview)
+    mountForm({ poster_position: 'l' }, fetchPreview)
     await flushPromises()
 
-    expect(fetchPreview).toHaveBeenCalledWith(3, expect.any(String), 'left', 'horizontal', 'text', 'default')
+    expect(fetchPreview).toHaveBeenCalledWith(3, expect.any(String), 'l', 'h', 'i', 'd')
   })
 
   it('renders badge direction dropdown', () => {
@@ -209,9 +209,9 @@ describe('PosterSettingsForm', () => {
 
   it('calls fetchPreview with badge direction', async () => {
     const fetchPreview = makeFetchPreview()
-    mountForm({ poster_badge_direction: 'vertical' }, fetchPreview)
+    mountForm({ poster_badge_direction: 'v' }, fetchPreview)
     await flushPromises()
 
-    expect(fetchPreview).toHaveBeenCalledWith(3, expect.any(String), 'bottom-center', 'horizontal', 'text', 'vertical')
+    expect(fetchPreview).toHaveBeenCalledWith(3, expect.any(String), 'bc', 'h', 'i', 'v')
   })
 })

@@ -57,7 +57,7 @@ pub fn render_badges_uniform(badges: &[RatingBadge], font: &FontArc, label_style
 
     let fonts = BadgeFonts::new(font);
 
-    let max_label_width = if label_style == "icon" {
+    let max_label_width = if label_style == "i" {
         // For icon mode, use the max icon width (scaled to icon height)
         badges.iter()
             .map(|b| icon_scaled_width(icons::icon_for_source(&b.source), ICON_HEIGHT))
@@ -97,7 +97,7 @@ fn render_badge_inner(
     uniform_value_width: Option<u32>,
     label_style: &str,
 ) -> RgbaImage {
-    let use_icon = label_style == "icon";
+    let use_icon = label_style == "i";
 
     let label = badge.source.label();
     let value = &badge.value;
@@ -181,7 +181,7 @@ const VERT_VALUE_FONT_SIZE: f32 = 28.0;
 /// Render a vertical badge: source label on top, rating value below.
 /// Used for left/right poster positions.
 pub fn render_vertical_badge(badge: &RatingBadge, font: &FontArc, label_style: &str) -> RgbaImage {
-    let use_icon = label_style == "icon";
+    let use_icon = label_style == "i";
     let label_scale = PxScale::from(VERT_LABEL_FONT_SIZE);
     let value_scale = PxScale::from(VERT_VALUE_FONT_SIZE);
 
@@ -284,7 +284,7 @@ mod tests {
             source: RatingSource::Imdb,
             value: "8.5".to_string(),
         };
-        let img = render_badge(&badge, &test_font(), "text");
+        let img = render_badge(&badge, &test_font(), "t");
         assert_eq!(img.height(), BADGE_HEIGHT);
         assert!(img.width() > 0);
     }
@@ -308,7 +308,7 @@ mod tests {
                 source,
                 value: "75%".to_string(),
             };
-            let img = render_badge(&badge, &font, "text");
+            let img = render_badge(&badge, &font, "t");
             assert_eq!(img.height(), BADGE_HEIGHT, "wrong height for {:?}", source);
             assert!(img.width() > 0, "zero width for {:?}", source);
         }
@@ -333,7 +333,7 @@ mod tests {
                 source,
                 value: "75%".to_string(),
             };
-            let img = render_badge(&badge, &font, "icon");
+            let img = render_badge(&badge, &font, "i");
             assert_eq!(img.height(), BADGE_HEIGHT, "wrong height for {:?}", source);
             assert!(img.width() > 0, "zero width for {:?}", source);
         }
@@ -351,8 +351,8 @@ mod tests {
             value: "100%".to_string(),
         };
 
-        let short_img = render_badge(&short, &font, "text");
-        let long_img = render_badge(&long, &font, "text");
+        let short_img = render_badge(&short, &font, "t");
+        let long_img = render_badge(&long, &font, "t");
 
         assert!(
             long_img.width() > short_img.width(),
@@ -366,7 +366,7 @@ mod tests {
             source: RatingSource::Imdb,
             value: "8.5".to_string(),
         };
-        let img = render_vertical_badge(&badge, &test_font(), "text");
+        let img = render_vertical_badge(&badge, &test_font(), "t");
         assert_eq!(img.width(), VERT_BADGE_WIDTH);
         assert!(img.height() > 0);
     }
@@ -390,7 +390,7 @@ mod tests {
                 source,
                 value: "75%".to_string(),
             };
-            let img = render_vertical_badge(&badge, &font, "text");
+            let img = render_vertical_badge(&badge, &font, "t");
             assert_eq!(img.width(), VERT_BADGE_WIDTH, "wrong width for {:?}", source);
             assert!(img.height() > 0, "zero height for {:?}", source);
         }
@@ -415,7 +415,7 @@ mod tests {
                 source,
                 value: "75%".to_string(),
             };
-            let img = render_vertical_badge(&badge, &font, "icon");
+            let img = render_vertical_badge(&badge, &font, "i");
             assert_eq!(img.width(), VERT_BADGE_WIDTH, "wrong width for {:?}", source);
             assert!(img.height() > 0, "zero height for {:?}", source);
         }
@@ -429,7 +429,7 @@ mod tests {
             value: String::new(),
         };
         // Should not panic
-        let img = render_badge(&badge, &font, "text");
+        let img = render_badge(&badge, &font, "t");
         assert_eq!(img.height(), BADGE_HEIGHT);
     }
 }

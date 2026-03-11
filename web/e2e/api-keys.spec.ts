@@ -116,12 +116,12 @@ test.describe('api keys', () => {
   test('per-key label style dropdowns are visible with default icon', async ({ page }) => {
     await createKeyAndOpenSettings(page)
 
-    const labelSelects = page.locator('select').filter({ has: page.locator('option[value="icon"]') })
+    const labelSelects = page.locator('select').filter({ has: page.locator('option[value="i"]') })
     // There should be 3 label style selects (poster, logo, backdrop)
     await expect(labelSelects).toHaveCount(3)
 
     for (const select of await labelSelects.all()) {
-      await expect(select).toHaveValue('icon')
+      await expect(select).toHaveValue('i')
     }
   })
 
@@ -129,8 +129,8 @@ test.describe('api keys', () => {
     const keyName = await createKeyAndOpenSettings(page)
 
     // Change poster label style to text (default is icon)
-    const labelSelects = page.locator('select').filter({ has: page.locator('option[value="icon"]') })
-    await labelSelects.first().selectOption('text')
+    const labelSelects = page.locator('select').filter({ has: page.locator('option[value="i"]') })
+    await labelSelects.first().selectOption('t')
 
     // Wait for auto-save confirmation
     await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 })
@@ -143,8 +143,8 @@ test.describe('api keys', () => {
     await keyRow.locator('button:not(:has-text("Delete"))').first().click()
     await expect(page.locator('text=Rating Display')).toBeVisible()
 
-    const reloadedSelects = page.locator('select').filter({ has: page.locator('option[value="icon"]') })
-    await expect(reloadedSelects.first()).toHaveValue('text')
+    const reloadedSelects = page.locator('select').filter({ has: page.locator('option[value="i"]') })
+    await expect(reloadedSelects.first()).toHaveValue('t')
   })
 
   test('delete a key removes it from list', async ({ page }) => {

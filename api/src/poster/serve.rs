@@ -62,8 +62,8 @@ impl ImageKind {
     fn kind_prefix(self) -> &'static str {
         match self {
             ImageKind::Poster => "",
-            ImageKind::Logo => ":logo",
-            ImageKind::Backdrop => ":backdrop",
+            ImageKind::Logo => ":l",
+            ImageKind::Backdrop => ":b",
         }
     }
 
@@ -89,23 +89,23 @@ impl ImageKind {
 
 /// Returns a cache key suffix for poster position.
 pub fn poster_position_cache_suffix(position: &str) -> String {
-    let pos = if position.is_empty() { "bottom-center" } else { position };
-    format!("_pos-{pos}")
+    let pos = if position.is_empty() { "bc" } else { position };
+    format!(".p{pos}")
 }
 
 /// Returns a cache key suffix for badge style.
 pub fn badge_style_cache_suffix(style: &str) -> String {
-    format!("_bs-{style}")
+    format!(".s{style}")
 }
 
 /// Returns a cache key suffix for label style.
 pub fn label_style_cache_suffix(style: &str) -> String {
-    format!("_ls-{style}")
+    format!(".l{style}")
 }
 
 /// Returns a cache key suffix for badge direction.
 pub fn badge_direction_cache_suffix(dir: &str) -> String {
-    format!("_bd-{dir}")
+    format!(".d{dir}")
 }
 
 pub async fn handle_inner(
@@ -301,7 +301,7 @@ async fn check_fanart_cache_variant(
     Ok(None)
 }
 
-/// Build a fanart cache key and filesystem path from a variant suffix (e.g. ":fanart:textless").
+/// Build a fanart cache key and filesystem path from a variant suffix (e.g. ":f:tl").
 fn fanart_variant_paths(
     cache_dir: &str,
     id_type_str: &str,
@@ -332,12 +332,12 @@ async fn try_fanart_path(
     // Build the list of cache variants to check.
     // When textless is requested but we know it's unavailable (negative cache),
     // skip the textless key and go straight to language.
-    let neg_key = format!("{id_type_str}/{id_value}:fanart:textless:neg");
+    let neg_key = format!("{id_type_str}/{id_value}:f:tl:neg");
     let textless_known_missing = settings.fanart_textless
         && state.fanart_negative.get(&neg_key).await.is_some();
 
-    let lang_variant = format!(":fanart:{}", settings.fanart_lang);
-    let lang_neg_key = format!("{id_type_str}/{id_value}:fanart:{}:neg", settings.fanart_lang);
+    let lang_variant = format!(":f:{}", settings.fanart_lang);
+    let lang_neg_key = format!("{id_type_str}/{id_value}:f:{}:neg", settings.fanart_lang);
     let lang_known_missing = state.fanart_negative.get(&lang_neg_key).await.is_some();
 
     // All fanart variants are known-missing — skip generation and fall through to TMDB
@@ -355,7 +355,7 @@ async fn try_fanart_path(
     // Check cached variants (textless first if requested, then language)
     let mut variants_to_check: Vec<String> = Vec::new();
     if settings.fanart_textless && !textless_known_missing {
-        variants_to_check.push(":fanart:textless".to_string());
+        variants_to_check.push(":f:tl".to_string());
     }
     if !lang_known_missing {
         variants_to_check.push(lang_variant.clone());
@@ -382,8 +382,8 @@ async fn try_fanart_path(
             }
 
             let actual_variant = match tier {
-                PosterMatch::Textless => ":fanart:textless".to_string(),
-                PosterMatch::Language => format!(":fanart:{}", settings.fanart_lang),
+                PosterMatch::Textless => ":f:tl".to_string(),
+                PosterMatch::Language => format!(":f:{}", settings.fanart_lang),
             };
             let (cache_key, cache_path) =
                 fanart_variant_paths(&state.config.cache_dir, id_type_str, id_value, &actual_variant, &ratings_suffix, &pos_suffix, &bs_suffix, &ls_suffix, &bd_suffix)?;
@@ -825,11 +825,11 @@ pub async fn handle_fanart_image_inner(
     let fanart_textless = matches!(kind, ImageKind::Poster) && settings.fanart_textless;
 
     // Check negative cache — skip generation if we already know there's nothing
-    let neg_textless_key = format!("{id_type_str}/{id_value}{kind_prefix}:fanart:textless:neg");
+    let neg_textless_key = format!("{id_type_str}/{id_value}{kind_prefix}:f:tl:neg");
     let textless_known_missing = fanart_textless
         && state.fanart_negative.get(&neg_textless_key).await.is_some();
 
-    let neg_lang_key = format!("{id_type_str}/{id_value}{kind_prefix}:fanart:{}:neg", fanart_lang);
+    let neg_lang_key = format!("{id_type_str}/{id_value}{kind_prefix}:f:{}:neg", fanart_lang);
     let lang_known_missing = state.fanart_negative.get(&neg_lang_key).await.is_some();
 
     if lang_known_missing && (!fanart_textless || textless_known_missing) {
@@ -838,8 +838,8 @@ pub async fn handle_fanart_image_inner(
 
     let variant = match kind {
         ImageKind::Backdrop => kind_prefix.to_string(),
-        ImageKind::Logo => format!("{kind_prefix}:fanart:{fanart_lang}"),
-        ImageKind::Poster => format!("{kind_prefix}:fanart:{fanart_lang}{}", if fanart_textless { ":textless" } else { "" }),
+        ImageKind::Logo => format!("{kind_prefix}:f:{fanart_lang}"),
+        ImageKind::Poster => format!("{kind_prefix}:f:{fanart_lang}{}", if fanart_textless { ":tl" } else { "" }),
     };
     let image_type = match fanart_kind {
         FanartImageKind::Logo => cache::ImageType::Logo,
@@ -970,8 +970,8 @@ mod tests {
     #[test]
     fn image_kind_prefix() {
         assert_eq!(ImageKind::Poster.kind_prefix(), "");
-        assert_eq!(ImageKind::Logo.kind_prefix(), ":logo");
-        assert_eq!(ImageKind::Backdrop.kind_prefix(), ":backdrop");
+        assert_eq!(ImageKind::Logo.kind_prefix(), ":l");
+        assert_eq!(ImageKind::Backdrop.kind_prefix(), ":b");
     }
 
     #[test]
@@ -1003,26 +1003,26 @@ mod tests {
 
     #[test]
     fn poster_position_cache_suffix_all_positions() {
-        assert_eq!(poster_position_cache_suffix("bottom-center"), "_pos-bottom-center");
-        assert_eq!(poster_position_cache_suffix(""), "_pos-bottom-center");
-        assert_eq!(poster_position_cache_suffix("top-center"), "_pos-top-center");
-        assert_eq!(poster_position_cache_suffix("left"), "_pos-left");
-        assert_eq!(poster_position_cache_suffix("right"), "_pos-right");
-        assert_eq!(poster_position_cache_suffix("top-left"), "_pos-top-left");
-        assert_eq!(poster_position_cache_suffix("top-right"), "_pos-top-right");
-        assert_eq!(poster_position_cache_suffix("bottom-left"), "_pos-bottom-left");
-        assert_eq!(poster_position_cache_suffix("bottom-right"), "_pos-bottom-right");
+        assert_eq!(poster_position_cache_suffix("bc"), ".pbc");
+        assert_eq!(poster_position_cache_suffix(""), ".pbc");
+        assert_eq!(poster_position_cache_suffix("tc"), ".ptc");
+        assert_eq!(poster_position_cache_suffix("l"), ".pl");
+        assert_eq!(poster_position_cache_suffix("r"), ".pr");
+        assert_eq!(poster_position_cache_suffix("tl"), ".ptl");
+        assert_eq!(poster_position_cache_suffix("tr"), ".ptr");
+        assert_eq!(poster_position_cache_suffix("bl"), ".pbl");
+        assert_eq!(poster_position_cache_suffix("br"), ".pbr");
     }
 
     #[test]
     fn badge_style_cache_suffix_values() {
-        assert_eq!(badge_style_cache_suffix("horizontal"), "_bs-horizontal");
-        assert_eq!(badge_style_cache_suffix("vertical"), "_bs-vertical");
+        assert_eq!(badge_style_cache_suffix("h"), ".sh");
+        assert_eq!(badge_style_cache_suffix("v"), ".sv");
     }
 
     #[test]
     fn label_style_cache_suffix_values() {
-        assert_eq!(label_style_cache_suffix("text"), "_ls-text");
-        assert_eq!(label_style_cache_suffix("icon"), "_ls-icon");
+        assert_eq!(label_style_cache_suffix("t"), ".lt");
+        assert_eq!(label_style_cache_suffix("i"), ".li");
     }
 }

@@ -62,16 +62,16 @@ describe('selfApi', () => {
       fanart_textless: true,
       ratings_limit: 3,
       ratings_order: 'mal,imdb,trakt',
-      poster_position: 'bottom-center',
+      poster_position: 'bc',
       logo_ratings_limit: 3,
       backdrop_ratings_limit: 3,
-      poster_badge_style: 'horizontal',
-      logo_badge_style: 'horizontal',
-      backdrop_badge_style: 'vertical',
-      poster_label_style: 'text',
-      logo_label_style: 'text',
-      backdrop_label_style: 'text',
-      poster_badge_direction: 'default',
+      poster_badge_style: 'h',
+      logo_badge_style: 'h',
+      backdrop_badge_style: 'v',
+      poster_label_style: 't',
+      logo_label_style: 't',
+      backdrop_label_style: 't',
+      poster_badge_direction: 'd',
     })
 
     const [url, options] = fetchMock.mock.calls[0]
@@ -84,16 +84,16 @@ describe('selfApi', () => {
       fanart_textless: true,
       ratings_limit: 3,
       ratings_order: 'mal,imdb,trakt',
-      poster_position: 'bottom-center',
+      poster_position: 'bc',
       logo_ratings_limit: 3,
       backdrop_ratings_limit: 3,
-      poster_badge_style: 'horizontal',
-      logo_badge_style: 'horizontal',
-      backdrop_badge_style: 'vertical',
-      poster_label_style: 'text',
-      logo_label_style: 'text',
-      backdrop_label_style: 'text',
-      poster_badge_direction: 'default',
+      poster_badge_style: 'h',
+      logo_badge_style: 'h',
+      backdrop_badge_style: 'v',
+      poster_label_style: 't',
+      logo_label_style: 't',
+      backdrop_label_style: 't',
+      poster_badge_direction: 'd',
     })
   })
 
@@ -134,49 +134,49 @@ describe('selfApi', () => {
     const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
     vi.stubGlobal('fetch', fetchMock)
 
-    await selfApi.previewPoster(3, 'imdb,rt', 'right')
+    await selfApi.previewPoster(3, 'imdb,rt', 'r')
 
     const [url] = fetchMock.mock.calls[0]
-    expect(url).toContain('poster_position=right')
+    expect(url).toContain('poster_position=r')
   })
 
   it('previewPoster includes label_style when provided', async () => {
     const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
     vi.stubGlobal('fetch', fetchMock)
 
-    await selfApi.previewPoster(3, 'imdb,rt', 'bottom-center', 'horizontal', 'icon')
+    await selfApi.previewPoster(3, 'imdb,rt', 'bc', 'h', 'i')
 
     const [url] = fetchMock.mock.calls[0]
-    expect(url).toContain('label_style=icon')
+    expect(url).toContain('label_style=i')
   })
 
   it('previewPoster includes badge_direction when provided', async () => {
     const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
     vi.stubGlobal('fetch', fetchMock)
 
-    await selfApi.previewPoster(3, 'imdb,rt', 'bottom-center', 'horizontal', 'icon', 'vertical')
+    await selfApi.previewPoster(3, 'imdb,rt', 'bc', 'h', 'i', 'v')
 
     const [url] = fetchMock.mock.calls[0]
-    expect(url).toContain('badge_direction=vertical')
+    expect(url).toContain('badge_direction=v')
   })
 
   it('previewLogo includes label_style when provided', async () => {
     const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
     vi.stubGlobal('fetch', fetchMock)
 
-    await selfApi.previewLogo(3, 'imdb,rt', 'horizontal', 'icon')
+    await selfApi.previewLogo(3, 'imdb,rt', 'h', 'i')
 
     const [url] = fetchMock.mock.calls[0]
-    expect(url).toContain('label_style=icon')
+    expect(url).toContain('label_style=i')
   })
 
   it('previewBackdrop includes label_style when provided', async () => {
     const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
     vi.stubGlobal('fetch', fetchMock)
 
-    await selfApi.previewBackdrop(3, 'imdb,rt', 'vertical', 'icon')
+    await selfApi.previewBackdrop(3, 'imdb,rt', 'v', 'i')
 
     const [url] = fetchMock.mock.calls[0]
-    expect(url).toContain('label_style=icon')
+    expect(url).toContain('label_style=i')
   })
 })

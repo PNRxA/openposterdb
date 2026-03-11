@@ -24,39 +24,39 @@ pub fn default_ratings_order() -> String {
 }
 
 pub fn default_poster_position() -> String {
-    "bottom-center".to_string()
+    "bc".to_string()
 }
 
 pub fn default_poster_badge_style() -> String {
-    "horizontal".to_string()
+    "h".to_string()
 }
 
 pub fn default_logo_badge_style() -> String {
-    "vertical".to_string()
+    "v".to_string()
 }
 
 pub fn default_backdrop_badge_style() -> String {
-    "vertical".to_string()
+    "v".to_string()
 }
 
 pub fn default_label_style() -> String {
-    "icon".to_string()
+    "i".to_string()
 }
 
 pub fn default_poster_badge_direction() -> String {
-    "default".to_string()
+    "d".to_string()
 }
 
-/// Resolve a badge direction of `"default"` to `"horizontal"` or `"vertical"`
+/// Resolve a badge direction of `"default"` to `"h"` or `"v"`
 /// based on the poster position. Center positions use horizontal; everything
 /// else (left, right, corners) uses vertical. Non-default values pass through.
 pub fn resolve_badge_direction(direction: &str, position: &str) -> String {
-    if direction != "default" {
+    if direction != "d" {
         return direction.to_string();
     }
     match position {
-        "bottom-center" | "top-center" => "horizontal".to_string(),
-        _ => "vertical".to_string(),
+        "bc" | "tc" => "h".to_string(),
+        _ => "v".to_string(),
     }
 }
 
@@ -107,27 +107,27 @@ pub fn validate_ratings_order(order: &str) -> Result<(), AppError> {
 
 pub fn validate_badge_style(style: &str) -> Result<(), AppError> {
     match style {
-        "horizontal" | "vertical" => Ok(()),
+        "h" | "v" => Ok(()),
         _ => Err(AppError::BadRequest(
-            "badge_style must be 'horizontal' or 'vertical'".into(),
+            "badge_style must be 'h' or 'v'".into(),
         )),
     }
 }
 
 pub fn validate_label_style(style: &str) -> Result<(), AppError> {
     match style {
-        "text" | "icon" => Ok(()),
+        "t" | "i" => Ok(()),
         _ => Err(AppError::BadRequest(
-            "label_style must be 'text' or 'icon'".into(),
+            "label_style must be 't' or 'i'".into(),
         )),
     }
 }
 
 pub fn validate_badge_direction(dir: &str) -> Result<(), AppError> {
     match dir {
-        "default" | "horizontal" | "vertical" => Ok(()),
+        "d" | "h" | "v" => Ok(()),
         _ => Err(AppError::BadRequest(
-            "badge_direction must be 'default', 'horizontal', or 'vertical'".into(),
+            "badge_direction must be 'd', 'h', or 'v'".into(),
         )),
     }
 }
@@ -135,10 +135,10 @@ pub fn validate_badge_direction(dir: &str) -> Result<(), AppError> {
 /// Validate that poster_position is a known value.
 pub fn validate_poster_position(pos: &str) -> Result<(), AppError> {
     match pos {
-        "bottom-center" | "top-center" | "left" | "right"
-        | "top-left" | "top-right" | "bottom-left" | "bottom-right" => Ok(()),
+        "bc" | "tc" | "l" | "r"
+        | "tl" | "tr" | "bl" | "br" => Ok(()),
         _ => Err(AppError::BadRequest(
-            "poster_position must be 'bottom-center', 'top-center', 'left', 'right', 'top-left', 'top-right', 'bottom-left', or 'bottom-right'".into(),
+            "poster_position must be 'bc', 'tc', 'l', 'r', 'tl', 'tr', 'bl', or 'br'".into(),
         )),
     }
 }
@@ -348,43 +348,43 @@ mod tests {
 
     #[test]
     fn validate_poster_position_accepts_valid() {
-        assert!(validate_poster_position("bottom-center").is_ok());
-        assert!(validate_poster_position("top-center").is_ok());
-        assert!(validate_poster_position("left").is_ok());
-        assert!(validate_poster_position("right").is_ok());
-        assert!(validate_poster_position("top-left").is_ok());
-        assert!(validate_poster_position("top-right").is_ok());
-        assert!(validate_poster_position("bottom-left").is_ok());
-        assert!(validate_poster_position("bottom-right").is_ok());
+        assert!(validate_poster_position("bc").is_ok());
+        assert!(validate_poster_position("tc").is_ok());
+        assert!(validate_poster_position("l").is_ok());
+        assert!(validate_poster_position("r").is_ok());
+        assert!(validate_poster_position("tl").is_ok());
+        assert!(validate_poster_position("tr").is_ok());
+        assert!(validate_poster_position("bl").is_ok());
+        assert!(validate_poster_position("br").is_ok());
     }
 
     #[test]
     fn validate_poster_position_rejects_invalid() {
         assert!(validate_poster_position("center").is_err());
         assert!(validate_poster_position("").is_err());
-        assert!(validate_poster_position("bottom").is_err());
+        assert!(validate_poster_position("bottom-center").is_err());
         assert!(validate_poster_position("middle").is_err());
     }
 
     #[test]
     fn default_poster_position_returns_bottom_center() {
-        assert_eq!(default_poster_position(), "bottom-center");
+        assert_eq!(default_poster_position(), "bc");
     }
 
     #[test]
     fn default_poster_badge_style_returns_horizontal() {
-        assert_eq!(default_poster_badge_style(), "horizontal");
+        assert_eq!(default_poster_badge_style(), "h");
     }
 
     #[test]
     fn default_backdrop_badge_style_returns_vertical() {
-        assert_eq!(default_backdrop_badge_style(), "vertical");
+        assert_eq!(default_backdrop_badge_style(), "v");
     }
 
     #[test]
     fn validate_badge_style_accepts_valid() {
-        assert!(validate_badge_style("horizontal").is_ok());
-        assert!(validate_badge_style("vertical").is_ok());
+        assert!(validate_badge_style("h").is_ok());
+        assert!(validate_badge_style("v").is_ok());
     }
 
     #[test]
@@ -395,8 +395,8 @@ mod tests {
 
     #[test]
     fn validate_label_style_accepts_valid() {
-        assert!(validate_label_style("text").is_ok());
-        assert!(validate_label_style("icon").is_ok());
+        assert!(validate_label_style("t").is_ok());
+        assert!(validate_label_style("i").is_ok());
     }
 
     #[test]
@@ -407,19 +407,19 @@ mod tests {
 
     #[test]
     fn default_label_style_returns_icon() {
-        assert_eq!(default_label_style(), "icon");
+        assert_eq!(default_label_style(), "i");
     }
 
     #[test]
     fn default_poster_badge_direction_returns_default() {
-        assert_eq!(default_poster_badge_direction(), "default");
+        assert_eq!(default_poster_badge_direction(), "d");
     }
 
     #[test]
     fn validate_badge_direction_accepts_default() {
-        assert!(validate_badge_direction("default").is_ok());
-        assert!(validate_badge_direction("horizontal").is_ok());
-        assert!(validate_badge_direction("vertical").is_ok());
+        assert!(validate_badge_direction("d").is_ok());
+        assert!(validate_badge_direction("h").is_ok());
+        assert!(validate_badge_direction("v").is_ok());
     }
 
     #[test]
@@ -430,28 +430,28 @@ mod tests {
 
     #[test]
     fn resolve_badge_direction_default_center_positions() {
-        assert_eq!(resolve_badge_direction("default", "bottom-center"), "horizontal");
-        assert_eq!(resolve_badge_direction("default", "top-center"), "horizontal");
+        assert_eq!(resolve_badge_direction("d", "bc"), "h");
+        assert_eq!(resolve_badge_direction("d", "tc"), "h");
     }
 
     #[test]
     fn resolve_badge_direction_default_side_positions() {
-        assert_eq!(resolve_badge_direction("default", "left"), "vertical");
-        assert_eq!(resolve_badge_direction("default", "right"), "vertical");
+        assert_eq!(resolve_badge_direction("d", "l"), "v");
+        assert_eq!(resolve_badge_direction("d", "r"), "v");
     }
 
     #[test]
     fn resolve_badge_direction_default_corner_positions() {
-        assert_eq!(resolve_badge_direction("default", "top-left"), "vertical");
-        assert_eq!(resolve_badge_direction("default", "top-right"), "vertical");
-        assert_eq!(resolve_badge_direction("default", "bottom-left"), "vertical");
-        assert_eq!(resolve_badge_direction("default", "bottom-right"), "vertical");
+        assert_eq!(resolve_badge_direction("d", "tl"), "v");
+        assert_eq!(resolve_badge_direction("d", "tr"), "v");
+        assert_eq!(resolve_badge_direction("d", "bl"), "v");
+        assert_eq!(resolve_badge_direction("d", "br"), "v");
     }
 
     #[test]
     fn resolve_badge_direction_explicit_passes_through() {
-        assert_eq!(resolve_badge_direction("horizontal", "left"), "horizontal");
-        assert_eq!(resolve_badge_direction("vertical", "bottom-center"), "vertical");
+        assert_eq!(resolve_badge_direction("h", "l"), "h");
+        assert_eq!(resolve_badge_direction("v", "bc"), "v");
     }
 }
 
@@ -923,16 +923,16 @@ impl Default for PosterSettings {
             ratings_limit: 3,
             ratings_order: "mal,imdb,lb,rt,mc,rta,tmdb,trakt".to_string(),
             is_default: true,
-            poster_position: "bottom-center".to_string(),
+            poster_position: "bc".to_string(),
             logo_ratings_limit: 5,
             backdrop_ratings_limit: 5,
-            poster_badge_style: "horizontal".to_string(),
-            logo_badge_style: "vertical".to_string(),
-            backdrop_badge_style: "vertical".to_string(),
-            poster_label_style: "icon".to_string(),
-            logo_label_style: "icon".to_string(),
-            backdrop_label_style: "icon".to_string(),
-            poster_badge_direction: "default".to_string(),
+            poster_badge_style: "h".to_string(),
+            logo_badge_style: "v".to_string(),
+            backdrop_badge_style: "v".to_string(),
+            poster_label_style: "i".to_string(),
+            logo_label_style: "i".to_string(),
+            backdrop_label_style: "i".to_string(),
+            poster_badge_direction: "d".to_string(),
         }
     }
 }

@@ -109,13 +109,13 @@ pub async fn preview_poster(
     Query(query): Query<PreviewQuery>,
 ) -> Result<Response, AppError> {
     let position = if query.poster_position.is_empty() {
-        "bottom-center"
+        "bc"
     } else {
         validate_poster_position(&query.poster_position)?;
         &query.poster_position
     };
     let badge_style = if query.badge_style.is_empty() {
-        "horizontal"
+        "h"
     } else {
         validate_badge_style(&query.badge_style)?;
         &query.badge_style
@@ -172,7 +172,7 @@ pub async fn preview_logo(
     Query(query): Query<PreviewQuery>,
 ) -> Result<Response, AppError> {
     let badge_style = if query.badge_style.is_empty() {
-        "horizontal"
+        "h"
     } else {
         validate_badge_style(&query.badge_style)?;
         &query.badge_style
@@ -221,7 +221,7 @@ pub async fn preview_backdrop(
     Query(query): Query<PreviewQuery>,
 ) -> Result<Response, AppError> {
     let badge_style = if query.badge_style.is_empty() {
-        "vertical"
+        "v"
     } else {
         validate_badge_style(&query.badge_style)?;
         &query.badge_style
@@ -324,7 +324,7 @@ mod tests {
     fn sample_poster_renders_with_badges() {
         let font = ab_glyph::FontArc::try_from_slice(crate::FONT_BYTES).unwrap();
         let badges = sample_badges();
-        let result = generate::render_poster_sync(&SAMPLE_POSTER_PNG, &badges, &font, 85, false, "bottom-center", "horizontal", "text", "horizontal");
+        let result = generate::render_poster_sync(&SAMPLE_POSTER_PNG, &badges, &font, 85, false, "bc", "h", "t", "h");
         let buf = result.expect("rendering should succeed");
         // Valid JPEG
         assert_eq!(buf[0], 0xFF);
@@ -335,7 +335,7 @@ mod tests {
     #[test]
     fn sample_poster_renders_with_no_badges() {
         let font = ab_glyph::FontArc::try_from_slice(crate::FONT_BYTES).unwrap();
-        let result = generate::render_poster_sync(&SAMPLE_POSTER_PNG, &[], &font, 85, false, "bottom-center", "horizontal", "text", "horizontal");
+        let result = generate::render_poster_sync(&SAMPLE_POSTER_PNG, &[], &font, 85, false, "bc", "h", "t", "h");
         let buf = result.expect("rendering should succeed");
         assert_eq!(buf[0], 0xFF);
         assert_eq!(buf[1], 0xD8);
@@ -353,8 +353,8 @@ mod tests {
         assert_eq!(query.ratings_limit, 3);
         assert_eq!(query.ratings_order, "");
         assert_eq!(query.badge_style, "");
-        assert_eq!(query.label_style, "icon");
-        assert_eq!(query.badge_direction, "default");
+        assert_eq!(query.label_style, "i");
+        assert_eq!(query.badge_direction, "d");
     }
 
     #[test]
