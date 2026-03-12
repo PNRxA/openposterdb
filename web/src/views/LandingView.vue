@@ -72,13 +72,19 @@ const labels = [
 ];
 
 const logos = [
-  { src: "/examples/logo-h.png", label: "Horizontal badges" },
-  { src: "/examples/logo-v.png", label: "Vertical badges" },
+  { src: "/examples/logo-nosferatu.png", label: "Nosferatu (1922)" },
+  { src: "/examples/logo-metropolis.png", label: "Metropolis (1927)" },
+  { src: "/examples/logo-caligari.png", alt: "The Cabinet of Dr. Caligari (1920)", label: "Dr. Caligari (1920)" },
+  { src: "/examples/logo-phantom.png", alt: "The Phantom of the Opera (1925)", label: "Phantom of the Opera (1925)" },
+  { src: "/examples/logo-trip-to-moon.png", alt: "A Trip to the Moon (1902)", label: "A Trip to the Moon (1902)" },
+  { src: "/examples/logo-safety-last.png", alt: "Safety Last! (1923)", label: "Safety Last! (1923)" },
+  { src: "/examples/logo-the-general.png", label: "The General (1926)" },
 ];
 
 const backdrops = [
-  { src: "/examples/backdrop-v.jpg", label: "Vertical badges" },
-  { src: "/examples/backdrop-h.jpg", label: "Horizontal badges" },
+  { src: "/examples/backdrop-nosferatu.jpg", label: "Nosferatu (1922)" },
+  { src: "/examples/backdrop-metropolis.jpg", label: "Metropolis (1927)" },
+  { src: "/examples/backdrop-trip-to-moon.jpg", alt: "A Trip to the Moon (1902)", label: "A Trip to the Moon (1902)" },
 ];
 </script>
 
@@ -150,6 +156,44 @@ const backdrops = [
           </p>
         </div>
 
+        <!-- Logos -->
+        <div class="space-y-4 text-center">
+          <h2 class="text-2xl font-semibold">Logos</h2>
+          <p class="text-sm text-muted-foreground max-w-lg mx-auto">
+            Serve transparent logos with rating badges attached below.
+          </p>
+          <div class="flex flex-wrap items-end justify-center gap-6">
+            <div v-for="l in logos" :key="l.src" class="space-y-2">
+              <img
+                :src="l.src"
+                :alt="l.alt || l.label"
+                loading="lazy"
+                class="rounded-lg shadow-md max-w-[200px] bg-neutral-900 p-3"
+              />
+              <p class="text-xs text-muted-foreground">{{ l.label }}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Backdrops -->
+        <div class="space-y-4 text-center">
+          <h2 class="text-2xl font-semibold">Backdrops</h2>
+          <p class="text-sm text-muted-foreground max-w-lg mx-auto">
+            Backdrops get rating badges in the top-right corner for a clean overlay.
+          </p>
+          <div class="flex flex-wrap justify-center gap-4">
+            <div v-for="b in backdrops" :key="b.src" class="space-y-1">
+              <img
+                :src="b.src"
+                :alt="b.alt || b.label"
+                loading="lazy"
+                class="rounded-lg shadow-md max-w-[360px] w-full"
+              />
+              <p class="text-xs text-muted-foreground">{{ b.label }}</p>
+            </div>
+          </div>
+        </div>
+
         <!-- Badge Position -->
         <div class="space-y-4 text-center">
           <h2 class="text-2xl font-semibold">Badge Position</h2>
@@ -208,43 +252,6 @@ const backdrops = [
           </div>
         </div>
 
-        <!-- Logos -->
-        <div class="space-y-4 text-center">
-          <h2 class="text-2xl font-semibold">Logos</h2>
-          <p class="text-sm text-muted-foreground max-w-lg mx-auto">
-            Serve transparent logos with rating badges attached below.
-          </p>
-          <div class="flex flex-wrap items-end justify-center gap-6">
-            <div v-for="l in logos" :key="l.src" class="space-y-2">
-              <img
-                :src="l.src"
-                :alt="l.label"
-                loading="lazy"
-                class="rounded-lg shadow-md max-w-[300px]"
-              />
-              <p class="text-xs text-muted-foreground">{{ l.label }}</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Backdrops -->
-        <div class="space-y-4 text-center">
-          <h2 class="text-2xl font-semibold">Backdrops</h2>
-          <p class="text-sm text-muted-foreground max-w-lg mx-auto">
-            Backdrops get rating badges in the top-right corner for a clean overlay.
-          </p>
-          <div class="flex flex-col items-center gap-6">
-            <div v-for="b in backdrops" :key="b.src" class="space-y-2">
-              <img
-                :src="b.src"
-                :alt="b.label"
-                loading="lazy"
-                class="rounded-lg shadow-md max-w-[560px] w-full"
-              />
-              <p class="text-xs text-muted-foreground">{{ b.label }}</p>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   </div>
