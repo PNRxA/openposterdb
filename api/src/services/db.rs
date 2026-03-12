@@ -19,8 +19,10 @@ pub const STYLE_HORIZONTAL: &str = "h";
 /// Badge style / badge direction: vertical
 pub const STYLE_VERTICAL: &str = "v";
 
-/// Badge direction: auto (resolves based on position)
+/// Default value for direction/style: auto (resolves based on context)
 pub const DIRECTION_DEFAULT: &str = "d";
+/// Badge style: default (resolves to match badge direction)
+pub const STYLE_DEFAULT: &str = DIRECTION_DEFAULT;
 
 /// Label style: icon
 pub const LABEL_ICON: &str = "i";
@@ -65,7 +67,7 @@ pub fn default_poster_position() -> String {
 }
 
 pub fn default_poster_badge_style() -> String {
-    STYLE_HORIZONTAL.to_string()
+    STYLE_DEFAULT.to_string()
 }
 
 pub fn default_logo_badge_style() -> String {
@@ -144,10 +146,20 @@ pub fn validate_ratings_order(order: &str) -> Result<(), AppError> {
 
 pub fn validate_badge_style(style: &str) -> Result<(), AppError> {
     match style {
-        STYLE_HORIZONTAL | STYLE_VERTICAL => Ok(()),
+        STYLE_HORIZONTAL | STYLE_VERTICAL | STYLE_DEFAULT => Ok(()),
         _ => Err(AppError::BadRequest(
-            format!("badge_style must be '{STYLE_HORIZONTAL}' or '{STYLE_VERTICAL}'"),
+            format!("badge_style must be '{STYLE_HORIZONTAL}', '{STYLE_VERTICAL}', or '{STYLE_DEFAULT}'"),
         )),
+    }
+}
+
+/// Resolve a badge style of `"d"` (default) to match the resolved badge direction.
+/// Non-default values pass through unchanged.
+pub fn resolve_badge_style(style: &str, resolved_direction: &str) -> String {
+    if style == STYLE_DEFAULT {
+        resolved_direction.to_string()
+    } else {
+        style.to_string()
     }
 }
 
@@ -423,8 +435,8 @@ mod tests {
     }
 
     #[test]
-    fn default_poster_badge_style_returns_horizontal() {
-        assert_eq!(default_poster_badge_style(), "h");
+    fn default_poster_badge_style_returns_default() {
+        assert_eq!(default_poster_badge_style(), "d");
     }
 
     #[test]
@@ -436,12 +448,25 @@ mod tests {
     fn validate_badge_style_accepts_valid() {
         assert!(validate_badge_style("h").is_ok());
         assert!(validate_badge_style("v").is_ok());
+        assert!(validate_badge_style("d").is_ok());
     }
 
     #[test]
     fn validate_badge_style_rejects_invalid() {
         assert!(validate_badge_style("diagonal").is_err());
         assert!(validate_badge_style("").is_err());
+    }
+
+    #[test]
+    fn resolve_badge_style_default_follows_direction() {
+        assert_eq!(resolve_badge_style("d", "h"), "h");
+        assert_eq!(resolve_badge_style("d", "v"), "v");
+    }
+
+    #[test]
+    fn resolve_badge_style_explicit_passes_through() {
+        assert_eq!(resolve_badge_style("h", "v"), "h");
+        assert_eq!(resolve_badge_style("v", "h"), "v");
     }
 
     #[test]

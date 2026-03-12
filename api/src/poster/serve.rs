@@ -8,7 +8,7 @@ use crate::cache::{self, MemCacheEntry};
 use crate::error::AppError;
 use crate::id::{self, IdType, MediaType, format_tmdb_id_value};
 use crate::poster::generate;
-use crate::services::db::{resolve_badge_direction, PosterSettings, POS_BOTTOM_CENTER, SOURCE_FANART};
+use crate::services::db::{resolve_badge_direction, resolve_badge_style, PosterSettings, POS_BOTTOM_CENTER, SOURCE_FANART};
 use crate::services::fanart::{FanartClient, FanartImages, FanartPoster, PosterMatch};
 use crate::services::ratings;
 use crate::AppState;
@@ -283,8 +283,9 @@ pub async fn handle_inner(
     let id_type = IdType::parse(id_type_str)?;
     let id_value = id_value_jpg.strip_suffix(".jpg").unwrap_or(id_value_jpg);
 
-    // Resolve "default" badge direction early, before cache key construction
+    // Resolve "default" badge direction and style early, before cache key construction
     settings.poster_badge_direction = resolve_badge_direction(&settings.poster_badge_direction, &settings.poster_position);
+    settings.poster_badge_style = resolve_badge_style(&settings.poster_badge_style, &settings.poster_badge_direction);
 
     let use_fanart = settings.poster_source == SOURCE_FANART;
 
@@ -299,6 +300,7 @@ pub async fn handle_inner(
     if use_fanart {
         let mut defaults = PosterSettings::default();
         defaults.poster_badge_direction = resolve_badge_direction(&defaults.poster_badge_direction, &defaults.poster_position);
+        defaults.poster_badge_style = resolve_badge_style(&defaults.poster_badge_style, &defaults.poster_badge_direction);
         settings = defaults;
     }
     let settings = &settings;

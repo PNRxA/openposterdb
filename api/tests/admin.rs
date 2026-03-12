@@ -582,7 +582,7 @@ async fn get_settings_returns_new_field_defaults() {
     assert_eq!(json["poster_position"], "bc");
     assert_eq!(json["logo_ratings_limit"], 5);
     assert_eq!(json["backdrop_ratings_limit"], 5);
-    assert_eq!(json["poster_badge_style"], "h");
+    assert_eq!(json["poster_badge_style"], "d");
     assert_eq!(json["logo_badge_style"], "v");
     assert_eq!(json["backdrop_badge_style"], "v");
 }

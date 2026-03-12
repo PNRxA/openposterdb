@@ -9,7 +9,7 @@ use std::sync::{Arc, LazyLock};
 use crate::cache;
 use crate::error::AppError;
 use crate::poster::generate;
-use crate::services::db::{validate_poster_position, validate_badge_style, validate_label_style, default_label_style, validate_badge_direction, default_poster_badge_direction, resolve_badge_direction};
+use crate::services::db::{validate_poster_position, validate_badge_style, validate_label_style, default_label_style, validate_badge_direction, default_poster_badge_direction, resolve_badge_direction, resolve_badge_style};
 use crate::services::ratings::{self, RatingBadge, RatingSource};
 use crate::AppState;
 
@@ -114,8 +114,8 @@ pub async fn preview_poster(
         validate_poster_position(&query.poster_position)?;
         &query.poster_position
     };
-    let badge_style = if query.badge_style.is_empty() {
-        "h"
+    let raw_badge_style = if query.badge_style.is_empty() {
+        "d"
     } else {
         validate_badge_style(&query.badge_style)?;
         &query.badge_style
@@ -124,9 +124,10 @@ pub async fn preview_poster(
     let label_style = &query.label_style;
     validate_badge_direction(&query.badge_direction)?;
     let badge_direction = resolve_badge_direction(&query.badge_direction, position);
+    let badge_style = resolve_badge_style(raw_badge_style, &badge_direction);
     let suffix = ratings::ratings_cache_suffix(&query.ratings_order, query.ratings_limit);
     let pos_suffix = crate::poster::serve::poster_position_cache_suffix(position);
-    let bs_suffix = crate::poster::serve::badge_style_cache_suffix(badge_style);
+    let bs_suffix = crate::poster::serve::badge_style_cache_suffix(&badge_style);
     let ls_suffix = crate::poster::serve::label_style_cache_suffix(label_style);
     let bd_suffix = crate::poster::serve::badge_direction_cache_suffix(&badge_direction);
     let cache_key = format!("preview:{suffix}{pos_suffix}{bs_suffix}{ls_suffix}{bd_suffix}");
@@ -152,7 +153,6 @@ pub async fn preview_poster(
     let font = state.font.clone();
     let quality = state.config.poster_quality;
     let position = position.to_string();
-    let badge_style = badge_style.to_string();
     let label_style = label_style.to_string();
     let buf = tokio::task::spawn_blocking(move || {
         generate::render_poster_sync(poster_png, &badges, &font, quality, false, &position, &badge_style, &label_style, &badge_direction)

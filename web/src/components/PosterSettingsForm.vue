@@ -55,7 +55,7 @@ const editRatingsOrder = ref<string[]>(parseOrder(props.settings.ratings_order))
 const editPosterPosition = ref(props.settings.poster_position || 'bc')
 const editLogoRatingsLimit = ref(props.settings.logo_ratings_limit ?? 3)
 const editBackdropRatingsLimit = ref(props.settings.backdrop_ratings_limit ?? 3)
-const editPosterBadgeStyle = ref(props.settings.poster_badge_style || 'h')
+const editPosterBadgeStyle = ref(props.settings.poster_badge_style || 'd')
 const editLogoBadgeStyle = ref(props.settings.logo_badge_style || 'v')
 const editBackdropBadgeStyle = ref(props.settings.backdrop_badge_style || 'v')
 const editPosterLabelStyle = ref(props.settings.poster_label_style || 'i')
@@ -72,7 +72,7 @@ function applySettings(s: PosterSettings) {
   editPosterPosition.value = s.poster_position || 'bc'
   editLogoRatingsLimit.value = s.logo_ratings_limit ?? 3
   editBackdropRatingsLimit.value = s.backdrop_ratings_limit ?? 3
-  editPosterBadgeStyle.value = s.poster_badge_style || 'h'
+  editPosterBadgeStyle.value = s.poster_badge_style || 'd'
   editLogoBadgeStyle.value = s.logo_badge_style || 'v'
   editBackdropBadgeStyle.value = s.backdrop_badge_style || 'v'
   editPosterLabelStyle.value = s.poster_label_style || 'i'
@@ -489,6 +489,7 @@ const selectClass = 'flex h-9 w-full max-w-xs rounded-md border border-input bg-
               v-model="editPosterBadgeStyle"
               :class="selectClass"
             >
+              <option value="d">Default</option>
               <option value="h">Horizontal</option>
               <option value="v">Vertical</option>
             </select>
