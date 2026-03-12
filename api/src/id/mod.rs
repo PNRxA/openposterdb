@@ -25,6 +25,13 @@ pub struct ResolvedId {
     pub release_date: Option<String>,
 }
 
+pub fn format_tmdb_id_value(tmdb_id: u64, media_type: &MediaType) -> String {
+    match media_type {
+        MediaType::Movie => format!("movie-{tmdb_id}"),
+        MediaType::Tv => format!("series-{tmdb_id}"),
+    }
+}
+
 impl IdType {
     pub fn parse(s: &str) -> Result<Self, AppError> {
         match s {
@@ -200,6 +207,16 @@ mod tests {
         // Should not accept uppercase
         assert!(IdType::parse("IMDB").is_err());
         assert!(IdType::parse("Tmdb").is_err());
+    }
+
+    #[test]
+    fn format_tmdb_id_value_movie() {
+        assert_eq!(format_tmdb_id_value(278, &MediaType::Movie), "movie-278");
+    }
+
+    #[test]
+    fn format_tmdb_id_value_tv() {
+        assert_eq!(format_tmdb_id_value(1396, &MediaType::Tv), "series-1396");
     }
 }
 

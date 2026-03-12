@@ -147,6 +147,7 @@ async fn _setup_test_app(cors_origin: Option<String>, secure_cookies: bool) -> (
             .time_to_live(Duration::from_secs(60))
             .build(),
         render_semaphore: Arc::new(tokio::sync::Semaphore::new(4)),
+        cross_id_semaphore: Arc::new(tokio::sync::Semaphore::new(8)),
     });
 
     let app = build_app(state.clone());

@@ -61,6 +61,22 @@ async fn main() {
         .map(|v| v != "false" && v != "0")
         .unwrap_or(true);
 
+    // Log startup configuration
+    tracing::info!(
+        mdblist = config.mdblist_api_key.is_some(),
+        omdb = config.omdb_api_key.is_some(),
+        fanart = config.fanart_api_key.is_some(),
+        "rating providers configured"
+    );
+    tracing::info!(
+        cache_dir = %config.cache_dir,
+        db_dir = %config.db_dir,
+        poster_quality = config.poster_quality,
+        mem_cache_mb = config.poster_mem_cache_mb,
+        secure_cookies,
+        "server configuration"
+    );
+
     // Ensure cache and database directories exist
     tokio::fs::create_dir_all(&config.cache_dir)
         .await
@@ -205,16 +221,24 @@ async fn main() {
         .time_to_live(Duration::from_secs(60))
         .build();
 
+    let available_cpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(2);
+    tracing::info!(cpus = available_cpus, "detected available CPUs");
+
     let render_concurrency: usize = std::env::var("RENDER_CONCURRENCY")
         .ok()
         .and_then(|v| v.parse().ok())
-        .unwrap_or_else(|| {
-            std::thread::available_parallelism()
-                .map(|n| n.get() * 2)
-                .unwrap_or(4)
-        });
+        .unwrap_or(available_cpus * 2);
     let render_semaphore = Arc::new(tokio::sync::Semaphore::new(render_concurrency));
     tracing::info!(permits = render_concurrency, "render semaphore initialized");
+
+    let cross_id_concurrency: usize = std::env::var("CROSS_ID_CONCURRENCY")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(available_cpus);
+    let cross_id_semaphore = Arc::new(tokio::sync::Semaphore::new(cross_id_concurrency));
+    tracing::info!(permits = cross_id_concurrency, "cross-id semaphore initialized");
 
     let pending_last_used: Arc<DashMap<i32, ()>> = Arc::new(DashMap::new());
 
@@ -242,6 +266,7 @@ async fn main() {
         preview_cache,
         free_api_key_cache,
         render_semaphore,
+        cross_id_semaphore,
         config: config.clone(),
     });
 

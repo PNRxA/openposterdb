@@ -125,6 +125,8 @@ See [docker-compose.yml](docker-compose.yml) for the full compose configuration.
 | `COOKIE_SECURE` | `true` | HTTPS-only cookies |
 | `FANART_API_KEY` | — | [Fanart.tv](https://fanart.tv/get-an-api-key/) key (enables Fanart.tv as alternative poster source; required for logo and backdrop endpoints) |
 | `CORS_ORIGIN` | — | Allowed origin for admin requests |
+| `RENDER_CONCURRENCY` | `CPUs × 2` | Max concurrent image render tasks |
+| `CROSS_ID_CONCURRENCY` | `CPUs` | Max concurrent cross-ID cache write tasks |
 | `ADMIN_USERNAME` | — | Seed admin username on first run |
 | `ADMIN_PASSWORD` | — | Seed admin password on first run |
 
@@ -168,7 +170,7 @@ Cache keys uniquely identify a rendered image. They are used as keys in the in-m
 
 | Suffix | Format | Example | Description |
 |---|---|---|---|
-| Ratings | `@{keys}` | `@mal,imdb,lb` | Ordered rating sources (truncated to limit) |
+| Ratings | `@{chars}` | `@mil` | Single-char per source, no commas (`m`=MAL, `i`=IMDb, `l`=Letterboxd, `r`=RT, `a`=RT Audience, `c`=Metacritic, `t`=TMDB, `k`=Trakt) |
 | Position | `.p{pos}` | `.pbc`, `.pl` | Poster badge position (`bc`, `tc`, `l`, `r`, `tl`, `tr`, `bl`, `br`) |
 | Badge style | `.s{style}` | `.sh`, `.sv` | `h` = horizontal, `v` = vertical |
 | Label style | `.l{style}` | `.lt`, `.li` | `t` = text labels, `i` = icon labels |
@@ -181,8 +183,8 @@ Logos and backdrops include a kind prefix in their cache keys to distinguish the
 | Kind | Prefix |
 |---|---|
 | Poster | *(none)* |
-| Logo | `:l` |
-| Backdrop | `:b` |
+| Logo | `_l` |
+| Backdrop | `_b` |
 
 ### Fanart Variant Markers
 
@@ -190,10 +192,10 @@ When the poster source is fanart.tv, the cache key includes a variant marker ind
 
 | Variant | Marker | Description |
 |---|---|---|
-| Textless | `:f:tl` | Fanart image with no text overlay |
-| Language | `:f:{lang}` | Fanart image matching language (e.g. `:f:en`) |
-| Negative (textless) | `:f:tl:neg` | No textless image available (stored in negative cache) |
-| Negative (language) | `:f:{lang}:neg` | No language image available |
+| Textless | `_f_tl` | Fanart image with no text overlay |
+| Language | `_f_{lang}` | Fanart image matching language (e.g. `_f_en`) |
+| Negative (textless) | `_f_tl_neg` | No textless image available (stored in negative cache) |
+| Negative (language) | `_f_{lang}_neg` | No language image available |
 
 ### Database Values
 
@@ -211,6 +213,7 @@ Settings are stored as short single-character or two-character codes:
 
 | Setting | Values | Meaning |
 |---|---|---|
+| `poster_source` | `t`, `f` | TMDB, Fanart.tv |
 | `badge_style` | `h`, `v` | Horizontal, Vertical |
 | `label_style` | `t`, `i` | Text, Icon |
 | `badge_direction` | `d`, `h`, `v` | Default (auto-resolved by position), Horizontal, Vertical |
@@ -219,18 +222,27 @@ Settings are stored as short single-character or two-character codes:
 ### Example Cache Keys
 
 ```
-# TMDB poster, 3 ratings (mal,imdb,lb), bottom-center, horizontal badges, icon labels, horizontal direction
-imdb/tt0111161@mal,imdb,lb.pbc.sh.li.dh
+# TMDB poster, 3 ratings (MAL, IMDb, Letterboxd), bottom-center, horizontal badges, icon labels, horizontal direction
+imdb/tt0111161@mil.pbc.sh.li.dh
 
 # Fanart textless poster
-imdb/tt0111161:f:tl@mal,imdb,lb.pbc.sh.li.dh
+imdb/tt0111161_f_tl@mil.pbc.sh.li.dh
 
 # Logo with 3 ratings, horizontal badges, text labels
-imdb/tt0111161:l:f:en@mal,imdb,lb.sh.lt
+imdb/tt0111161_l_f_en@mil.sh.lt
 
 # Backdrop with vertical badges, icon labels
-imdb/tt0111161:b@mal,imdb,lb.sv.li
+imdb/tt0111161_b@mil.sv.li
 ```
+
+### Cross-ID Cache
+
+When a poster is generated via one ID type (e.g. IMDB), the rendered image is also written to the filesystem cache under all resolved alternate IDs (TMDB, TVDB). This avoids redundant image generation when the same content is requested via different ID types.
+
+- Alternate IDs are determined from the moka-cached `ResolvedId` (no extra API calls)
+- Writes are best-effort and parallelized — errors are logged but not propagated
+- Only the filesystem cache and DB metadata are populated; the in-memory cache is not — alternate keys get promoted to memory on their first actual request
+- Applies to all image types: posters, logos, and backdrops
 
 ### Staleness and Background Refresh
 

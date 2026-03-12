@@ -96,13 +96,21 @@ pub struct RatingBadge {
     pub value: String,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct RatingsResult {
+    pub badges: Vec<RatingBadge>,
+    pub tmdb_id: Option<u64>,
+    pub tvdb_id: Option<u64>,
+    pub imdb_id: Option<String>,
+}
+
 pub async fn fetch_ratings(
     resolved: &ResolvedId,
     tmdb: &TmdbClient,
     omdb: Option<&OmdbClient>,
     mdblist: Option<&MdblistClient>,
-    cache: &moka::future::Cache<String, Vec<RatingBadge>>,
-) -> Vec<RatingBadge> {
+    cache: &moka::future::Cache<String, RatingsResult>,
+) -> RatingsResult {
     let media_type_str = match resolved.media_type {
         MediaType::Movie => "movie",
         MediaType::Tv => "tv",
@@ -114,13 +122,16 @@ pub async fn fetch_ratings(
     let omdb = omdb.cloned();
     let mdblist = mdblist.cloned();
 
-    cache
+    let coalesced = cache
         .try_get_with(key, async move {
-            let result = fetch_ratings_inner(&resolved, &tmdb, omdb.as_ref(), mdblist.as_ref()).await;
+            let result =
+                fetch_ratings_inner(&resolved, &tmdb, omdb.as_ref(), mdblist.as_ref()).await;
             Ok::<_, std::convert::Infallible>(result)
         })
         .await
-        .unwrap_or_default()
+        .unwrap_or_default();
+
+    coalesced
 }
 
 async fn fetch_ratings_inner(
@@ -128,13 +139,18 @@ async fn fetch_ratings_inner(
     tmdb: &TmdbClient,
     omdb: Option<&OmdbClient>,
     mdblist: Option<&MdblistClient>,
-) -> Vec<RatingBadge> {
+) -> RatingsResult {
     let tmdb_fut = fetch_tmdb_rating(resolved, tmdb);
     let omdb_fut = fetch_omdb_ratings(resolved.imdb_id.as_deref(), omdb);
     let mdblist_fut = fetch_mdblist_ratings(resolved, mdblist);
 
-    let (tmdb_badges, omdb_badges, mdblist_badges) =
+    let (tmdb_badges, omdb_badges, mdblist_raw) =
         tokio::join!(tmdb_fut, omdb_fut, mdblist_fut);
+
+    let (mdblist_badges, mdb_tmdb_id, mdb_tvdb_id, mdb_imdb_id) = match mdblist_raw {
+        Some((badges, tmdb_id, tvdb_id, imdb_id)) => (Some(badges), tmdb_id, tvdb_id, imdb_id),
+        None => (None, None, None, None),
+    };
 
     // Collect which sources OMDb already provided
     let omdb_has = |src: RatingSource| -> bool {
@@ -172,7 +188,12 @@ async fn fetch_ratings_inner(
         find_mdb(RatingSource::Mal),
     ];
 
-    ordered.into_iter().flatten().collect()
+    RatingsResult {
+        badges: ordered.into_iter().flatten().collect(),
+        tmdb_id: mdb_tmdb_id,
+        tvdb_id: mdb_tvdb_id,
+        imdb_id: mdb_imdb_id,
+    }
 }
 
 async fn fetch_tmdb_rating(resolved: &ResolvedId, tmdb: &TmdbClient) -> Option<RatingBadge> {
@@ -481,7 +502,7 @@ mod tests {
 async fn fetch_mdblist_ratings(
     resolved: &ResolvedId,
     mdblist: Option<&MdblistClient>,
-) -> Option<Vec<RatingBadge>> {
+) -> Option<(Vec<RatingBadge>, Option<u64>, Option<u64>, Option<String>)> {
     let client = mdblist?;
     let imdb_id = resolved.imdb_id.as_deref()?;
 
@@ -530,5 +551,5 @@ async fn fetch_mdblist_ratings(
         }
     }
 
-    Some(badges)
+    Some((badges, resp.ids.tmdb, resp.ids.tvdb, resp.ids.imdb))
 }

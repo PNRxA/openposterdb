@@ -13,6 +13,15 @@ pub struct MdblistClient {
 pub struct MdblistResponse {
     #[serde(default)]
     pub ratings: Vec<MdblistRating>,
+    #[serde(default)]
+    pub ids: MdblistIds,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct MdblistIds {
+    pub imdb: Option<String>,
+    pub tmdb: Option<u64>,
+    pub tvdb: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]

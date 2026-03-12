@@ -30,7 +30,6 @@ use services::db::PosterSettings;
 use services::fanart::{FanartClient, FanartImages};
 use services::mdblist::MdblistClient;
 use services::omdb::OmdbClient;
-use services::ratings::RatingBadge;
 use services::tmdb::TmdbClient;
 
 #[derive(Clone)]
@@ -48,7 +47,7 @@ pub struct AppState {
     pub api_key_cache: moka::future::Cache<String, Option<i32>>,
     pub poster_inflight: moka::future::Cache<String, bytes::Bytes>,
     pub id_cache: moka::future::Cache<String, ResolvedId>,
-    pub ratings_cache: moka::future::Cache<String, Vec<RatingBadge>>,
+    pub ratings_cache: moka::future::Cache<String, services::ratings::RatingsResult>,
     pub poster_mem_cache: moka::future::Cache<String, MemCacheEntry>,
     pub pending_last_used: Arc<DashMap<i32, ()>>,
     pub fanart: Option<FanartClient>,
@@ -61,6 +60,7 @@ pub struct AppState {
     pub preview_cache: moka::future::Cache<String, bytes::Bytes>,
     pub free_api_key_cache: moka::future::Cache<(), bool>,
     pub render_semaphore: Arc<tokio::sync::Semaphore>,
+    pub cross_id_semaphore: Arc<tokio::sync::Semaphore>,
 }
 
 impl AppState {

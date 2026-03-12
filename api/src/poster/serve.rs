@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use crate::cache::{self, MemCacheEntry};
 use crate::error::AppError;
-use crate::id::{self, IdType, MediaType};
+use crate::id::{self, IdType, MediaType, format_tmdb_id_value};
 use crate::poster::generate;
 use crate::services::db::{resolve_badge_direction, PosterSettings, POS_BOTTOM_CENTER, SOURCE_FANART};
 use crate::services::fanart::{FanartClient, FanartImages, FanartPoster, PosterMatch};
@@ -62,8 +62,8 @@ impl ImageKind {
     fn kind_prefix(self) -> &'static str {
         match self {
             ImageKind::Poster => "",
-            ImageKind::Logo => ":l",
-            ImageKind::Backdrop => ":b",
+            ImageKind::Logo => "_l",
+            ImageKind::Backdrop => "_b",
         }
     }
 
@@ -106,6 +106,104 @@ pub fn label_style_cache_suffix(style: &str) -> String {
 /// Returns a cache key suffix for badge direction.
 pub fn badge_direction_cache_suffix(dir: &str) -> String {
     format!(".d{dir}")
+}
+
+/// IDs available for cross-ID cache population, built from the resolved ID
+/// with optional backfill from MDBList ratings response.
+struct CrossIdInfo {
+    imdb_id: Option<String>,
+    tmdb_id: u64,
+    tvdb_id: Option<u64>,
+    media_type: MediaType,
+    release_date: Option<String>,
+}
+
+impl CrossIdInfo {
+    /// Build from a resolved ID, merging in any extra IDs from the ratings response.
+    fn from_resolved(resolved: &id::ResolvedId, ratings: &ratings::RatingsResult) -> Self {
+        Self {
+            imdb_id: resolved.imdb_id.clone().or_else(|| ratings.imdb_id.clone()),
+            tmdb_id: resolved.tmdb_id,
+            tvdb_id: resolved.tvdb_id.or(ratings.tvdb_id),
+            media_type: resolved.media_type,
+            release_date: resolved.release_date.clone(),
+        }
+    }
+}
+
+/// Spawn a background task to write cache entries for all alternate IDs.
+/// Uses `CrossIdInfo` to determine alternate ID paths.
+/// All writes are best-effort — errors are logged but not propagated.
+/// Does NOT populate memory cache; alternate keys get promoted on first actual request.
+fn spawn_cross_id_cache(
+    state: &AppState,
+    cross_ids: CrossIdInfo,
+    id_type: IdType,
+    cache_suffix: String,
+    image_type: cache::ImageType,
+    bytes: Bytes,
+) {
+    let permit = match state.cross_id_semaphore.clone().try_acquire_owned() {
+        Ok(p) => p,
+        Err(_) => {
+            tracing::debug!("cross-id cache skipped: semaphore full");
+            return;
+        }
+    };
+    let state = state.clone();
+    tokio::spawn(async move {
+        let _permit = permit;
+
+        // Build list of (id_type_str, id_value) for alternate IDs
+        let mut alternates: Vec<(&str, String)> = Vec::new();
+
+        if let Some(ref imdb_id) = cross_ids.imdb_id {
+            if id_type != IdType::Imdb {
+                alternates.push(("imdb", imdb_id.clone()));
+            }
+        }
+        {
+            let tmdb_val = format_tmdb_id_value(cross_ids.tmdb_id, &cross_ids.media_type);
+            if id_type != IdType::Tmdb {
+                alternates.push(("tmdb", tmdb_val));
+            }
+        }
+        if let Some(tvdb_id) = cross_ids.tvdb_id {
+            if id_type != IdType::Tvdb {
+                alternates.push(("tvdb", tvdb_id.to_string()));
+            }
+        }
+
+        let mut set = tokio::task::JoinSet::new();
+        for (alt_type, alt_value) in &alternates {
+            let cache_value = format!("{alt_value}{cache_suffix}");
+            let alt_cache_path = match cache::typed_cache_path(&state.config.cache_dir, image_type, alt_type, &cache_value) {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::warn!(error = %e, alt_type, alt_value, "cross-id cache path failed");
+                    continue;
+                }
+            };
+            let alt_cache_key = format!("{alt_type}/{alt_value}{cache_suffix}");
+
+            let state = state.clone();
+            let bytes = bytes.clone();
+            let release_date = cross_ids.release_date.clone();
+            set.spawn(async move {
+                if let Err(e) = cache::write(&alt_cache_path, &bytes).await {
+                    tracing::warn!(error = %e, key = %alt_cache_key, "cross-id cache write failed");
+                }
+                if let Err(e) = cache::upsert_meta_db(&state.db, &alt_cache_key, release_date.as_deref(), image_type).await {
+                    tracing::warn!(error = %e, key = %alt_cache_key, "cross-id meta write failed");
+                }
+            });
+        }
+        while let Some(result) = set.join_next().await {
+            if let Err(e) = result {
+                tracing::error!(error = %e, "cross-id cache task panicked");
+            }
+        }
+    });
 }
 
 /// Check in-memory and filesystem caches for a cached image, triggering a
@@ -214,12 +312,14 @@ pub async fn handle_inner(
     let cache_key = format!("{id_type_str}/{id_value}{ratings_suffix}{pos_suffix}{bs_suffix}{ls_suffix}{bd_suffix}");
 
     // Check caches (memory → filesystem)
+    let cache_suffix: Arc<str> = format!("{ratings_suffix}{pos_suffix}{bs_suffix}{ls_suffix}{bd_suffix}").into();
     {
         let id_type = id_type;
         let id_value = id_value.to_string();
+        let cache_suffix = cache_suffix.clone();
         let settings = settings.clone();
         if let Some(bytes) = check_caches(state, &cache_key, &cache_path, |s, k, p| {
-            trigger_background_refresh(s, k, p, id_type, &id_value, &settings);
+            trigger_background_refresh(s, k, p, id_type, &id_value, &cache_suffix, &settings);
         }).await? {
             return Ok(bytes);
         }
@@ -234,11 +334,13 @@ pub async fn handle_inner(
     let bytes: Bytes = state
         .poster_inflight
         .try_get_with(cache_key.clone(), async move {
-            let (bytes, rd, _used_fanart) =
+            let (bytes, rd, _used_fanart, cross_ids) =
                 generate_poster_with_source(&state2, id_type, &id_value2, &settings2).await?;
             cache::write(&cache_path2, &bytes).await?;
             cache::upsert_meta_db(&state2.db, &cache_key2, rd.as_deref(), cache::ImageType::Poster).await?;
-            Ok::<_, AppError>(Bytes::from(bytes))
+            let bytes = Bytes::from(bytes);
+            spawn_cross_id_cache(&state2, cross_ids, id_type, cache_suffix.to_string(), cache::ImageType::Poster, bytes.clone());
+            Ok::<_, AppError>(bytes)
         })
         .await
         .map_err(|e| AppError::Other(e.to_string()))?;
@@ -265,16 +367,18 @@ async fn check_fanart_cache_variant(
     cache_path: &std::path::Path,
     id_type: IdType,
     id_value: &str,
+    cache_suffix: &str,
     settings: &PosterSettings,
 ) -> Result<Option<Bytes>, AppError> {
     let id_value = id_value.to_string();
+    let cache_suffix = cache_suffix.to_string();
     let settings = settings.clone();
     check_caches(state, cache_key, cache_path, |s, k, p| {
-        trigger_background_refresh(s, k, p, id_type, &id_value, &settings);
+        trigger_background_refresh(s, k, p, id_type, &id_value, &cache_suffix, &settings);
     }).await
 }
 
-/// Build a fanart cache key and filesystem path from a variant suffix (e.g. ":f:tl").
+/// Build a fanart cache key and filesystem path from a variant suffix (e.g. "_f_tl").
 fn fanart_variant_paths(
     cache_dir: &str,
     id_type_str: &str,
@@ -287,8 +391,7 @@ fn fanart_variant_paths(
     bd_suffix: &str,
 ) -> Result<(String, std::path::PathBuf), AppError> {
     let cache_key = format!("{id_type_str}/{id_value}{variant}{ratings_suffix}{pos_suffix}{bs_suffix}{ls_suffix}{bd_suffix}");
-    let path_variant = variant.replace(':', "_");
-    let cache_path_base = format!("{id_value}{path_variant}{ratings_suffix}{pos_suffix}{bs_suffix}{ls_suffix}{bd_suffix}");
+    let cache_path_base = format!("{id_value}{variant}{ratings_suffix}{pos_suffix}{bs_suffix}{ls_suffix}{bd_suffix}");
     let cache_path = cache::typed_cache_path(cache_dir, cache::ImageType::Poster, id_type_str, &cache_path_base)?;
     Ok((cache_key, cache_path))
 }
@@ -305,12 +408,12 @@ async fn try_fanart_path(
     // Build the list of cache variants to check.
     // When textless is requested but we know it's unavailable (negative cache),
     // skip the textless key and go straight to language.
-    let neg_key = format!("{id_type_str}/{id_value}:f:tl:neg");
+    let neg_key = format!("{id_type_str}/{id_value}_f_tl_neg");
     let textless_known_missing = settings.fanart_textless
         && state.fanart_negative.get(&neg_key).await.is_some();
 
-    let lang_variant = format!(":f:{}", settings.fanart_lang);
-    let lang_neg_key = format!("{id_type_str}/{id_value}:f:{}:neg", settings.fanart_lang);
+    let lang_variant = format!("_f_{}", settings.fanart_lang);
+    let lang_neg_key = format!("{id_type_str}/{id_value}_f_{}_neg", settings.fanart_lang);
     let lang_known_missing = state.fanart_negative.get(&lang_neg_key).await.is_some();
 
     // All fanart variants are known-missing — skip generation and fall through to TMDB
@@ -328,7 +431,7 @@ async fn try_fanart_path(
     // Check cached variants (textless first if requested, then language)
     let mut variants_to_check: Vec<String> = Vec::new();
     if settings.fanart_textless && !textless_known_missing {
-        variants_to_check.push(":f:tl".to_string());
+        variants_to_check.push("_f_tl".to_string());
     }
     if !lang_known_missing {
         variants_to_check.push(lang_variant.clone());
@@ -337,8 +440,9 @@ async fn try_fanart_path(
     for variant in &variants_to_check {
         let (cache_key, cache_path) =
             fanart_variant_paths(&state.config.cache_dir, id_type_str, id_value, variant, &ratings_suffix, &pos_suffix, &bs_suffix, &ls_suffix, &bd_suffix)?;
+        let variant_cache_suffix = format!("{variant}{ratings_suffix}{pos_suffix}{bs_suffix}{ls_suffix}{bd_suffix}");
         if let Some(bytes) =
-            check_fanart_cache_variant(state, &cache_key, &cache_path, id_type, id_value, settings).await?
+            check_fanart_cache_variant(state, &cache_key, &cache_path, id_type, id_value, &variant_cache_suffix, settings).await?
         {
             return Ok(Some(bytes));
         }
@@ -349,20 +453,22 @@ async fn try_fanart_path(
     let result = generate_poster_with_source(state, id_type, id_value, settings).await;
 
     match result {
-        Ok((bytes, rd, Some(tier))) => {
+        Ok((bytes, rd, Some(tier), cross_ids)) => {
             if settings.fanart_textless && tier == PosterMatch::Language {
                 state.fanart_negative.insert(neg_key, ()).await;
             }
 
             let actual_variant = match tier {
-                PosterMatch::Textless => ":f:tl".to_string(),
-                PosterMatch::Language => format!(":f:{}", settings.fanart_lang),
+                PosterMatch::Textless => "_f_tl".to_string(),
+                PosterMatch::Language => format!("_f_{}", settings.fanart_lang),
             };
             let (cache_key, cache_path) =
                 fanart_variant_paths(&state.config.cache_dir, id_type_str, id_value, &actual_variant, &ratings_suffix, &pos_suffix, &bs_suffix, &ls_suffix, &bd_suffix)?;
             let _ = cache::write(&cache_path, &bytes).await;
             let _ = cache::upsert_meta_db(&state.db, &cache_key, rd.as_deref(), cache::ImageType::Poster).await;
+            let fanart_cache_suffix = format!("{actual_variant}{ratings_suffix}{pos_suffix}{bs_suffix}{ls_suffix}{bd_suffix}");
             let bytes = Bytes::from(bytes);
+            spawn_cross_id_cache(state, cross_ids, id_type, fanart_cache_suffix, cache::ImageType::Poster, bytes.clone());
             state
                 .poster_mem_cache
                 .insert(
@@ -375,7 +481,7 @@ async fn try_fanart_path(
                 .await;
             Ok(Some(bytes))
         }
-        Ok((_bytes, _rd, None)) => {
+        Ok((_bytes, _rd, None, _cross_ids)) => {
             if settings.fanart_textless {
                 state.fanart_negative.insert(neg_key, ()).await;
             }
@@ -390,15 +496,17 @@ async fn try_fanart_path(
 }
 
 /// Spawn a background refresh task. The `generate` future produces
-/// `(image_bytes, release_date, image_type)` on success.
+/// `(image_bytes, release_date, image_type, cross_id_info)` on success.
+/// `cross_id` optionally provides (id_type, cache_suffix) for cross-ID cache writes.
 fn spawn_background_refresh<F>(
     state: &AppState,
     cache_key: &str,
     cache_path: &std::path::Path,
+    cross_id: Option<(IdType, String)>,
     generate: F,
 )
 where
-    F: std::future::Future<Output = Result<(Vec<u8>, Option<String>, cache::ImageType), AppError>>
+    F: std::future::Future<Output = Result<(Vec<u8>, Option<String>, cache::ImageType, CrossIdInfo), AppError>>
         + Send
         + 'static,
 {
@@ -412,7 +520,7 @@ where
     tokio::spawn(async move {
         tracing::info!(key = %cache_key, "background refresh started");
         match generate.await {
-            Ok((bytes, rd, image_type)) => {
+            Ok((bytes, rd, image_type, cross_ids)) => {
                 if let Err(e) = cache::write(&cache_path, &bytes).await {
                     tracing::error!(error = %e, "failed to write cache");
                 }
@@ -421,12 +529,16 @@ where
                 {
                     tracing::error!(error = %e, "failed to write meta to db");
                 }
+                let bytes = Bytes::from(bytes);
+                if let Some((id_type, suffix)) = cross_id {
+                    spawn_cross_id_cache(&state, cross_ids, id_type, suffix, image_type, bytes.clone());
+                }
                 state
                     .poster_mem_cache
                     .insert(
                         cache_key.clone(),
                         MemCacheEntry {
-                            bytes: bytes.into(),
+                            bytes,
                             last_checked: Instant::now(),
                         },
                     )
@@ -446,15 +558,17 @@ fn trigger_background_refresh(
     cache_path: &std::path::Path,
     id_type: IdType,
     id_value: &str,
+    cache_suffix: &str,
     settings: &PosterSettings,
 ) {
     let state2 = state.clone();
     let id_value = id_value.to_string();
     let settings = settings.clone();
-    spawn_background_refresh(state, cache_key, cache_path, async move {
-        let (bytes, rd, _tier) =
+    let cross_id = Some((id_type, cache_suffix.to_string()));
+    spawn_background_refresh(state, cache_key, cache_path, cross_id, async move {
+        let (bytes, rd, _tier, cross_ids) =
             generate_poster_with_source(&state2, id_type, &id_value, &settings).await?;
-        Ok((bytes, rd, cache::ImageType::Poster))
+        Ok((bytes, rd, cache::ImageType::Poster, cross_ids))
     });
 }
 
@@ -464,13 +578,15 @@ fn trigger_fanart_background_refresh(
     cache_path: &std::path::Path,
     id_type: IdType,
     id_value: &str,
+    cache_suffix: &str,
     settings: &PosterSettings,
     fanart_kind: FanartImageKind,
 ) {
     let state2 = state.clone();
     let id_value = id_value.to_string();
     let settings = settings.clone();
-    spawn_background_refresh(state, cache_key, cache_path, async move {
+    let cross_id = Some((id_type, cache_suffix.to_string()));
+    spawn_background_refresh(state, cache_key, cache_path, cross_id, async move {
         let fanart = state2
             .fanart
             .as_ref()
@@ -485,7 +601,7 @@ fn trigger_fanart_background_refresh(
 
         let resolved = id::resolve(id_type, &id_value, &state2.tmdb, &state2.id_cache).await?;
 
-        let badges = ratings::fetch_ratings(
+        let ratings_result = ratings::fetch_ratings(
             &resolved,
             &state2.tmdb,
             state2.omdb.as_ref(),
@@ -493,11 +609,12 @@ fn trigger_fanart_background_refresh(
             &state2.ratings_cache,
         )
         .await;
+        let cross_ids = CrossIdInfo::from_resolved(&resolved, &ratings_result);
         let type_ratings_limit = match fanart_kind {
             FanartImageKind::Logo => settings.logo_ratings_limit,
             FanartImageKind::Backdrop => settings.backdrop_ratings_limit,
         };
-        let badges = ratings::apply_rating_preferences(badges, &settings.ratings_order, type_ratings_limit);
+        let badges = ratings::apply_rating_preferences(ratings_result.badges, &settings.ratings_order, type_ratings_limit);
 
         let fanart_result = fetch_fanart_image(
             fanart,
@@ -531,17 +648,17 @@ fn trigger_fanart_background_refresh(
             FanartImageKind::Backdrop => generate::generate_backdrop(image_bytes, badges, state2.font.clone(), state2.config.poster_quality, type_badge_style, type_label_style, state2.render_semaphore.clone()).await?,
         };
 
-        Ok((bytes, resolved.release_date, image_type))
+        Ok((bytes, cross_ids.release_date.clone(), image_type, cross_ids))
     });
 }
 
-/// Returns (poster_bytes, release_date, fanart_match_tier)
+/// Returns (poster_bytes, release_date, fanart_match_tier, cross_id_info)
 async fn generate_poster_with_source(
     state: &AppState,
     id_type: IdType,
     id_value: &str,
     settings: &PosterSettings,
-) -> Result<(Vec<u8>, Option<String>, Option<PosterMatch>), AppError> {
+) -> Result<(Vec<u8>, Option<String>, Option<PosterMatch>, CrossIdInfo), AppError> {
     let resolved = id::resolve(id_type, id_value, &state.tmdb, &state.id_cache).await?;
 
     let poster_path = resolved
@@ -549,7 +666,7 @@ async fn generate_poster_with_source(
         .as_deref()
         .ok_or_else(|| AppError::Other("no poster available".into()))?;
 
-    let badges = ratings::fetch_ratings(
+    let ratings_result = ratings::fetch_ratings(
         &resolved,
         &state.tmdb,
         state.omdb.as_ref(),
@@ -558,7 +675,9 @@ async fn generate_poster_with_source(
     )
     .await;
 
-    let badges = ratings::apply_rating_preferences(badges, &settings.ratings_order, settings.ratings_limit);
+    let cross_ids = CrossIdInfo::from_resolved(&resolved, &ratings_result);
+
+    let badges = ratings::apply_rating_preferences(ratings_result.badges, &settings.ratings_order, settings.ratings_limit);
 
     // Try to fetch poster bytes from fanart.tv if configured
     let fanart_result = if settings.poster_source == SOURCE_FANART {
@@ -602,7 +721,7 @@ async fn generate_poster_with_source(
     })
     .await?;
 
-    Ok((bytes, resolved.release_date, match_tier))
+    Ok((bytes, cross_ids.release_date.clone(), match_tier, cross_ids))
 }
 
 /// Result of a fanart poster fetch, indicating what tier matched.
@@ -799,11 +918,11 @@ pub async fn handle_fanart_image_inner(
     let fanart_textless = matches!(kind, ImageKind::Poster) && settings.fanart_textless;
 
     // Check negative cache — skip generation if we already know there's nothing
-    let neg_textless_key = format!("{id_type_str}/{id_value}{kind_prefix}:f:tl:neg");
+    let neg_textless_key = format!("{id_type_str}/{id_value}{kind_prefix}_f_tl_neg");
     let textless_known_missing = fanart_textless
         && state.fanart_negative.get(&neg_textless_key).await.is_some();
 
-    let neg_lang_key = format!("{id_type_str}/{id_value}{kind_prefix}:f:{}:neg", fanart_lang);
+    let neg_lang_key = format!("{id_type_str}/{id_value}{kind_prefix}_f_{}_neg", fanart_lang);
     let lang_known_missing = state.fanart_negative.get(&neg_lang_key).await.is_some();
 
     if lang_known_missing && (!fanart_textless || textless_known_missing) {
@@ -812,24 +931,25 @@ pub async fn handle_fanart_image_inner(
 
     let variant = match kind {
         ImageKind::Backdrop => kind_prefix.to_string(),
-        ImageKind::Logo => format!("{kind_prefix}:f:{fanart_lang}"),
-        ImageKind::Poster => format!("{kind_prefix}:f:{fanart_lang}{}", if fanart_textless { ":tl" } else { "" }),
+        ImageKind::Logo => format!("{kind_prefix}_f_{fanart_lang}"),
+        ImageKind::Poster => format!("{kind_prefix}_f_{fanart_lang}{}", if fanart_textless { "_tl" } else { "" }),
     };
     let image_type = match fanart_kind {
         FanartImageKind::Logo => cache::ImageType::Logo,
         FanartImageKind::Backdrop => cache::ImageType::Backdrop,
     };
     let cache_key = format!("{id_type_str}/{id_value}{variant}{ratings_suffix}{bs_suffix}{ls_suffix}");
-    let path_variant = variant.replace(':', "_");
-    let cache_path_base = format!("{id_value}{path_variant}{ratings_suffix}{bs_suffix}{ls_suffix}");
+    let cache_path_base = format!("{id_value}{variant}{ratings_suffix}{bs_suffix}{ls_suffix}");
     let cache_path = cache::typed_cache_path(&state.config.cache_dir, image_type, id_type_str, &cache_path_base)?;
 
     // Check caches (memory → filesystem)
+    let fanart_cache_suffix: Arc<str> = format!("{variant}{ratings_suffix}{bs_suffix}{ls_suffix}").into();
     {
         let id_value = id_value.to_string();
+        let fanart_cache_suffix = fanart_cache_suffix.clone();
         let settings = settings.clone();
         if let Some(bytes) = check_caches(state, &cache_key, &cache_path, |s, k, p| {
-            trigger_fanart_background_refresh(s, k, p, id_type, &id_value, &settings, fanart_kind);
+            trigger_fanart_background_refresh(s, k, p, id_type, &id_value, &fanart_cache_suffix, &settings, fanart_kind);
         }).await? {
             return Ok(bytes);
         }
@@ -840,6 +960,7 @@ pub async fn handle_fanart_image_inner(
     let cache_key2 = cache_key.clone();
     let cache_path2 = cache_path.clone();
     let id_value2 = id_value.to_string();
+    let fanart_cache_suffix2 = fanart_cache_suffix.clone();
     let settings2 = settings.clone();
     let fanart2 = fanart.clone();
     let neg_textless_key2 = neg_textless_key.clone();
@@ -852,7 +973,7 @@ pub async fn handle_fanart_image_inner(
         .try_get_with(cache_key.clone(), async move {
             let resolved = id::resolve(id_type, &id_value2, &state2.tmdb, &state2.id_cache).await?;
 
-            let badges = ratings::fetch_ratings(
+            let ratings_result = ratings::fetch_ratings(
                 &resolved,
                 &state2.tmdb,
                 state2.omdb.as_ref(),
@@ -860,7 +981,8 @@ pub async fn handle_fanart_image_inner(
                 &state2.ratings_cache,
             )
             .await;
-            let badges = ratings::apply_rating_preferences(badges, &settings2.ratings_order, type_ratings_limit);
+            let cross_ids = CrossIdInfo::from_resolved(&resolved, &ratings_result);
+            let badges = ratings::apply_rating_preferences(ratings_result.badges, &settings2.ratings_order, type_ratings_limit);
 
             let fanart_result = fetch_fanart_image(
                 &fanart2,
@@ -896,8 +1018,10 @@ pub async fn handle_fanart_image_inner(
             };
 
             let _ = cache::write(&cache_path2, &bytes).await;
-            let _ = cache::upsert_meta_db(&state2.db, &cache_key2, resolved.release_date.as_deref(), image_type).await;
-            Ok::<_, AppError>(Bytes::from(bytes))
+            let _ = cache::upsert_meta_db(&state2.db, &cache_key2, cross_ids.release_date.as_deref(), image_type).await;
+            let bytes = Bytes::from(bytes);
+            spawn_cross_id_cache(&state2, cross_ids, id_type, fanart_cache_suffix2.to_string(), image_type, bytes.clone());
+            Ok::<_, AppError>(bytes)
         })
         .await
         .map_err(|e| AppError::Other(e.to_string()))?;
@@ -916,8 +1040,8 @@ mod tests {
     #[test]
     fn image_kind_prefix() {
         assert_eq!(ImageKind::Poster.kind_prefix(), "");
-        assert_eq!(ImageKind::Logo.kind_prefix(), ":l");
-        assert_eq!(ImageKind::Backdrop.kind_prefix(), ":b");
+        assert_eq!(ImageKind::Logo.kind_prefix(), "_l");
+        assert_eq!(ImageKind::Backdrop.kind_prefix(), "_b");
     }
 
     #[test]
@@ -970,5 +1094,80 @@ mod tests {
     fn label_style_cache_suffix_values() {
         assert_eq!(label_style_cache_suffix("t"), ".lt");
         assert_eq!(label_style_cache_suffix("i"), ".li");
+    }
+
+    #[test]
+    fn badge_direction_cache_suffix_values() {
+        assert_eq!(badge_direction_cache_suffix("h"), ".dh");
+        assert_eq!(badge_direction_cache_suffix("v"), ".dv");
+        assert_eq!(badge_direction_cache_suffix("d"), ".dd");
+    }
+
+    #[test]
+    fn cross_id_info_merges_resolved_and_ratings() {
+        let resolved = id::ResolvedId {
+            imdb_id: Some("tt1234567".into()),
+            tmdb_id: 100,
+            tvdb_id: None,
+            media_type: MediaType::Movie,
+            poster_path: None,
+            release_date: Some("2020-01-01".into()),
+        };
+        let ratings = ratings::RatingsResult {
+            badges: vec![],
+            tmdb_id: Some(100),
+            tvdb_id: Some(999),
+            imdb_id: Some("tt1234567".into()),
+        };
+        let info = CrossIdInfo::from_resolved(&resolved, &ratings);
+        assert_eq!(info.imdb_id.as_deref(), Some("tt1234567"));
+        assert_eq!(info.tmdb_id, 100);
+        // tvdb_id backfilled from ratings when resolved has None
+        assert_eq!(info.tvdb_id, Some(999));
+        assert_eq!(info.release_date.as_deref(), Some("2020-01-01"));
+    }
+
+    #[test]
+    fn cross_id_info_resolved_takes_precedence() {
+        let resolved = id::ResolvedId {
+            imdb_id: Some("tt1111111".into()),
+            tmdb_id: 200,
+            tvdb_id: Some(500),
+            media_type: MediaType::Tv,
+            poster_path: None,
+            release_date: None,
+        };
+        let ratings = ratings::RatingsResult {
+            badges: vec![],
+            tmdb_id: Some(200),
+            tvdb_id: Some(999),
+            imdb_id: Some("tt2222222".into()),
+        };
+        let info = CrossIdInfo::from_resolved(&resolved, &ratings);
+        // Resolved values take precedence over ratings
+        assert_eq!(info.imdb_id.as_deref(), Some("tt1111111"));
+        assert_eq!(info.tvdb_id, Some(500));
+    }
+
+    #[test]
+    fn cross_id_info_backfills_imdb_from_ratings() {
+        let resolved = id::ResolvedId {
+            imdb_id: None,
+            tmdb_id: 300,
+            tvdb_id: None,
+            media_type: MediaType::Movie,
+            poster_path: None,
+            release_date: None,
+        };
+        let ratings = ratings::RatingsResult {
+            badges: vec![],
+            tmdb_id: None,
+            tvdb_id: Some(777),
+            imdb_id: Some("tt9999999".into()),
+        };
+        let info = CrossIdInfo::from_resolved(&resolved, &ratings);
+        // Both backfilled from ratings
+        assert_eq!(info.imdb_id.as_deref(), Some("tt9999999"));
+        assert_eq!(info.tvdb_id, Some(777));
     }
 }
