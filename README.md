@@ -280,3 +280,24 @@ When `ENABLE_CDN_REDIRECTS=true`, authenticated poster requests (`/{api_key}/...
 The redirect response uses `Cache-Control: private, max-age=300` so the CDN does not cache the redirect itself (it contains the API key path). The `/c/` image response uses `Cache-Control: public, max-age=86400, stale-while-revalidate=604800` for long CDN caching. The `/c/` routes are rate-limited by IP.
 
 **Important:** The origin keeps the settings hash → settings mapping in memory with a 5-minute TTL. The CDN must cache the image on the first request to the `/c/` URL; if it doesn't, subsequent requests after the TTL expires will 404 at origin until the next authenticated request re-populates the mapping. Cloudflare and most production CDNs cache on first hit, so this is not an issue in practice.
+
+## Acknowledgments
+
+OpenPosterDB is made possible by these third-party services and projects:
+
+### Data & Image Providers
+
+- **[TMDB (The Movie Database)](https://www.themoviedb.org/)** ([get API key](https://www.themoviedb.org/settings/api)) — Movie and TV metadata, poster images. This product uses the TMDB API but is not endorsed or certified by TMDB.
+- **[MDBList](https://mdblist.com/)** ([get API key](https://mdblist.com/preferences/)) — Aggregated ratings from multiple sources in a single API
+- **[OMDb (Open Movie Database)](https://www.omdbapi.com/)** ([get API key](https://www.omdbapi.com/apikey.aspx)) — Alternative ratings source for IMDb, Rotten Tomatoes, and Metacritic
+- **[Fanart.tv](https://fanart.tv/)** ([get API key](https://fanart.tv/get-an-api-key/)) — High-quality fan art, logos, and backdrops with language and textless support
+- **[RPDB (Rating Poster Database)](https://ratingposterdb.com/)** — The original project that inspired OpenPosterDB's API design
+
+### Rating Sources
+
+- **[IMDb](https://www.imdb.com/)** — Internet Movie Database ratings
+- **[Rotten Tomatoes](https://www.rottentomatoes.com/)** — Critics and audience scores
+- **[Metacritic](https://www.metacritic.com/)** — Aggregated critic reviews
+- **[Trakt](https://trakt.tv/)** — Community ratings and tracking
+- **[Letterboxd](https://letterboxd.com/)** — Film community ratings
+- **[MyAnimeList](https://myanimelist.net/)** — Anime and manga ratings

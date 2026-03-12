@@ -2,7 +2,7 @@
 import { version } from "../../package.json";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Image, KeyRound, Zap, Shield, Github } from "lucide-vue-next";
+import { Image, KeyRound, Zap, Shield, Github, ExternalLink } from "lucide-vue-next";
 import FreeApiKeyCard from "@/components/FreeApiKeyCard.vue";
 
 const features = [
@@ -69,6 +69,23 @@ const styles = [
 const labels = [
   { src: "/examples/label-icon.jpg", label: "Icons" },
   { src: "/examples/label-text.jpg", label: "Text" },
+];
+
+const dataProviders = [
+  { name: "TMDB", url: "https://www.themoviedb.org/", keyUrl: "https://www.themoviedb.org/settings/api", desc: "Movie & TV metadata and poster images" },
+  { name: "MDBList", url: "https://mdblist.com/", keyUrl: "https://mdblist.com/preferences/", desc: "Aggregated ratings from multiple sources" },
+  { name: "OMDb", url: "https://www.omdbapi.com/", keyUrl: "https://www.omdbapi.com/apikey.aspx", desc: "Alternative ratings source" },
+  { name: "Fanart.tv", url: "https://fanart.tv/", keyUrl: "https://fanart.tv/get-an-api-key/", desc: "Fan art, logos, and backdrops" },
+  { name: "RPDB", url: "https://ratingposterdb.com/", desc: "The original inspiration for this project" },
+];
+
+const ratingSources = [
+  { name: "IMDb", url: "https://www.imdb.com/" },
+  { name: "Rotten Tomatoes", url: "https://www.rottentomatoes.com/" },
+  { name: "Metacritic", url: "https://www.metacritic.com/" },
+  { name: "Trakt", url: "https://trakt.tv/" },
+  { name: "Letterboxd", url: "https://letterboxd.com/" },
+  { name: "MyAnimeList", url: "https://myanimelist.net/" },
 ];
 
 const logos = [
@@ -250,6 +267,63 @@ const backdrops = [
               <p class="text-xs text-muted-foreground">{{ l.label }}</p>
             </div>
           </div>
+        </div>
+
+        <!-- Acknowledgments -->
+        <div class="space-y-6 text-center">
+          <h2 class="text-2xl font-semibold">Acknowledgments</h2>
+          <p class="text-sm text-muted-foreground max-w-lg mx-auto">
+            OpenPosterDB is made possible by these third-party services.
+          </p>
+          <div class="flex flex-wrap justify-center gap-3 text-left max-w-3xl mx-auto">
+            <div
+              v-for="p in dataProviders"
+              :key="p.name"
+              class="rounded-lg border p-3 w-full sm:w-[calc(50%-0.375rem)] lg:w-[calc(33.333%-0.5rem)]"
+            >
+              <p class="text-sm font-medium">{{ p.name }}</p>
+              <p class="text-xs text-muted-foreground mb-2">{{ p.desc }}</p>
+              <div class="flex gap-3">
+                <a
+                  :href="p.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-xs text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
+                >
+                  <ExternalLink class="h-3 w-3" />
+                  Homepage
+                </a>
+                <a
+                  v-if="p.keyUrl"
+                  :href="p.keyUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-xs text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
+                >
+                  <KeyRound class="h-3 w-3" />
+                  Get API key
+                </a>
+              </div>
+            </div>
+          </div>
+          <div class="pt-2">
+            <p class="text-xs text-muted-foreground mb-2">Rating sources</p>
+            <div class="flex flex-wrap justify-center gap-x-4 gap-y-1">
+              <a
+                v-for="r in ratingSources"
+                :key="r.name"
+                :href="r.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {{ r.name }}
+              </a>
+            </div>
+          </div>
+          <p class="text-xs text-muted-foreground italic max-w-lg mx-auto">
+            This product uses the TMDB API but is not endorsed or certified by TMDB.
+          </p>
         </div>
 
       </div>
