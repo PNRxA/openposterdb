@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { version } from '../../package.json'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -66,9 +67,7 @@ function toggleMode() {
     <div class="w-full max-w-sm space-y-6">
       <div class="text-center">
         <h1 class="text-2xl font-bold">OpenPosterDB</h1>
-        <p class="text-muted-foreground">
-          {{ mode === 'admin' ? 'Sign in to manage API keys' : 'Sign in with your API key' }}
-        </p>
+        <p class="text-xs text-muted-foreground">v{{ version }}</p>
       </div>
 
       <form class="space-y-4" @submit.prevent="handleLogin">

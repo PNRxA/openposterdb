@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { version } from '../../package.json'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { LayoutDashboard, Image, Stamp, Wallpaper, KeyRound, Settings, LogOut } from 'lucide-vue-next'
@@ -48,8 +49,9 @@ function handleLogout() {
 <template>
   <Sidebar variant="inset" collapsible="icon">
     <SidebarHeader>
-      <router-link to="/" class="flex items-center justify-center py-1 group-data-[state=expanded]/sidebar-wrapper:justify-start hover:opacity-80 transition-opacity" @click="onNavigate">
+      <router-link to="/" class="flex flex-col items-center py-1 group-data-[state=expanded]/sidebar-wrapper:items-start hover:opacity-80 transition-opacity" @click="onNavigate">
         <span class="font-bold text-lg whitespace-nowrap">{{ state === 'collapsed' ? 'OPDB' : 'OpenPosterDB' }}</span>
+        <span class="text-xs text-muted-foreground whitespace-nowrap">v{{ version }}</span>
       </router-link>
     </SidebarHeader>
     <SidebarContent>
