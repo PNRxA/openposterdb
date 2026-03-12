@@ -20,6 +20,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': process.env.E2E_BACKEND_URL || 'http://localhost:3000',
+      // Must match FREE_API_KEY in src/lib/constants.ts
+      '/t0-free-rpdb': process.env.E2E_BACKEND_URL || 'http://localhost:3000',
     },
   },
 })

@@ -23,12 +23,12 @@ const auth = useAuthStore()
 const { state, isMobile, setOpenMobile } = useSidebar()
 
 const items = [
-  { title: 'Dashboard', icon: LayoutDashboard, to: '/' },
-  { title: 'Posters', icon: Image, to: '/posters' },
-  { title: 'Logos', icon: Stamp, to: '/logos' },
-  { title: 'Backdrops', icon: Wallpaper, to: '/backdrops' },
-  { title: 'API Keys', icon: KeyRound, to: '/keys' },
-  { title: 'Settings', icon: Settings, to: '/settings' },
+  { title: 'Dashboard', icon: LayoutDashboard, to: '/admin' },
+  { title: 'Posters', icon: Image, to: '/admin/posters' },
+  { title: 'Logos', icon: Stamp, to: '/admin/logos' },
+  { title: 'Backdrops', icon: Wallpaper, to: '/admin/backdrops' },
+  { title: 'API Keys', icon: KeyRound, to: '/admin/keys' },
+  { title: 'Settings', icon: Settings, to: '/admin/settings' },
 ]
 
 function isActive(path: string) {
@@ -49,7 +49,7 @@ function handleLogout() {
 <template>
   <Sidebar variant="inset" collapsible="icon">
     <SidebarHeader>
-      <router-link to="/" class="flex flex-col items-center py-1 group-data-[state=expanded]/sidebar-wrapper:items-start hover:opacity-80 transition-opacity" @click="onNavigate">
+      <router-link to="/admin" class="flex flex-col items-center py-1 group-data-[state=expanded]/sidebar-wrapper:items-start hover:opacity-80 transition-opacity" @click="onNavigate">
         <span class="font-bold text-lg whitespace-nowrap">{{ state === 'collapsed' ? 'OPDB' : 'OpenPosterDB' }}</span>
         <span class="text-xs text-muted-foreground whitespace-nowrap">v{{ version }}</span>
       </router-link>

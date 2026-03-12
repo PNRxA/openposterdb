@@ -1,11 +1,73 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, type RouteLocationNormalized } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+
+export async function routeGuard(to: RouteLocationNormalized) {
+  const auth = useAuthStore()
+
+  // Only check setup status when navigating to setup or login (avoids an API
+  // call on every navigation). The result is cached in the auth store after the
+  // first successful call.
+  if (to.name === 'setup' || to.name === 'login' || to.name === 'landing' || to.name === 'dashboard') {
+    try {
+      const setupRequired = await auth.checkSetupRequired()
+      if (setupRequired && to.name !== 'setup') {
+        auth.logout()
+        return { name: 'setup' }
+      }
+      if (!setupRequired && to.name === 'setup') {
+        return { name: 'login' }
+      }
+    } catch {
+      // If we can't check, continue
+    }
+  }
+
+  // Authenticated users hitting landing → redirect to admin dashboard
+  if (to.name === 'landing') {
+    if (auth.isAdminSession) {
+      return { name: 'dashboard' }
+    }
+    if (auth.isApiKeySession) {
+      return { name: 'key-settings' }
+    }
+  }
+
+  // Admin routes require admin session (not API key session)
+  if (to.matched.some((r) => r.meta.requiresAuth)) {
+    if (!auth.isAdminSession) {
+      if (auth.isApiKeySession) {
+        return { name: 'key-settings' }
+      }
+      return { name: 'login' }
+    }
+  }
+
+  // API key routes require API key session
+  if (to.matched.some((r) => r.meta.requiresApiKey) && !auth.isApiKeySession) {
+    return { name: 'login' }
+  }
+
+  // Redirect away from login/setup if already authenticated
+  if (to.name === 'login' || to.name === 'setup') {
+    if (auth.isAdminSession) {
+      return { name: 'dashboard' }
+    }
+    if (auth.isApiKeySession) {
+      return { name: 'key-settings' }
+    }
+  }
+}
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
+      name: 'landing',
+      component: () => import('@/views/LandingView.vue'),
+    },
+    {
+      path: '/admin',
       component: () => import('@/layouts/DashboardLayout.vue'),
       meta: { requiresAuth: true },
       children: [
@@ -63,50 +125,13 @@ const router = createRouter({
       name: 'setup',
       component: () => import('@/views/SetupView.vue'),
     },
+    {
+      path: '/:pathMatch(.*)*',
+      redirect: '/',
+    },
   ],
 })
 
-router.beforeEach(async (to) => {
-  const auth = useAuthStore()
-
-  // Check if setup is needed
-  try {
-    const setupRequired = await auth.checkSetupRequired()
-    if (setupRequired && to.name !== 'setup') {
-      auth.logout()
-      return { name: 'setup' }
-    }
-    if (!setupRequired && to.name === 'setup') {
-      return { name: 'login' }
-    }
-  } catch {
-    // If we can't check, continue
-  }
-
-  // Admin routes require admin session (not API key session)
-  if (to.matched.some((r) => r.meta.requiresAuth)) {
-    if (!auth.isAdminSession) {
-      if (auth.isApiKeySession) {
-        return { name: 'key-settings' }
-      }
-      return { name: 'login' }
-    }
-  }
-
-  // API key routes require API key session
-  if (to.matched.some((r) => r.meta.requiresApiKey) && !auth.isApiKeySession) {
-    return { name: 'login' }
-  }
-
-  // Redirect away from login/setup if already authenticated
-  if (to.name === 'login' || to.name === 'setup') {
-    if (auth.isAdminSession) {
-      return { name: 'dashboard' }
-    }
-    if (auth.isApiKeySession) {
-      return { name: 'key-settings' }
-    }
-  }
-})
+router.beforeEach(routeGuard)
 
 export default router

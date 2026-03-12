@@ -10,7 +10,7 @@ test.describe('dashboard', () => {
     await page.fill('#username', 'admin')
     await page.fill('#password', 'testpassword123')
     await page.click('button[type="submit"]')
-    await expect(page).toHaveURL(/\/$/)
+    await expect(page).toHaveURL(/\/admin/)
   })
 
   test('shows stats cards', async ({ page }) => {
@@ -35,24 +35,24 @@ test.describe('dashboard', () => {
   test('clicking OpenPosterDB title navigates to dashboard', async ({ page }) => {
     // Navigate away first
     await page.click('text=Posters')
-    await expect(page).toHaveURL(/\/posters/)
+    await expect(page).toHaveURL(/\/admin\/posters/)
 
     // Click the title
     await page.click('text=OpenPosterDB')
-    await expect(page).toHaveURL(/\/$/)
+    await expect(page).toHaveURL(/\/admin$/)
   })
 
   test('sidebar navigation works', async ({ page }) => {
     // Navigate to Posters
     await page.click('text=Posters')
-    await expect(page).toHaveURL(/\/posters/)
+    await expect(page).toHaveURL(/\/admin\/posters/)
 
     // Navigate to API Keys
     await page.click('text=API Keys')
-    await expect(page).toHaveURL(/\/keys/)
+    await expect(page).toHaveURL(/\/admin\/keys/)
 
     // Navigate back to Dashboard
     await page.click('text=Dashboard')
-    await expect(page).toHaveURL(/\/$/)
+    await expect(page).toHaveURL(/\/admin$/)
   })
 })

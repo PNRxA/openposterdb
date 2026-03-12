@@ -33,6 +33,10 @@ function mountView() {
           template: '<button><slot /></button>',
           props: ['disabled'],
         },
+        'router-link': {
+          template: '<a><slot /></a>',
+          props: ['to'],
+        },
       },
     },
   })
@@ -81,7 +85,7 @@ describe('LoginView', () => {
     await flushPromises()
 
     expect(mockAuthStore.login).toHaveBeenCalledWith('admin', 'secret')
-    expect(mockRouter.push).toHaveBeenCalledWith('/')
+    expect(mockRouter.push).toHaveBeenCalledWith('/admin')
   })
 
   it('toggles to API key mode', async () => {

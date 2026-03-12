@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { routeGuard } from '@/router/index'
 
 vi.stubGlobal('sessionStorage', {
   getItem: vi.fn(() => null),
@@ -10,11 +11,16 @@ vi.stubGlobal('sessionStorage', {
 })
 
 function makeRouter() {
-  return createRouter({
+  const router = createRouter({
     history: createWebHistory(),
     routes: [
       {
         path: '/',
+        name: 'landing',
+        component: { template: '<div>Landing</div>' },
+      },
+      {
+        path: '/admin',
         component: { template: '<router-view />' },
         meta: { requiresAuth: true },
         children: [
@@ -35,36 +41,8 @@ function makeRouter() {
       { path: '/setup', name: 'setup', component: { template: '<div>Setup</div>' } },
     ],
   })
-}
-
-function addGuards(router: ReturnType<typeof createRouter>) {
-  const auth = useAuthStore()
-  router.beforeEach(async (to) => {
-    // Admin routes require admin session
-    if (to.matched.some((r) => r.meta.requiresAuth)) {
-      if (!auth.isAdminSession) {
-        if (auth.isApiKeySession) {
-          return { name: 'key-settings' }
-        }
-        return { name: 'login' }
-      }
-    }
-
-    // API key routes require API key session
-    if (to.matched.some((r) => r.meta.requiresApiKey) && !auth.isApiKeySession) {
-      return { name: 'login' }
-    }
-
-    // Redirect away from login/setup if already authenticated
-    if (to.name === 'login' || to.name === 'setup') {
-      if (auth.isAdminSession) {
-        return { name: 'dashboard' }
-      }
-      if (auth.isApiKeySession) {
-        return { name: 'key-settings' }
-      }
-    }
-  })
+  router.beforeEach(routeGuard)
+  return router
 }
 
 describe('router', () => {
@@ -72,21 +50,39 @@ describe('router', () => {
     setActivePinia(createPinia())
   })
 
-  it('unauthenticated user visiting / gets redirected to /login', async () => {
+  it('unauthenticated user visiting / sees landing page', async () => {
     const router = makeRouter()
-    addGuards(router)
 
     await router.push('/')
     await router.isReady()
 
+    expect(router.currentRoute.value.name).toBe('landing')
+  })
+
+  it('unauthenticated user visiting /admin gets redirected to /login', async () => {
+    const router = makeRouter()
+
+    await router.push('/admin')
+    await router.isReady()
+
     expect(router.currentRoute.value.name).toBe('login')
+  })
+
+  it('admin user visiting / gets redirected to dashboard', async () => {
+    const router = makeRouter()
+    const auth = useAuthStore()
+    auth.token = 'valid-token'
+
+    await router.push('/')
+    await router.isReady()
+
+    expect(router.currentRoute.value.name).toBe('dashboard')
   })
 
   it('admin user visiting /login gets redirected to dashboard', async () => {
     const router = makeRouter()
     const auth = useAuthStore()
     auth.token = 'valid-token'
-    addGuards(router)
 
     await router.push('/login')
     await router.isReady()
@@ -98,7 +94,6 @@ describe('router', () => {
     const router = makeRouter()
     const auth = useAuthStore()
     auth.apiKeyToken = 'jwt-token'
-    addGuards(router)
 
     await router.push('/')
     await router.isReady()
@@ -110,7 +105,6 @@ describe('router', () => {
     const router = makeRouter()
     const auth = useAuthStore()
     auth.apiKeyToken = 'jwt-token'
-    addGuards(router)
 
     await router.push('/login')
     await router.isReady()
@@ -120,7 +114,6 @@ describe('router', () => {
 
   it('unauthenticated user visiting /key-settings gets redirected to /login', async () => {
     const router = makeRouter()
-    addGuards(router)
 
     await router.push('/key-settings')
     await router.isReady()
@@ -132,7 +125,6 @@ describe('router', () => {
     const router = makeRouter()
     const auth = useAuthStore()
     auth.apiKeyToken = 'jwt-token'
-    addGuards(router)
 
     await router.push('/key-settings')
     await router.isReady()
@@ -144,9 +136,8 @@ describe('router', () => {
     const router = makeRouter()
     const auth = useAuthStore()
     auth.token = 'valid-token'
-    addGuards(router)
 
-    await router.push('/')
+    await router.push('/admin')
     await router.isReady()
 
     expect(router.currentRoute.value.name).toBe('dashboard')

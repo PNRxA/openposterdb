@@ -27,7 +27,7 @@ async function handleSetup() {
   try {
     const ok = await auth.setup(username.value, password.value)
     if (ok) {
-      router.push('/')
+      router.push('/admin')
     } else {
       error.value = 'Setup failed. An admin account may already exist.'
     }

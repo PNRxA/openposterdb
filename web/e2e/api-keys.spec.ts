@@ -11,11 +11,11 @@ test.describe('api keys', () => {
     await page.fill('#username', 'admin')
     await page.fill('#password', 'testpassword123')
     await page.click('button[type="submit"]')
-    await expect(page).toHaveURL(/\/$/)
+    await expect(page).toHaveURL(/\/admin/)
 
     // Navigate to API Keys page
     await page.click('text=API Keys')
-    await expect(page).toHaveURL(/\/keys/)
+    await expect(page).toHaveURL(/\/admin\/keys/)
   })
 
   test('create a new API key and see its value', async ({ page }) => {

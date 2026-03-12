@@ -14,7 +14,7 @@ test.describe.serial('setup flow', () => {
     await page.fill('#confirm-password', 'testpassword123')
     await page.click('button[type="submit"]')
 
-    await expect(page).toHaveURL(/\/$/)
+    await expect(page).toHaveURL(/\/admin/)
   })
 
   test('revisiting /setup after account created redirects to /login', async ({ page }) => {

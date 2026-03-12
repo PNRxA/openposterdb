@@ -1,0 +1,186 @@
+<script setup lang="ts">
+import { version } from '../../package.json'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Image, KeyRound, Zap, Shield, Github } from 'lucide-vue-next'
+import FreeApiKeyCard from '@/components/FreeApiKeyCard.vue'
+
+const features = [
+  { icon: Image, title: 'Posters & Backdrops', desc: 'Generate and serve posters, logos, and backdrops for movies, shows, and collections.' },
+  { icon: KeyRound, title: 'API Key Management', desc: 'Create and manage API keys with per-key settings for different media servers.' },
+  { icon: Zap, title: 'Fast & Cached', desc: 'In-memory caching and on-disk storage for instant poster delivery.' },
+  { icon: Shield, title: 'RPDB Compatible', desc: 'Drop-in replacement for RPDB with full API compatibility.' },
+]
+
+const posters = [
+  { src: '/examples/nosferatu.jpg', label: 'Nosferatu (1922)' },
+  { src: '/examples/metropolis.jpg', label: 'Metropolis (1927)' },
+  { src: '/examples/caligari.jpg', alt: 'The Cabinet of Dr. Caligari (1920)', label: 'Dr. Caligari (1920)' },
+  { src: '/examples/phantom.jpg', alt: 'The Phantom of the Opera (1925)', label: 'Phantom of the Opera (1925)' },
+  { src: '/examples/trip-to-moon.jpg', alt: 'A Trip to the Moon (1902)', label: 'A Trip to the Moon (1902)' },
+  { src: '/examples/safety-last.jpg', alt: 'Safety Last! (1923)', label: 'Safety Last! (1923)' },
+  { src: '/examples/the-general.jpg', label: 'The General (1926)' },
+]
+
+const positions = [
+  { src: '/examples/pos-tl.jpg', label: 'Top left' },
+  { src: '/examples/pos-tc.jpg', label: 'Top center' },
+  { src: '/examples/pos-tr.jpg', label: 'Top right' },
+  { src: '/examples/pos-r.jpg', label: 'Right' },
+  { src: '/examples/pos-bl.jpg', label: 'Bottom left' },
+  { src: '/examples/pos-bc.jpg', label: 'Bottom center' },
+  { src: '/examples/pos-br.jpg', label: 'Bottom right' },
+  { src: '/examples/pos-l.jpg', label: 'Left' },
+]
+
+const styles = [
+  { src: '/examples/style-h.jpg', label: 'Horizontal' },
+  { src: '/examples/style-v.jpg', label: 'Vertical' },
+]
+
+const labels = [
+  { src: '/examples/label-icon.jpg', label: 'Icons' },
+  { src: '/examples/label-text.jpg', label: 'Text' },
+]
+
+const logos = [
+  { src: '/examples/logo-h.png', label: 'Horizontal badges' },
+  { src: '/examples/logo-v.png', label: 'Vertical badges' },
+]
+
+const backdrops = [
+  { src: '/examples/backdrop-v.jpg', label: 'Vertical badges' },
+  { src: '/examples/backdrop-h.jpg', label: 'Horizontal badges' },
+]
+</script>
+
+<template>
+  <div class="min-h-screen flex flex-col">
+    <div class="flex-1 flex flex-col items-center px-4 py-16">
+      <div class="max-w-5xl w-full space-y-20">
+        <!-- Hero -->
+        <div class="text-center space-y-3">
+          <h1 class="text-4xl font-bold tracking-tight sm:text-5xl">OpenPosterDB</h1>
+          <p class="text-xs text-muted-foreground">v{{ version }}</p>
+          <p class="text-lg text-muted-foreground max-w-xl mx-auto">
+            Self-hosted poster, logo, and backdrop serving for your media server.
+          </p>
+          <div class="pt-4 flex items-center justify-center gap-3">
+            <Button as-child size="lg">
+              <router-link to="/login">Sign in</router-link>
+            </Button>
+            <Button as-child variant="outline" size="lg">
+              <a href="https://github.com/PNRxA/openposterdb" target="_blank" rel="noopener noreferrer">
+                <Github class="h-5 w-5" />
+                GitHub
+              </a>
+            </Button>
+          </div>
+          <div class="pt-4 max-w-lg mx-auto">
+            <FreeApiKeyCard />
+          </div>
+          <!-- Feature cards -->
+          <div class="pt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 text-left">
+            <Card v-for="f in features" :key="f.title">
+              <CardHeader class="pb-0">
+                <CardTitle class="text-sm flex items-center gap-2">
+                  <component :is="f.icon" class="h-4 w-4 text-muted-foreground shrink-0" />
+                  {{ f.title }}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p class="text-sm text-muted-foreground">{{ f.desc }}</p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        <!-- Real poster examples -->
+        <div class="space-y-4 text-center">
+          <h2 class="text-2xl font-semibold">Rating Badges on Real Posters</h2>
+          <p class="text-sm text-muted-foreground max-w-lg mx-auto">
+            Rating badges from IMDb, Letterboxd, Rotten Tomatoes, and more are overlaid directly onto your media posters.
+          </p>
+          <div class="flex flex-wrap justify-center gap-4">
+            <div v-for="p in posters" :key="p.src" class="space-y-1">
+              <img :src="p.src" :alt="p.alt || p.label" loading="lazy" class="rounded-lg shadow-xl max-w-[160px]" />
+              <p class="text-xs text-muted-foreground">{{ p.label }}</p>
+            </div>
+          </div>
+          <p class="text-xs text-muted-foreground italic">All films shown are in the public domain</p>
+        </div>
+
+        <!-- Badge Position -->
+        <div class="space-y-4 text-center">
+          <h2 class="text-2xl font-semibold">Badge Position</h2>
+          <p class="text-sm text-muted-foreground max-w-lg mx-auto">
+            Place rating badges anywhere on the poster &mdash; corners, edges, or centered.
+          </p>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 justify-items-center">
+            <div v-for="p in positions" :key="p.src" class="space-y-2">
+              <img :src="p.src" :alt="p.label" loading="lazy" class="rounded-lg shadow-md w-full max-w-[160px]" />
+              <p class="text-xs text-muted-foreground">{{ p.label }}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Badge Style -->
+        <div class="space-y-4 text-center">
+          <h2 class="text-2xl font-semibold">Badge Style</h2>
+          <p class="text-sm text-muted-foreground max-w-lg mx-auto">
+            Horizontal badges show the source icon and score side by side. Vertical badges stack them.
+          </p>
+          <div class="flex flex-wrap items-end justify-center gap-6">
+            <div v-for="s in styles" :key="s.src" class="space-y-2">
+              <img :src="s.src" :alt="s.label" loading="lazy" class="rounded-lg shadow-md max-w-[200px]" />
+              <p class="text-xs text-muted-foreground">{{ s.label }}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Label Style -->
+        <div class="space-y-4 text-center">
+          <h2 class="text-2xl font-semibold">Label Style</h2>
+          <p class="text-sm text-muted-foreground max-w-lg mx-auto">
+            Show rating sources as colored icons or as text labels.
+          </p>
+          <div class="flex flex-wrap items-end justify-center gap-6">
+            <div v-for="l in labels" :key="l.src" class="space-y-2">
+              <img :src="l.src" :alt="l.label" loading="lazy" class="rounded-lg shadow-md max-w-[200px]" />
+              <p class="text-xs text-muted-foreground">{{ l.label }}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Logos -->
+        <div class="space-y-4 text-center">
+          <h2 class="text-2xl font-semibold">Logos</h2>
+          <p class="text-sm text-muted-foreground max-w-lg mx-auto">
+            Serve transparent logos with rating badges attached below.
+          </p>
+          <div class="flex flex-wrap items-end justify-center gap-6">
+            <div v-for="l in logos" :key="l.src" class="space-y-2">
+              <img :src="l.src" :alt="l.label" loading="lazy" class="rounded-lg shadow-md max-w-[300px]" />
+              <p class="text-xs text-muted-foreground">{{ l.label }}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Backdrops -->
+        <div class="space-y-4 text-center">
+          <h2 class="text-2xl font-semibold">Backdrops</h2>
+          <p class="text-sm text-muted-foreground max-w-lg mx-auto">
+            Backdrops get rating badges in the top-right corner for a clean overlay.
+          </p>
+          <div class="flex flex-col items-center gap-6">
+            <div v-for="b in backdrops" :key="b.src" class="space-y-2">
+              <img :src="b.src" :alt="b.label" loading="lazy" class="rounded-lg shadow-md max-w-[560px] w-full" />
+              <p class="text-xs text-muted-foreground">{{ b.label }}</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</template>

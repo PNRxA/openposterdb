@@ -22,11 +22,11 @@ test.describe('settings', () => {
     await page.fill('#username', 'admin')
     await page.fill('#password', 'testpassword123')
     await page.click('button[type="submit"]')
-    await expect(page).toHaveURL(/\/$/)
+    await expect(page).toHaveURL(/\/admin/)
 
     // Navigate to Settings page
     await page.click('text=Settings')
-    await expect(page).toHaveURL(/\/settings/)
+    await expect(page).toHaveURL(/\/admin\/settings/)
   })
 
   test('settings page loads with heading', async ({ page }) => {
@@ -127,11 +127,11 @@ test.describe('settings', () => {
   test('sidebar navigation to settings works', async ({ page }) => {
     // Navigate away
     await page.click('text=Dashboard')
-    await expect(page).toHaveURL(/\/$/)
+    await expect(page).toHaveURL(/\/admin$/)
 
     // Navigate back via sidebar
     await page.click('text=Settings')
-    await expect(page).toHaveURL(/\/settings/)
+    await expect(page).toHaveURL(/\/admin\/settings/)
   })
 
   test('preview section is visible', async ({ page }) => {

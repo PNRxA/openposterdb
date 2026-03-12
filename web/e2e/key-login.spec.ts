@@ -89,7 +89,7 @@ test.describe('API key login flow', () => {
     await expect(page).toHaveURL(/\/key-settings/)
 
     // Try to navigate to admin area
-    await page.goto('/')
+    await page.goto('/admin')
     await expect(page).toHaveURL(/\/key-settings/)
   })
 

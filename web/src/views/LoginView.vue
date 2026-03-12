@@ -4,7 +4,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
-import { FREE_API_KEY } from '@/lib/constants'
+import FreeApiKeyCard from '@/components/FreeApiKeyCard.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -37,7 +37,7 @@ async function handleLogin() {
     if (mode.value === 'admin') {
       const ok = await auth.login(username.value, password.value)
       if (ok) {
-        router.push('/')
+        router.push('/admin')
       } else {
         error.value = 'Invalid username or password'
       }
@@ -122,13 +122,11 @@ function toggleMode() {
         </button>
       </p>
 
-      <div v-if="auth.freeApiKeyEnabled" class="rounded-lg border border-blue-500/30 bg-blue-500/5 p-4 space-y-2">
-        <p class="text-sm font-medium">Free API Key Available</p>
-        <p class="text-sm text-muted-foreground">
-          Use the following key for poster serving (read-only, global defaults):
-        </p>
-        <code class="block text-sm font-mono bg-muted px-3 py-2 rounded select-all">{{ FREE_API_KEY }}</code>
-      </div>
+      <p class="text-center text-sm text-muted-foreground">
+        <router-link to="/" class="underline hover:text-foreground">&larr; Back to home</router-link>
+      </p>
+
+      <FreeApiKeyCard />
     </div>
   </div>
 </template>

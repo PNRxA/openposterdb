@@ -10,10 +10,10 @@ test.describe('backdrops page', () => {
     await page.fill('#username', 'admin')
     await page.fill('#password', 'testpassword123')
     await page.click('button[type="submit"]')
-    await expect(page).toHaveURL(/\/$/)
+    await expect(page).toHaveURL(/\/admin/)
 
     await page.click('text=Backdrops')
-    await expect(page).toHaveURL(/\/backdrops/)
+    await expect(page).toHaveURL(/\/admin\/backdrops/)
   })
 
   test('shows table headers', async ({ page }) => {

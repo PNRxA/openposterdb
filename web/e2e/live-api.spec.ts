@@ -296,11 +296,11 @@ test.describe('live API - UI poster fetch', () => {
     await page.fill('#username', 'admin')
     await page.fill('#password', 'testpassword123')
     await page.click('button[type="submit"]')
-    await expect(page).toHaveURL(/\/$/)
+    await expect(page).toHaveURL(/\/admin/)
 
     // Navigate to Posters page
     await page.click('text=Posters')
-    await expect(page).toHaveURL(/\/posters/)
+    await expect(page).toHaveURL(/\/admin\/posters/)
 
     // Use Fetch button to fetch a poster
     await page.click('button:has-text("Fetch")')
@@ -333,11 +333,11 @@ test.describe('live API - UI fetch shows preview immediately', () => {
     await page.fill('#username', 'admin')
     await page.fill('#password', 'testpassword123')
     await page.click('button[type="submit"]')
-    await expect(page).toHaveURL(/\/$/)
+    await expect(page).toHaveURL(/\/admin/)
 
     const label = section.charAt(0).toUpperCase() + section.slice(1)
     await page.click(`text=${label}`)
-    await expect(page).toHaveURL(new RegExp(`/${section}`))
+    await expect(page).toHaveURL(new RegExp(`/admin/${section}`))
   }
 
   /** Fetch via UI and assert preview image is visible immediately. */
