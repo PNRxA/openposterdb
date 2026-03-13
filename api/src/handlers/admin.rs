@@ -117,6 +117,7 @@ pub struct GlobalSettingsResponse {
     pub ratings_limit: i32,
     pub ratings_order: String,
     pub free_api_key_enabled: bool,
+    pub free_api_key_locked: bool,
     pub poster_position: String,
     pub logo_ratings_limit: i32,
     pub backdrop_ratings_limit: i32,
@@ -141,6 +142,7 @@ pub async fn get_settings(
         })
         .await
         .map_err(|e| AppError::Other(e.to_string()))?;
+    let free_api_key_locked = state.config.free_key_enabled.is_some();
     let free_api_key_enabled = state.is_free_api_key_enabled().await;
     Ok(Json(GlobalSettingsResponse {
         poster_source: settings.poster_source.to_string(),
@@ -150,6 +152,7 @@ pub async fn get_settings(
         ratings_limit: settings.ratings_limit,
         ratings_order: settings.ratings_order.to_string(),
         free_api_key_enabled,
+        free_api_key_locked,
         poster_position: settings.poster_position.to_string(),
         logo_ratings_limit: settings.logo_ratings_limit,
         backdrop_ratings_limit: settings.backdrop_ratings_limit,
@@ -241,15 +244,17 @@ pub async fn update_settings(
         ("poster_badge_direction", &req.poster_badge_direction),
     ];
     let free_key_str;
-    if let Some(enabled) = req.free_api_key_enabled {
-        free_key_str = if enabled { "true" } else { "false" };
-        batch.push(("free_api_key_enabled", free_key_str));
+    if state.config.free_key_enabled.is_none() {
+        if let Some(enabled) = req.free_api_key_enabled {
+            free_key_str = if enabled { "true" } else { "false" };
+            batch.push(("free_api_key_enabled", free_key_str));
+        }
     }
     db::set_global_settings_batch(&state.db, &batch).await?;
     // Invalidate caches (preview_cache needs no invalidation — keys encode the config)
     state.global_settings_cache.invalidate(&()).await;
     state.settings_cache.invalidate_all();
-    if req.free_api_key_enabled.is_some() {
+    if req.free_api_key_enabled.is_some() && state.config.free_key_enabled.is_none() {
         state.free_api_key_cache.invalidate(&()).await;
     }
     Ok(Json(serde_json::json!({ "ok": true })))

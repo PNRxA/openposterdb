@@ -17,6 +17,7 @@ pub struct TestAppOptions {
     pub enable_cdn_redirects: bool,
     pub external_cache_only: bool,
     pub cache_dir_override: Option<String>,
+    pub free_key_enabled: Option<bool>,
 }
 
 impl Default for TestAppOptions {
@@ -27,6 +28,7 @@ impl Default for TestAppOptions {
             enable_cdn_redirects: false,
             external_cache_only: false,
             cache_dir_override: None,
+            free_key_enabled: None,
         }
     }
 }
@@ -37,14 +39,15 @@ pub async fn setup_test_app_with_options(opts: TestAppOptions) -> (axum::Router,
     let enable_cdn_redirects = opts.enable_cdn_redirects;
     let external_cache_only = opts.external_cache_only;
     let cache_dir_override = opts.cache_dir_override;
-    _setup_test_app(cors_origin, secure_cookies, enable_cdn_redirects, external_cache_only, cache_dir_override).await
+    let free_key_enabled = opts.free_key_enabled;
+    _setup_test_app(cors_origin, secure_cookies, enable_cdn_redirects, external_cache_only, cache_dir_override, free_key_enabled).await
 }
 
 pub async fn setup_test_app_with_cors(cors_origin: Option<String>) -> (axum::Router, Arc<AppState>) {
-    _setup_test_app(cors_origin, false, false, false, None).await
+    _setup_test_app(cors_origin, false, false, false, None, None).await
 }
 
-async fn _setup_test_app(cors_origin: Option<String>, secure_cookies: bool, enable_cdn_redirects: bool, external_cache_only: bool, cache_dir_override: Option<String>) -> (axum::Router, Arc<AppState>) {
+async fn _setup_test_app(cors_origin: Option<String>, secure_cookies: bool, enable_cdn_redirects: bool, external_cache_only: bool, cache_dir_override: Option<String>, free_key_enabled: Option<bool>) -> (axum::Router, Arc<AppState>) {
     let sqlite_opts = sqlx::sqlite::SqliteConnectOptions::new()
         .filename(":memory:")
         .create_if_missing(true)
@@ -116,6 +119,7 @@ async fn _setup_test_app(cors_origin: Option<String>, secure_cookies: bool, enab
             fanart_api_key: Some("test".into()),
             enable_cdn_redirects,
             external_cache_only,
+            free_key_enabled,
         },
         tmdb: TmdbClient::new("test".into(), http.clone()),
         omdb: None,

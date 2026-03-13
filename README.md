@@ -172,6 +172,7 @@ See [docker-compose.yml](docker-compose.yml) for the full compose configuration.
 | `ADMIN_PASSWORD` | — | Seed admin password on first run |
 | `ENABLE_CDN_REDIRECTS` | `false` | Enable content-addressed CDN redirects (see [CDN Caching](#cdn-caching)) |
 | `EXTERNAL_CACHE_ONLY` | `false` | Skip all image file writes to disk; rely on a CDN for caching (see [External Cache Only](#external-cache-only)) |
+| `FREE_KEY_ENABLED` | — | Force-enable (`true`) or force-disable (`false`) the free API key, overriding the admin UI toggle. When set, the UI toggle is locked. Omit to let admins control it from the settings page |
 
 ## Cache Architecture
 

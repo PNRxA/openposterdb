@@ -68,6 +68,9 @@ pub struct AppState {
 
 impl AppState {
     pub async fn is_free_api_key_enabled(&self) -> bool {
+        if let Some(val) = self.config.free_key_enabled {
+            return val;
+        }
         let db_ref = self.db.clone();
         self.free_api_key_cache
             .try_get_with((), async move {

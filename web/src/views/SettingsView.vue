@@ -7,7 +7,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import PosterSettingsForm from '@/components/PosterSettingsForm.vue'
 import type { PosterSettings } from '@/components/PosterSettingsForm.vue'
 
-type SettingsResponse = PosterSettings & { free_api_key_enabled: boolean }
+type SettingsResponse = PosterSettings & { free_api_key_enabled: boolean; free_api_key_locked: boolean }
 
 const freeApiKeyEnabled = ref(false)
 const freeKeyLoading = ref(false)
@@ -96,7 +96,7 @@ async function toggleFreeApiKey() {
             type="button"
             role="switch"
             :aria-checked="freeApiKeyEnabled"
-            :disabled="freeKeyLoading || !settings"
+            :disabled="freeKeyLoading || !settings || settings?.free_api_key_locked"
             class="relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             :class="freeApiKeyEnabled ? 'bg-primary' : 'bg-input'"
             @click="toggleFreeApiKey"
@@ -109,6 +109,9 @@ async function toggleFreeApiKey() {
           <span class="text-sm font-medium">{{ freeApiKeyEnabled ? 'Enabled' : 'Disabled' }}</span>
           <span v-if="freeKeyError" class="text-sm text-destructive">{{ freeKeyError }}</span>
         </label>
+        <p v-if="settings?.free_api_key_locked" class="text-sm text-muted-foreground">
+          Controlled by <code class="font-mono text-xs bg-muted px-1 py-0.5 rounded">FREE_KEY_ENABLED</code> environment variable.
+        </p>
       </div>
 
       <div class="rounded-lg border p-6 space-y-4">

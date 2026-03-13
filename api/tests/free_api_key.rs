@@ -2,6 +2,7 @@ mod common;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
+use common::TestAppOptions;
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
@@ -228,4 +229,113 @@ async fn free_key_does_not_track_last_used() {
         state.pending_last_used.is_empty(),
         "free API key should not track last_used"
     );
+}
+
+// --- FREE_KEY_ENABLED env var override ---
+
+#[tokio::test]
+async fn env_var_true_forces_free_key_on() {
+    let (app, _state) = common::setup_test_app_with_options(TestAppOptions {
+        free_key_enabled: Some(true),
+        ..Default::default()
+    })
+    .await;
+
+    // Free key should work without any DB toggle
+    let req = Request::builder()
+        .uri("/t0-free-rpdb/imdb/poster-default/tt0111161.jpg")
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_ne!(
+        res.status(),
+        StatusCode::UNAUTHORIZED,
+        "free key should be accepted when FREE_KEY_ENABLED=true"
+    );
+}
+
+#[tokio::test]
+async fn env_var_false_forces_free_key_off() {
+    let (app, _state) = common::setup_test_app_with_options(TestAppOptions {
+        free_key_enabled: Some(false),
+        ..Default::default()
+    })
+    .await;
+    let token = common::setup_admin(&app).await;
+
+    // Try to enable via DB — should be silently ignored
+    set_free_api_key_enabled(&app, &token, true).await;
+
+    // Free key should still be rejected
+    let req = Request::builder()
+        .uri("/t0-free-rpdb/imdb/poster-default/tt0111161.jpg")
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(
+        res.status(),
+        StatusCode::UNAUTHORIZED,
+        "free key should be rejected when FREE_KEY_ENABLED=false"
+    );
+}
+
+#[tokio::test]
+async fn env_var_sets_locked_in_settings_response() {
+    let (app, _state) = common::setup_test_app_with_options(TestAppOptions {
+        free_key_enabled: Some(true),
+        ..Default::default()
+    })
+    .await;
+    let token = common::setup_admin(&app).await;
+
+    let req = Request::builder()
+        .uri("/api/admin/settings")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["free_api_key_enabled"], true);
+    assert_eq!(json["free_api_key_locked"], true);
+}
+
+#[tokio::test]
+async fn no_env_var_not_locked_in_settings_response() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    let req = Request::builder()
+        .uri("/api/admin/settings")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["free_api_key_locked"], false);
+}
+
+#[tokio::test]
+async fn env_var_auth_status_reflects_override() {
+    let (app, _state) = common::setup_test_app_with_options(TestAppOptions {
+        free_key_enabled: Some(true),
+        ..Default::default()
+    })
+    .await;
+
+    let req = Request::builder()
+        .uri("/api/auth/status")
+        .body(Body::empty())
+        .unwrap();
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["free_api_key_enabled"], true);
 }

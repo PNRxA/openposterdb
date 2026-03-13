@@ -76,6 +76,7 @@ async fn main() {
         secure_cookies,
         cdn_redirects = config.enable_cdn_redirects,
         external_cache_only = config.external_cache_only,
+        free_key_enabled = ?config.free_key_enabled,
         "server configuration"
     );
 

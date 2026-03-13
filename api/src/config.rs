@@ -18,6 +18,7 @@ pub struct Config {
     pub fanart_api_key: Option<String>,
     pub enable_cdn_redirects: bool,
     pub external_cache_only: bool,
+    pub free_key_enabled: Option<bool>,
 }
 
 impl Config {
@@ -58,6 +59,9 @@ impl Config {
             external_cache_only: env::var("EXTERNAL_CACHE_ONLY")
                 .map(|v| v == "true" || v == "1")
                 .unwrap_or(false),
+            free_key_enabled: env::var("FREE_KEY_ENABLED")
+                .ok()
+                .map(|v| v == "true" || v == "1"),
         };
 
         if config.omdb_api_key.is_none() && config.mdblist_api_key.is_none() {
