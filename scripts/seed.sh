@@ -12,7 +12,7 @@ GENRES=""        # comma-separated, e.g. "Action,Horror"
 YEAR_FROM=""
 YEAR_TO="$(($(date +%Y) - 1))"
 API_KEY="t0-free-rpdb"
-CONCURRENCY=4
+CONCURRENCY=1
 ASSETS="poster"  # poster, logo, backdrop, all
 DRY_RUN=false
 
@@ -36,6 +36,9 @@ Options:
   -y, --year-to YEAR       Maximum year (inclusive, default: current year - 1)
   -k, --key KEY            API key to use (default: $API_KEY)
   -c, --concurrency NUM    Parallel requests (default: $CONCURRENCY)
+                           WARNING: Each request may trigger upstream API calls
+                           (TMDB, MDBList, OMDb). Higher concurrency risks hitting
+                           their rate limits. Increase with caution.
   -a, --assets ASSETS      What to fetch: poster, logo, backdrop, all (default: $ASSETS)
   -d, --dry-run            Print what would be seeded without making requests
   -h, --help               Show this help
