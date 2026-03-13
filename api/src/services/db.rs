@@ -2,6 +2,7 @@ use sea_orm::{ConnectionTrait, DatabaseConnection, EntityTrait, Set, Transaction
 use zeroize::Zeroizing;
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::entity::{admin_user, api_key, api_key_settings, global_settings, refresh_token};
 use crate::error::AppError;
@@ -46,6 +47,115 @@ pub const POS_BOTTOM_LEFT: &str = "bl";
 /// Poster position: bottom-right
 pub const POS_BOTTOM_RIGHT: &str = "br";
 
+// --- Image size ---
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImageSize {
+    Small,
+    Medium,
+    Large,
+    VeryLarge,
+}
+
+impl ImageSize {
+    pub fn from_query_str(s: &str) -> Option<Self> {
+        match s {
+            "small" => Some(Self::Small),
+            "medium" => Some(Self::Medium),
+            "large" => Some(Self::Large),
+            "very-large" | "verylarge" => Some(Self::VeryLarge),
+            _ => None,
+        }
+    }
+
+    /// Target width for posters at this size.
+    ///
+    /// Panics if called with `Small` — validation rejects it before reaching here.
+    pub fn poster_target_width(self) -> u32 {
+        match self {
+            Self::Small => unreachable!("Small is not valid for posters — validate_image_size should reject it"),
+            Self::Medium => 580,
+            Self::Large => 1280,
+            Self::VeryLarge => 2000,
+        }
+    }
+
+    /// Target width for backdrops at this size.
+    pub fn backdrop_target_width(self) -> u32 {
+        match self {
+            Self::Small => 1280,
+            Self::Medium => 1920,
+            Self::Large => 3840,
+            Self::VeryLarge => 3840,
+        }
+    }
+
+    /// Target width for logos at this size.
+    ///
+    /// Panics if called with `Small` — validation rejects it before reaching here.
+    pub fn logo_target_width(self) -> u32 {
+        match self {
+            Self::Small => unreachable!("Small is not valid for logos — validate_image_size should reject it"),
+            Self::Medium => 780,
+            Self::Large => 1722,
+            Self::VeryLarge => 2689,
+        }
+    }
+
+    /// Badge scale factor relative to the medium (default) target width for each image kind.
+    /// Base widths: poster=580, logo=780, backdrop=1920.
+    pub fn badge_scale(self, kind: crate::cache::ImageType) -> f32 {
+        match kind {
+            crate::cache::ImageType::Poster => self.poster_target_width() as f32 / 580.0,
+            crate::cache::ImageType::Logo => self.logo_target_width() as f32 / 780.0,
+            crate::cache::ImageType::Backdrop => self.backdrop_target_width() as f32 / 1920.0,
+        }
+    }
+
+    /// Cache key suffix for this image size.
+    pub fn cache_suffix(self) -> &'static str {
+        match self {
+            Self::Small => ".zs",
+            Self::Medium => ".zm",
+            Self::Large => ".zl",
+            Self::VeryLarge => ".zvl",
+        }
+    }
+
+    /// Query string value for this image size.
+    pub fn query_str(self) -> &'static str {
+        match self {
+            Self::Small => "small",
+            Self::Medium => "medium",
+            Self::Large => "large",
+            Self::VeryLarge => "very-large",
+        }
+    }
+
+    /// TMDB CDN size string for fetching source images.
+    pub fn tmdb_size(self) -> &'static str {
+        match self {
+            Self::Small => "w780",
+            Self::Medium => "w780",
+            Self::Large => "original",
+            Self::VeryLarge => "original",
+        }
+    }
+}
+
+pub fn validate_image_size(size_str: &str, kind: crate::cache::ImageType) -> Result<ImageSize, AppError> {
+    let size = ImageSize::from_query_str(size_str)
+        .ok_or_else(|| AppError::BadRequest(
+            "imageSize must be 'small', 'medium', 'large', or 'very-large'".into(),
+        ))?;
+    if size == ImageSize::Small && kind != crate::cache::ImageType::Backdrop {
+        return Err(AppError::BadRequest(
+            "imageSize 'small' is only valid for backdrops".into(),
+        ));
+    }
+    Ok(size)
+}
+
 pub fn default_fanart_lang() -> String {
     "en".to_string()
 }
@@ -89,13 +199,13 @@ pub fn default_poster_badge_direction() -> String {
 /// Resolve a badge direction of `"default"` to `"h"` or `"v"`
 /// based on the poster position. Center positions use horizontal; everything
 /// else (left, right, corners) uses vertical. Non-default values pass through.
-pub fn resolve_badge_direction(direction: &str, position: &str) -> String {
+pub fn resolve_badge_direction(direction: &str, position: &str) -> Arc<str> {
     if direction != DIRECTION_DEFAULT {
-        return direction.to_string();
+        return Arc::from(direction);
     }
     match position {
-        POS_BOTTOM_CENTER | POS_TOP_CENTER => STYLE_HORIZONTAL.to_string(),
-        _ => STYLE_VERTICAL.to_string(),
+        POS_BOTTOM_CENTER | POS_TOP_CENTER => Arc::from(STYLE_HORIZONTAL),
+        _ => Arc::from(STYLE_VERTICAL),
     }
 }
 
@@ -155,11 +265,11 @@ pub fn validate_badge_style(style: &str) -> Result<(), AppError> {
 
 /// Resolve a badge style of `"d"` (default) to match the resolved badge direction.
 /// Non-default values pass through unchanged.
-pub fn resolve_badge_style(style: &str, resolved_direction: &str) -> String {
+pub fn resolve_badge_style(style: &str, resolved_direction: &str) -> Arc<str> {
     if style == STYLE_DEFAULT {
-        resolved_direction.to_string()
+        Arc::from(resolved_direction)
     } else {
-        style.to_string()
+        Arc::from(style)
     }
 }
 
@@ -209,6 +319,43 @@ pub fn validate_fanart_lang(lang: &str) -> Result<(), AppError> {
     }
 }
 
+/// Common poster settings fields shared between per-key and global update requests.
+pub trait PosterSettingsInput {
+    fn poster_source(&self) -> &str;
+    fn fanart_lang(&self) -> &str;
+    fn ratings_limit(&self) -> i32;
+    fn ratings_order(&self) -> &str;
+    fn poster_position(&self) -> &str;
+    fn logo_ratings_limit(&self) -> i32;
+    fn backdrop_ratings_limit(&self) -> i32;
+    fn poster_badge_style(&self) -> &str;
+    fn logo_badge_style(&self) -> &str;
+    fn backdrop_badge_style(&self) -> &str;
+    fn poster_label_style(&self) -> &str;
+    fn logo_label_style(&self) -> &str;
+    fn backdrop_label_style(&self) -> &str;
+    fn poster_badge_direction(&self) -> &str;
+}
+
+/// Validate all poster settings fields at once.
+pub fn validate_poster_settings_input(input: &dyn PosterSettingsInput) -> Result<(), AppError> {
+    validate_poster_source(input.poster_source())?;
+    validate_fanart_lang(input.fanart_lang())?;
+    validate_ratings_limit(input.ratings_limit())?;
+    validate_ratings_order(input.ratings_order())?;
+    validate_poster_position(input.poster_position())?;
+    validate_ratings_limit(input.logo_ratings_limit())?;
+    validate_ratings_limit(input.backdrop_ratings_limit())?;
+    validate_badge_style(input.poster_badge_style())?;
+    validate_badge_style(input.logo_badge_style())?;
+    validate_badge_style(input.backdrop_badge_style())?;
+    validate_label_style(input.poster_label_style())?;
+    validate_label_style(input.logo_label_style())?;
+    validate_label_style(input.backdrop_label_style())?;
+    validate_badge_direction(input.poster_badge_direction())?;
+    Ok(())
+}
+
 fn now_utc() -> String {
     chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string()
 }
@@ -252,6 +399,7 @@ fn hex_to_bytes(hex: &str) -> Result<Vec<u8>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
     fn hex_to_bytes_valid() {
@@ -292,12 +440,14 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     #[should_panic(expected = "is not set")]
     fn load_secret_missing_env_var() {
         load_secret_from_env("OPENPOSTERDB_TEST_NONEXISTENT_SECRET_VAR");
     }
 
     #[test]
+    #[serial]
     #[should_panic(expected = "must be 32 bytes")]
     fn load_secret_wrong_length() {
         let var_name = "OPENPOSTERDB_TEST_SHORT_SECRET";
@@ -310,6 +460,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn load_secret_valid_32_bytes() {
         let var_name = "OPENPOSTERDB_TEST_VALID_SECRET";
         let hex = "ab".repeat(32);
@@ -459,14 +610,14 @@ mod tests {
 
     #[test]
     fn resolve_badge_style_default_follows_direction() {
-        assert_eq!(resolve_badge_style("d", "h"), "h");
-        assert_eq!(resolve_badge_style("d", "v"), "v");
+        assert_eq!(&*resolve_badge_style("d", "h"), "h");
+        assert_eq!(&*resolve_badge_style("d", "v"), "v");
     }
 
     #[test]
     fn resolve_badge_style_explicit_passes_through() {
-        assert_eq!(resolve_badge_style("h", "v"), "h");
-        assert_eq!(resolve_badge_style("v", "h"), "v");
+        assert_eq!(&*resolve_badge_style("h", "v"), "h");
+        assert_eq!(&*resolve_badge_style("v", "h"), "v");
     }
 
     #[test]
@@ -506,28 +657,133 @@ mod tests {
 
     #[test]
     fn resolve_badge_direction_default_center_positions() {
-        assert_eq!(resolve_badge_direction("d", "bc"), "h");
-        assert_eq!(resolve_badge_direction("d", "tc"), "h");
+        assert_eq!(&*resolve_badge_direction("d", "bc"), "h");
+        assert_eq!(&*resolve_badge_direction("d", "tc"), "h");
     }
 
     #[test]
     fn resolve_badge_direction_default_side_positions() {
-        assert_eq!(resolve_badge_direction("d", "l"), "v");
-        assert_eq!(resolve_badge_direction("d", "r"), "v");
+        assert_eq!(&*resolve_badge_direction("d", "l"), "v");
+        assert_eq!(&*resolve_badge_direction("d", "r"), "v");
     }
 
     #[test]
     fn resolve_badge_direction_default_corner_positions() {
-        assert_eq!(resolve_badge_direction("d", "tl"), "v");
-        assert_eq!(resolve_badge_direction("d", "tr"), "v");
-        assert_eq!(resolve_badge_direction("d", "bl"), "v");
-        assert_eq!(resolve_badge_direction("d", "br"), "v");
+        assert_eq!(&*resolve_badge_direction("d", "tl"), "v");
+        assert_eq!(&*resolve_badge_direction("d", "tr"), "v");
+        assert_eq!(&*resolve_badge_direction("d", "bl"), "v");
+        assert_eq!(&*resolve_badge_direction("d", "br"), "v");
     }
 
     #[test]
     fn resolve_badge_direction_explicit_passes_through() {
-        assert_eq!(resolve_badge_direction("h", "l"), "h");
-        assert_eq!(resolve_badge_direction("v", "bc"), "v");
+        assert_eq!(&*resolve_badge_direction("h", "l"), "h");
+        assert_eq!(&*resolve_badge_direction("v", "bc"), "v");
+    }
+
+    // --- ImageSize tests ---
+
+    #[test]
+    fn image_size_from_query_str_valid() {
+        assert_eq!(ImageSize::from_query_str("small"), Some(ImageSize::Small));
+        assert_eq!(ImageSize::from_query_str("medium"), Some(ImageSize::Medium));
+        assert_eq!(ImageSize::from_query_str("large"), Some(ImageSize::Large));
+        assert_eq!(ImageSize::from_query_str("very-large"), Some(ImageSize::VeryLarge));
+    }
+
+    #[test]
+    fn image_size_from_query_str_invalid() {
+        assert_eq!(ImageSize::from_query_str(""), None);
+        assert_eq!(ImageSize::from_query_str("huge"), None);
+        assert_eq!(ImageSize::from_query_str("MEDIUM"), None);
+        assert_eq!(ImageSize::from_query_str("very_large"), None);
+    }
+
+    #[test]
+    fn image_size_poster_target_widths() {
+        assert_eq!(ImageSize::Medium.poster_target_width(), 580);
+        assert_eq!(ImageSize::Large.poster_target_width(), 1280);
+        assert_eq!(ImageSize::VeryLarge.poster_target_width(), 2000);
+    }
+
+    #[test]
+    fn image_size_logo_target_widths() {
+        assert_eq!(ImageSize::Medium.logo_target_width(), 780);
+        assert_eq!(ImageSize::Large.logo_target_width(), 1722);
+        assert_eq!(ImageSize::VeryLarge.logo_target_width(), 2689);
+    }
+
+    #[test]
+    fn image_size_backdrop_target_widths() {
+        assert_eq!(ImageSize::Small.backdrop_target_width(), 1280);
+        assert_eq!(ImageSize::Medium.backdrop_target_width(), 1920);
+        assert_eq!(ImageSize::Large.backdrop_target_width(), 3840);
+    }
+
+    #[test]
+    fn image_size_badge_scale_medium_is_baseline() {
+        // Medium is the default — badge scale should be 1.0 for all kinds
+        let scale = ImageSize::Medium.badge_scale(crate::cache::ImageType::Poster);
+        assert!((scale - 1.0).abs() < 0.01);
+
+        let scale = ImageSize::Medium.badge_scale(crate::cache::ImageType::Logo);
+        assert!((scale - 1.0).abs() < 0.01);
+
+        let scale = ImageSize::Medium.badge_scale(crate::cache::ImageType::Backdrop);
+        assert!((scale - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn image_size_badge_scale_increases_with_size() {
+        let medium = ImageSize::Medium.badge_scale(crate::cache::ImageType::Poster);
+        let large = ImageSize::Large.badge_scale(crate::cache::ImageType::Poster);
+        let very_large = ImageSize::VeryLarge.badge_scale(crate::cache::ImageType::Poster);
+        assert!(large > medium);
+        assert!(very_large > large);
+    }
+
+    #[test]
+    fn image_size_cache_suffixes() {
+        assert_eq!(ImageSize::Small.cache_suffix(), ".zs");
+        assert_eq!(ImageSize::Medium.cache_suffix(), ".zm");
+        assert_eq!(ImageSize::Large.cache_suffix(), ".zl");
+        assert_eq!(ImageSize::VeryLarge.cache_suffix(), ".zvl");
+    }
+
+    #[test]
+    fn image_size_tmdb_sizes() {
+        assert_eq!(ImageSize::Small.tmdb_size(), "w780");
+        assert_eq!(ImageSize::Medium.tmdb_size(), "w780");
+        assert_eq!(ImageSize::Large.tmdb_size(), "original");
+        assert_eq!(ImageSize::VeryLarge.tmdb_size(), "original");
+    }
+
+    #[test]
+    fn validate_image_size_accepts_valid_poster_sizes() {
+        assert!(validate_image_size("medium", crate::cache::ImageType::Poster).is_ok());
+        assert!(validate_image_size("large", crate::cache::ImageType::Poster).is_ok());
+        assert!(validate_image_size("very-large", crate::cache::ImageType::Poster).is_ok());
+    }
+
+    #[test]
+    fn validate_image_size_rejects_small_for_poster() {
+        assert!(validate_image_size("small", crate::cache::ImageType::Poster).is_err());
+    }
+
+    #[test]
+    fn validate_image_size_rejects_small_for_logo() {
+        assert!(validate_image_size("small", crate::cache::ImageType::Logo).is_err());
+    }
+
+    #[test]
+    fn validate_image_size_accepts_small_for_backdrop() {
+        assert!(validate_image_size("small", crate::cache::ImageType::Backdrop).is_ok());
+    }
+
+    #[test]
+    fn validate_image_size_rejects_unknown() {
+        assert!(validate_image_size("huge", crate::cache::ImageType::Poster).is_err());
+        assert!(validate_image_size("", crate::cache::ImageType::Backdrop).is_err());
     }
 }
 
@@ -972,22 +1228,22 @@ pub async fn delete_api_key_settings(
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct PosterSettings {
-    pub poster_source: String,
-    pub fanart_lang: String,
+    pub poster_source: Arc<str>,
+    pub fanart_lang: Arc<str>,
     pub fanart_textless: bool,
     pub ratings_limit: i32,
-    pub ratings_order: String,
+    pub ratings_order: Arc<str>,
     pub is_default: bool,
-    pub poster_position: String,
+    pub poster_position: Arc<str>,
     pub logo_ratings_limit: i32,
     pub backdrop_ratings_limit: i32,
-    pub poster_badge_style: String,
-    pub logo_badge_style: String,
-    pub backdrop_badge_style: String,
-    pub poster_label_style: String,
-    pub logo_label_style: String,
-    pub backdrop_label_style: String,
-    pub poster_badge_direction: String,
+    pub poster_badge_style: Arc<str>,
+    pub logo_badge_style: Arc<str>,
+    pub backdrop_badge_style: Arc<str>,
+    pub poster_label_style: Arc<str>,
+    pub logo_label_style: Arc<str>,
+    pub backdrop_label_style: Arc<str>,
+    pub poster_badge_direction: Arc<str>,
     /// Set when `?lang=` query param overrides the stored fanart_lang at request time.
     #[serde(skip)]
     pub lang_override: bool,
@@ -996,22 +1252,22 @@ pub struct PosterSettings {
 impl Default for PosterSettings {
     fn default() -> Self {
         Self {
-            poster_source: SOURCE_TMDB.to_string(),
-            fanart_lang: default_fanart_lang(),
+            poster_source: Arc::from(SOURCE_TMDB),
+            fanart_lang: Arc::from("en"),
             fanart_textless: false,
             ratings_limit: default_ratings_limit(),
-            ratings_order: default_ratings_order(),
+            ratings_order: Arc::from("mal,imdb,lb,rt,mc,rta,tmdb,trakt"),
             is_default: true,
-            poster_position: default_poster_position(),
+            poster_position: Arc::from(POS_BOTTOM_CENTER),
             logo_ratings_limit: default_logo_backdrop_ratings_limit(),
             backdrop_ratings_limit: default_logo_backdrop_ratings_limit(),
-            poster_badge_style: default_poster_badge_style(),
-            logo_badge_style: default_logo_badge_style(),
-            backdrop_badge_style: default_backdrop_badge_style(),
-            poster_label_style: default_label_style(),
-            logo_label_style: default_label_style(),
-            backdrop_label_style: default_label_style(),
-            poster_badge_direction: default_poster_badge_direction(),
+            poster_badge_style: Arc::from(STYLE_DEFAULT),
+            logo_badge_style: Arc::from(STYLE_VERTICAL),
+            backdrop_badge_style: Arc::from(STYLE_VERTICAL),
+            poster_label_style: Arc::from(LABEL_ICON),
+            logo_label_style: Arc::from(LABEL_ICON),
+            backdrop_label_style: Arc::from(LABEL_ICON),
+            poster_badge_direction: Arc::from(DIRECTION_DEFAULT),
             lang_override: false,
         }
     }
@@ -1023,15 +1279,12 @@ pub fn parse_global_poster_settings(globals: &HashMap<String, String>) -> Poster
         return PosterSettings::default();
     }
     let defaults = PosterSettings::default();
+    let arc_or = |key: &str, default: Arc<str>| -> Arc<str> {
+        globals.get(key).map(|s| Arc::from(s.as_str())).unwrap_or(default)
+    };
     PosterSettings {
-        poster_source: globals
-            .get("poster_source")
-            .cloned()
-            .unwrap_or(defaults.poster_source),
-        fanart_lang: globals
-            .get("fanart_lang")
-            .cloned()
-            .unwrap_or(defaults.fanart_lang),
+        poster_source: arc_or("poster_source", defaults.poster_source),
+        fanart_lang: arc_or("fanart_lang", defaults.fanart_lang),
         fanart_textless: globals
             .get("fanart_textless")
             .map(|v| v == "true")
@@ -1040,15 +1293,9 @@ pub fn parse_global_poster_settings(globals: &HashMap<String, String>) -> Poster
             .get("ratings_limit")
             .and_then(|v| v.parse().ok())
             .unwrap_or(defaults.ratings_limit),
-        ratings_order: globals
-            .get("ratings_order")
-            .cloned()
-            .unwrap_or(defaults.ratings_order),
+        ratings_order: arc_or("ratings_order", defaults.ratings_order),
         is_default: true,
-        poster_position: globals
-            .get("poster_position")
-            .cloned()
-            .unwrap_or(defaults.poster_position),
+        poster_position: arc_or("poster_position", defaults.poster_position),
         logo_ratings_limit: globals
             .get("logo_ratings_limit")
             .and_then(|v| v.parse().ok())
@@ -1057,34 +1304,13 @@ pub fn parse_global_poster_settings(globals: &HashMap<String, String>) -> Poster
             .get("backdrop_ratings_limit")
             .and_then(|v| v.parse().ok())
             .unwrap_or(defaults.backdrop_ratings_limit),
-        poster_badge_style: globals
-            .get("poster_badge_style")
-            .cloned()
-            .unwrap_or(defaults.poster_badge_style),
-        logo_badge_style: globals
-            .get("logo_badge_style")
-            .cloned()
-            .unwrap_or(defaults.logo_badge_style),
-        backdrop_badge_style: globals
-            .get("backdrop_badge_style")
-            .cloned()
-            .unwrap_or(defaults.backdrop_badge_style),
-        poster_label_style: globals
-            .get("poster_label_style")
-            .cloned()
-            .unwrap_or(defaults.poster_label_style),
-        logo_label_style: globals
-            .get("logo_label_style")
-            .cloned()
-            .unwrap_or(defaults.logo_label_style),
-        backdrop_label_style: globals
-            .get("backdrop_label_style")
-            .cloned()
-            .unwrap_or(defaults.backdrop_label_style),
-        poster_badge_direction: globals
-            .get("poster_badge_direction")
-            .cloned()
-            .unwrap_or(defaults.poster_badge_direction),
+        poster_badge_style: arc_or("poster_badge_style", defaults.poster_badge_style),
+        logo_badge_style: arc_or("logo_badge_style", defaults.logo_badge_style),
+        backdrop_badge_style: arc_or("backdrop_badge_style", defaults.backdrop_badge_style),
+        poster_label_style: arc_or("poster_label_style", defaults.poster_label_style),
+        logo_label_style: arc_or("logo_label_style", defaults.logo_label_style),
+        backdrop_label_style: arc_or("backdrop_label_style", defaults.backdrop_label_style),
+        poster_badge_direction: arc_or("poster_badge_direction", defaults.poster_badge_direction),
         lang_override: false,
     }
 }
@@ -1098,22 +1324,22 @@ pub async fn get_effective_poster_settings(
     match get_api_key_settings(db, api_key_id).await {
         Ok(Some(s)) => {
             return PosterSettings {
-                poster_source: s.poster_source,
-                fanart_lang: s.fanart_lang,
+                poster_source: Arc::from(s.poster_source.as_str()),
+                fanart_lang: Arc::from(s.fanart_lang.as_str()),
                 fanart_textless: s.fanart_textless,
                 ratings_limit: s.ratings_limit,
-                ratings_order: s.ratings_order,
+                ratings_order: Arc::from(s.ratings_order.as_str()),
                 is_default: false,
-                poster_position: s.poster_position,
+                poster_position: Arc::from(s.poster_position.as_str()),
                 logo_ratings_limit: s.logo_ratings_limit,
                 backdrop_ratings_limit: s.backdrop_ratings_limit,
-                poster_badge_style: s.poster_badge_style,
-                logo_badge_style: s.logo_badge_style,
-                backdrop_badge_style: s.backdrop_badge_style,
-                poster_label_style: s.poster_label_style,
-                logo_label_style: s.logo_label_style,
-                backdrop_label_style: s.backdrop_label_style,
-                poster_badge_direction: s.poster_badge_direction,
+                poster_badge_style: Arc::from(s.poster_badge_style.as_str()),
+                logo_badge_style: Arc::from(s.logo_badge_style.as_str()),
+                backdrop_badge_style: Arc::from(s.backdrop_badge_style.as_str()),
+                poster_label_style: Arc::from(s.poster_label_style.as_str()),
+                logo_label_style: Arc::from(s.logo_label_style.as_str()),
+                backdrop_label_style: Arc::from(s.backdrop_label_style.as_str()),
+                poster_badge_direction: Arc::from(s.poster_badge_direction.as_str()),
                 lang_override: false,
             };
         }

@@ -4,6 +4,7 @@ use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 use std::sync::Arc;
 
+use crate::cache;
 use crate::error::AppError;
 use crate::handlers::auth::hash_api_key;
 use crate::poster::generate;
@@ -20,6 +21,8 @@ pub struct PosterQuery {
     pub fallback: Option<String>,
     #[serde(default)]
     pub lang: Option<String>,
+    #[serde(default, rename = "imageSize")]
+    pub image_size: Option<String>,
 }
 
 /// Resolve settings for a free API key (global defaults, no per-key DB lookup).
@@ -118,7 +121,7 @@ fn apply_lang_override(
     if let Some(lang) = lang {
         db::validate_fanart_lang(lang).map_err(|e| e.into_response())?;
         let mut s = (*settings).clone();
-        s.fanart_lang = lang.clone();
+        s.fanart_lang = Arc::from(lang.as_str());
         s.lang_override = true;
         Ok(Arc::new(s))
     } else {
@@ -136,18 +139,26 @@ async fn try_cdn_redirect(
     image_type_path: &str,
     id_value: &str,
     fallback: Option<&str>,
+    image_size: Option<db::ImageSize>,
 ) -> Option<Response> {
     if !state.config.enable_cdn_redirects {
         return None;
     }
-    let hash = serve::settings_hash(settings, kind);
+    let hash = serve::settings_hash(settings, kind, image_size);
     state
         .settings_hash_registry
         .insert(hash.clone(), settings.clone())
         .await;
     let mut url = format!("/c/{hash}/{id_type_str}/{image_type_path}/{id_value}");
+    let mut has_query = false;
     if fallback == Some("true") {
         url.push_str("?fallback=true");
+        has_query = true;
+    }
+    if let Some(size) = image_size {
+        url.push(if has_query { '&' } else { '?' });
+        url.push_str("imageSize=");
+        url.push_str(size.query_str());
     }
     Some(serve::cdn_redirect_response(&url))
 }
@@ -158,6 +169,11 @@ pub async fn handler(
     Query(query): Query<PosterQuery>,
 ) -> Response {
     let use_fallback = query.fallback.as_deref() == Some("true");
+
+    let image_size = match parse_image_size(&query.image_size, cache::ImageType::Poster) {
+        Ok(s) => s,
+        Err(resp) => return resp,
+    };
 
     let settings = match resolve_settings(&state, &api_key).await {
         Ok(s) => s,
@@ -176,13 +192,27 @@ pub async fn handler(
         "poster-default",
         &id_value_jpg,
         query.fallback.as_deref(),
+        image_size,
     )
     .await
     {
         return redirect;
     }
 
-    serve_poster(&state, &id_type_str, &id_value_jpg, &settings, use_fallback).await
+    serve_poster(&state, &id_type_str, &id_value_jpg, &settings, use_fallback, image_size).await
+}
+
+/// Parse and validate the optional `imageSize` query parameter.
+fn parse_image_size(
+    raw: &Option<String>,
+    kind: cache::ImageType,
+) -> Result<Option<db::ImageSize>, Response> {
+    match raw {
+        Some(s) => db::validate_image_size(s, kind)
+            .map(Some)
+            .map_err(|e| e.into_response()),
+        None => Ok(None),
+    }
 }
 
 async fn serve_poster(
@@ -191,8 +221,9 @@ async fn serve_poster(
     id_value_jpg: &str,
     settings: &db::PosterSettings,
     use_fallback: bool,
+    image_size: Option<db::ImageSize>,
 ) -> Response {
-    match serve::handle_inner(state, id_type_str, id_value_jpg, settings.clone()).await {
+    match serve::handle_inner(state, id_type_str, id_value_jpg, settings.clone(), image_size).await {
         Ok(bytes) => serve::jpeg_response(bytes),
         Err(e) => {
             if use_fallback {
@@ -223,6 +254,11 @@ pub async fn logo_handler(
 ) -> Response {
     let use_fallback = query.fallback.as_deref() == Some("true");
 
+    let image_size = match parse_image_size(&query.image_size, cache::ImageType::Logo) {
+        Ok(s) => s,
+        Err(resp) => return resp,
+    };
+
     if let Err(resp) = require_fanart(&state) {
         return resp;
     }
@@ -244,13 +280,14 @@ pub async fn logo_handler(
         "logo-default",
         &id_value_png,
         query.fallback.as_deref(),
+        image_size,
     )
     .await
     {
         return redirect;
     }
 
-    serve_fanart_image(&state, &id_type_str, &id_value_png, &settings, use_fallback, serve::FanartImageKind::Logo).await
+    serve_fanart_image(&state, &id_type_str, &id_value_png, &settings, use_fallback, serve::FanartImageKind::Logo, image_size).await
 }
 
 pub async fn backdrop_handler(
@@ -259,6 +296,11 @@ pub async fn backdrop_handler(
     Query(query): Query<PosterQuery>,
 ) -> Response {
     let use_fallback = query.fallback.as_deref() == Some("true");
+
+    let image_size = match parse_image_size(&query.image_size, cache::ImageType::Backdrop) {
+        Ok(s) => s,
+        Err(resp) => return resp,
+    };
 
     if let Err(resp) = require_fanart(&state) {
         return resp;
@@ -281,13 +323,14 @@ pub async fn backdrop_handler(
         "backdrop-default",
         &id_value_jpg,
         query.fallback.as_deref(),
+        image_size,
     )
     .await
     {
         return redirect;
     }
 
-    serve_fanart_image(&state, &id_type_str, &id_value_jpg, &settings, use_fallback, serve::FanartImageKind::Backdrop).await
+    serve_fanart_image(&state, &id_type_str, &id_value_jpg, &settings, use_fallback, serve::FanartImageKind::Backdrop, image_size).await
 }
 
 async fn serve_fanart_image(
@@ -297,8 +340,9 @@ async fn serve_fanart_image(
     settings: &db::PosterSettings,
     use_fallback: bool,
     kind: serve::FanartImageKind,
+    image_size: Option<db::ImageSize>,
 ) -> Response {
-    match serve::handle_fanart_image_inner(state, id_type_str, id_value_raw, settings, kind).await {
+    match serve::handle_fanart_image_inner(state, id_type_str, id_value_raw, settings, kind, image_size).await {
         Ok(bytes) => match kind {
             serve::FanartImageKind::Logo => serve::png_response(bytes),
             serve::FanartImageKind::Backdrop => serve::jpeg_response(bytes),
@@ -339,7 +383,12 @@ pub async fn cdn_poster_handler(
 
     let use_fallback = query.fallback.as_deref() == Some("true");
 
-    match serve::handle_inner(&state, &id_type_str, &id_value_jpg, (*settings).clone()).await {
+    let image_size = match parse_image_size(&query.image_size, cache::ImageType::Poster) {
+        Ok(s) => s,
+        Err(resp) => return resp,
+    };
+
+    match serve::handle_inner(&state, &id_type_str, &id_value_jpg, (*settings).clone(), image_size).await {
         Ok(bytes) => serve::cdn_jpeg_response(bytes),
         Err(e) => {
             if use_fallback {
@@ -368,7 +417,12 @@ pub async fn cdn_logo_handler(
 
     let use_fallback = query.fallback.as_deref() == Some("true");
 
-    match serve::handle_fanart_image_inner(&state, &id_type_str, &id_value_png, &settings, serve::FanartImageKind::Logo).await {
+    let image_size = match parse_image_size(&query.image_size, cache::ImageType::Logo) {
+        Ok(s) => s,
+        Err(resp) => return resp,
+    };
+
+    match serve::handle_fanart_image_inner(&state, &id_type_str, &id_value_png, &settings, serve::FanartImageKind::Logo, image_size).await {
         Ok(bytes) => serve::cdn_png_response(bytes),
         Err(e) => {
             if use_fallback {
@@ -397,7 +451,12 @@ pub async fn cdn_backdrop_handler(
 
     let use_fallback = query.fallback.as_deref() == Some("true");
 
-    match serve::handle_fanart_image_inner(&state, &id_type_str, &id_value_jpg, &settings, serve::FanartImageKind::Backdrop).await {
+    let image_size = match parse_image_size(&query.image_size, cache::ImageType::Backdrop) {
+        Ok(s) => s,
+        Err(resp) => return resp,
+    };
+
+    match serve::handle_fanart_image_inner(&state, &id_type_str, &id_value_jpg, &settings, serve::FanartImageKind::Backdrop, image_size).await {
         Ok(bytes) => serve::cdn_jpeg_response(bytes),
         Err(e) => {
             if use_fallback {

@@ -49,9 +49,40 @@ GET /{api_key}/isValid
 - `id_value`: e.g. `tt1234567`, `movie-123`, `series-456`
 - `?fallback=true`: return a placeholder image instead of an error on failure
 - `?lang={code}`: override the Fanart.tv language for this request (e.g. `?lang=de` for German posters). Automatically switches the poster source to Fanart.tv even if TMDB is configured
+- `?imageSize={size}`: control output image dimensions. Available sizes vary by image type (see [Image Sizes](#image-sizes))
 - RPDB-compatible — use `http://localhost:3000` as the base URL (drop-in replacement for `https://api.ratingposterdb.com`)
 
 Management endpoints (auth, keys, settings) are under `/api/` and return JSON.
+
+### Image Sizes
+
+The `?imageSize=` parameter controls the output dimensions. When omitted, `medium` is used as the default. All badge elements scale proportionally with the image.
+
+**Poster sizes:**
+
+| Size | Dimensions |
+|---|---|
+| `medium` *(default)* | 580 × 859 |
+| `large` | 1280 × 1896 |
+| `very-large` | 2000 × 2962 |
+
+**Logo sizes:**
+
+| Size | Dimensions |
+|---|---|
+| `medium` *(default)* | 780 × 244 |
+| `large` | 1722 × 539 |
+| `very-large` | 2689 × 841 |
+
+**Backdrop sizes:**
+
+| Size | Dimensions |
+|---|---|
+| `small` | 1280 × 720 |
+| `medium` *(default)* | 1920 × 1080 |
+| `large` | 3840 × 2160 |
+
+`small` is only valid for backdrops — requesting it for posters or logos returns `400 Bad Request`. `verylarge` is accepted as an alias for `very-large` for RPDB compatibility.
 
 ## Features
 
@@ -150,7 +181,7 @@ Images are cached in three layers: in-memory (moka), filesystem, and SQLite meta
 ```
 {CACHE_DIR}/
 ├── base/
-│   ├── posters/          # Raw TMDB poster downloads (original filename)
+│   ├── posters/{tmdb_size}/  # Raw TMDB poster downloads (grouped by CDN size: w500, w780, original)
 │   └── fanart/           # Raw fanart.tv downloads ({fanart_id}.{ext})
 ├── posters/{id_type}/    # Rendered poster JPEGs
 ├── logos/{id_type}/       # Rendered logo PNGs
@@ -164,17 +195,17 @@ Cache keys uniquely identify a rendered image. They are used as keys in the in-m
 
 **Poster:**
 ```
-{id_type}/{id_value}{ratings_suffix}{pos_suffix}{style_suffix}{label_suffix}{direction_suffix}
+{id_type}/{id_value}{ratings_suffix}{pos_suffix}{style_suffix}{label_suffix}{direction_suffix}{size_suffix}
 ```
 
 **Fanart poster:**
 ```
-{id_type}/{id_value}{variant}{ratings_suffix}{pos_suffix}{style_suffix}{label_suffix}{direction_suffix}
+{id_type}/{id_value}{variant}{ratings_suffix}{pos_suffix}{style_suffix}{label_suffix}{direction_suffix}{size_suffix}
 ```
 
 **Logo / Backdrop:**
 ```
-{id_type}/{id_value}{kind_prefix}{variant}{ratings_suffix}{style_suffix}{label_suffix}
+{id_type}/{id_value}{kind_prefix}{variant}{ratings_suffix}{style_suffix}{label_suffix}{size_suffix}
 ```
 
 ### Suffix Reference
@@ -186,6 +217,7 @@ Cache keys uniquely identify a rendered image. They are used as keys in the in-m
 | Badge style | `.s{style}` | `.sh`, `.sv` | `h` = horizontal, `v` = vertical |
 | Label style | `.l{style}` | `.lt`, `.li` | `t` = text labels, `i` = icon labels |
 | Badge direction | `.d{dir}` | `.dh`, `.dv` | `h` = horizontal, `v` = vertical (resolved from `d` = default) |
+| Image size | `.z{size}` | `.zm`, `.zl` | `s` = small, `m` = medium (default), `l` = large, `vl` = very-large |
 
 ### Image Kind Prefixes
 
@@ -233,17 +265,20 @@ Settings are stored as short single-character or two-character codes:
 ### Example Cache Keys
 
 ```
-# TMDB poster, 3 ratings (MAL, IMDb, Letterboxd), bottom-center, horizontal badges, icon labels, horizontal direction
-imdb/tt0111161@mil.pbc.sh.li.dh
+# TMDB poster, 3 ratings (MAL, IMDb, Letterboxd), bottom-center, horizontal badges, icon labels, horizontal direction, medium (default)
+imdb/tt0111161@mil.pbc.sh.li.dh.zm
+
+# Same poster at large size
+imdb/tt0111161@mil.pbc.sh.li.dh.zl
 
 # Fanart textless poster
-imdb/tt0111161_f_tl@mil.pbc.sh.li.dh
+imdb/tt0111161_f_tl@mil.pbc.sh.li.dh.zm
 
 # Logo with 3 ratings, horizontal badges, text labels
-imdb/tt0111161_l_f_en@mil.sh.lt
+imdb/tt0111161_l_f_en@mil.sh.lt.zm
 
-# Backdrop with vertical badges, icon labels
-imdb/tt0111161_b@mil.sv.li
+# Backdrop with vertical badges, icon labels, large size
+imdb/tt0111161_b@mil.sv.li.zl
 ```
 
 ### Cross-ID Cache
@@ -268,7 +303,7 @@ When a stale entry is served, a background refresh is spawned to regenerate it w
 
 When `ENABLE_CDN_REDIRECTS=true`, authenticated poster requests (`/{api_key}/...`) return a **302 redirect** to a content-addressed URL (`/c/{settings_hash}/...`) instead of serving the image directly. This is designed for deployments behind Cloudflare or another CDN:
 
-1. The app computes a 12-character hash from the user's effective settings (ratings order, badge style, position, etc.)
+1. The app computes a 32-character hex hash from the user's effective settings (ratings order, badge style, position, etc.)
 2. The original endpoint validates the API key, then redirects to `/c/{hash}/{id_type}/poster-default/{id_value}.jpg`
 3. The `/c/` endpoint serves the image with a long public cache TTL (`max-age=86400`)
 4. The CDN caches by the `/c/` URL — all users with identical settings share one cache entry

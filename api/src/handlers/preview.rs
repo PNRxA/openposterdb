@@ -9,7 +9,8 @@ use std::sync::{Arc, LazyLock};
 use crate::cache;
 use crate::error::AppError;
 use crate::poster::generate;
-use crate::services::db::{validate_poster_position, validate_badge_style, validate_label_style, default_label_style, validate_badge_direction, default_poster_badge_direction, resolve_badge_direction, resolve_badge_style};
+use crate::poster::serve;
+use crate::services::db::{self, validate_poster_position, validate_badge_style, validate_label_style, default_label_style, validate_badge_direction, default_poster_badge_direction, resolve_badge_direction, resolve_badge_style};
 use crate::services::ratings::{self, RatingBadge, RatingSource};
 use crate::AppState;
 
@@ -98,6 +99,19 @@ pub struct PreviewQuery {
     pub label_style: String,
     #[serde(default = "default_poster_badge_direction")]
     pub badge_direction: String,
+    #[serde(default, rename = "imageSize")]
+    pub image_size: Option<String>,
+}
+
+/// Parse and validate the optional `imageSize` query parameter for previews.
+fn parse_preview_image_size(
+    raw: &Option<String>,
+    kind: cache::ImageType,
+) -> Result<Option<db::ImageSize>, AppError> {
+    match raw {
+        Some(s) => db::validate_image_size(s, kind).map(Some),
+        None => Ok(None),
+    }
 }
 
 fn default_ratings_limit() -> i32 {
@@ -108,6 +122,11 @@ pub async fn preview_poster(
     State(state): State<Arc<AppState>>,
     Query(query): Query<PreviewQuery>,
 ) -> Result<Response, AppError> {
+    let image_size = parse_preview_image_size(&query.image_size, cache::ImageType::Poster)?;
+    let resolved_size = serve::resolve_image_size(image_size);
+    let target_width = resolved_size.poster_target_width();
+    let badge_scale = resolved_size.badge_scale(cache::ImageType::Poster);
+
     let position = if query.poster_position.is_empty() {
         "bc"
     } else {
@@ -126,12 +145,13 @@ pub async fn preview_poster(
     let badge_direction = resolve_badge_direction(&query.badge_direction, position);
     let badge_style = resolve_badge_style(raw_badge_style, &badge_direction);
     let suffix = ratings::ratings_cache_suffix(&query.ratings_order, query.ratings_limit);
-    let pos_suffix = crate::poster::serve::poster_position_cache_suffix(position);
-    let bs_suffix = crate::poster::serve::badge_style_cache_suffix(&badge_style);
-    let ls_suffix = crate::poster::serve::label_style_cache_suffix(label_style);
-    let bd_suffix = crate::poster::serve::badge_direction_cache_suffix(&badge_direction);
-    let cache_key = format!("preview:{suffix}{pos_suffix}{bs_suffix}{ls_suffix}{bd_suffix}");
-    let cache_path = cache::preview_path(&state.config.cache_dir, cache::ImageType::Poster, &format!("{suffix}{pos_suffix}{bs_suffix}{ls_suffix}{bd_suffix}"), "jpg")?;
+    let pos_suffix = serve::poster_position_cache_suffix(position);
+    let bs_suffix = serve::badge_style_cache_suffix(&badge_style);
+    let ls_suffix = serve::label_style_cache_suffix(label_style);
+    let bd_suffix = serve::badge_direction_cache_suffix(&badge_direction);
+    let is_suffix = serve::image_size_cache_suffix(image_size);
+    let cache_key = format!("preview:{suffix}{pos_suffix}{bs_suffix}{ls_suffix}{bd_suffix}{is_suffix}");
+    let cache_path = cache::preview_path(&state.config.cache_dir, cache::ImageType::Poster, &format!("{suffix}{pos_suffix}{bs_suffix}{ls_suffix}{bd_suffix}{is_suffix}"), "jpg")?;
 
     // 1. Check in-memory cache
     if let Some(cached) = state.preview_cache.get(&cache_key).await {
@@ -155,7 +175,7 @@ pub async fn preview_poster(
     let position = position.to_string();
     let label_style = label_style.to_string();
     let buf = tokio::task::spawn_blocking(move || {
-        generate::render_poster_sync(poster_png, &badges, &font, quality, false, &position, &badge_style, &label_style, &badge_direction)
+        generate::render_poster_sync(poster_png, &badges, &font, quality, &position, &badge_style, &label_style, &badge_direction, target_width, badge_scale)
     })
     .await
     .map_err(|e| AppError::Other(e.to_string()))??;
@@ -171,6 +191,11 @@ pub async fn preview_logo(
     State(state): State<Arc<AppState>>,
     Query(query): Query<PreviewQuery>,
 ) -> Result<Response, AppError> {
+    let image_size = parse_preview_image_size(&query.image_size, cache::ImageType::Logo)?;
+    let resolved_size = serve::resolve_image_size(image_size);
+    let target_width = resolved_size.logo_target_width();
+    let badge_scale = resolved_size.badge_scale(cache::ImageType::Logo);
+
     let badge_style = if query.badge_style.is_empty() {
         "h"
     } else {
@@ -180,10 +205,11 @@ pub async fn preview_logo(
     validate_label_style(&query.label_style)?;
     let label_style = &query.label_style;
     let suffix = ratings::ratings_cache_suffix(&query.ratings_order, query.ratings_limit);
-    let bs_suffix = crate::poster::serve::badge_style_cache_suffix(badge_style);
-    let ls_suffix = crate::poster::serve::label_style_cache_suffix(label_style);
-    let cache_key = format!("preview-logo:{suffix}{bs_suffix}{ls_suffix}");
-    let cache_path = cache::preview_path(&state.config.cache_dir, cache::ImageType::Logo, &format!("{suffix}{bs_suffix}{ls_suffix}"), "png")?;
+    let bs_suffix = serve::badge_style_cache_suffix(badge_style);
+    let ls_suffix = serve::label_style_cache_suffix(label_style);
+    let is_suffix = serve::image_size_cache_suffix(image_size);
+    let cache_key = format!("preview-logo:{suffix}{bs_suffix}{ls_suffix}{is_suffix}");
+    let cache_path = cache::preview_path(&state.config.cache_dir, cache::ImageType::Logo, &format!("{suffix}{bs_suffix}{ls_suffix}{is_suffix}"), "png")?;
 
     if let Some(cached) = state.preview_cache.get(&cache_key).await {
         return Ok(preview_png_response(cached));
@@ -204,7 +230,7 @@ pub async fn preview_logo(
     let label_style = label_style.to_string();
 
     let buf = tokio::task::spawn_blocking(move || {
-        generate::render_logo_sync(logo_png, &badges, &font, &badge_style, &label_style)
+        generate::render_logo_sync(logo_png, &badges, &font, &badge_style, &label_style, target_width, badge_scale)
     })
     .await
     .map_err(|e| AppError::Other(e.to_string()))??;
@@ -220,6 +246,11 @@ pub async fn preview_backdrop(
     State(state): State<Arc<AppState>>,
     Query(query): Query<PreviewQuery>,
 ) -> Result<Response, AppError> {
+    let image_size = parse_preview_image_size(&query.image_size, cache::ImageType::Backdrop)?;
+    let resolved_size = serve::resolve_image_size(image_size);
+    let target_width = resolved_size.backdrop_target_width();
+    let badge_scale = resolved_size.badge_scale(cache::ImageType::Backdrop);
+
     let badge_style = if query.badge_style.is_empty() {
         "v"
     } else {
@@ -229,10 +260,11 @@ pub async fn preview_backdrop(
     validate_label_style(&query.label_style)?;
     let label_style = &query.label_style;
     let suffix = ratings::ratings_cache_suffix(&query.ratings_order, query.ratings_limit);
-    let bs_suffix = crate::poster::serve::badge_style_cache_suffix(badge_style);
-    let ls_suffix = crate::poster::serve::label_style_cache_suffix(label_style);
-    let cache_key = format!("preview-backdrop:{suffix}{bs_suffix}{ls_suffix}");
-    let cache_path = cache::preview_path(&state.config.cache_dir, cache::ImageType::Backdrop, &format!("{suffix}{bs_suffix}{ls_suffix}"), "jpg")?;
+    let bs_suffix = serve::badge_style_cache_suffix(badge_style);
+    let ls_suffix = serve::label_style_cache_suffix(label_style);
+    let is_suffix = serve::image_size_cache_suffix(image_size);
+    let cache_key = format!("preview-backdrop:{suffix}{bs_suffix}{ls_suffix}{is_suffix}");
+    let cache_path = cache::preview_path(&state.config.cache_dir, cache::ImageType::Backdrop, &format!("{suffix}{bs_suffix}{ls_suffix}{is_suffix}"), "jpg")?;
 
     if let Some(cached) = state.preview_cache.get(&cache_key).await {
         return Ok(preview_response(cached));
@@ -254,7 +286,7 @@ pub async fn preview_backdrop(
     let label_style = label_style.to_string();
 
     let buf = tokio::task::spawn_blocking(move || {
-        generate::render_backdrop_sync(backdrop_png, &badges, &font, quality, &badge_style, &label_style)
+        generate::render_backdrop_sync(backdrop_png, &badges, &font, quality, &badge_style, &label_style, target_width, badge_scale)
     })
     .await
     .map_err(|e| AppError::Other(e.to_string()))??;
@@ -324,7 +356,7 @@ mod tests {
     fn sample_poster_renders_with_badges() {
         let font = ab_glyph::FontArc::try_from_slice(crate::FONT_BYTES).unwrap();
         let badges = sample_badges();
-        let result = generate::render_poster_sync(&SAMPLE_POSTER_PNG, &badges, &font, 85, false, "bc", "h", "t", "h");
+        let result = generate::render_poster_sync(&SAMPLE_POSTER_PNG, &badges, &font, 85, "bc", "h", "t", "h", 500, 1.0);
         let buf = result.expect("rendering should succeed");
         // Valid JPEG
         assert_eq!(buf[0], 0xFF);
@@ -335,7 +367,7 @@ mod tests {
     #[test]
     fn sample_poster_renders_with_no_badges() {
         let font = ab_glyph::FontArc::try_from_slice(crate::FONT_BYTES).unwrap();
-        let result = generate::render_poster_sync(&SAMPLE_POSTER_PNG, &[], &font, 85, false, "bc", "h", "t", "h");
+        let result = generate::render_poster_sync(&SAMPLE_POSTER_PNG, &[], &font, 85, "bc", "h", "t", "h", 500, 1.0);
         let buf = result.expect("rendering should succeed");
         assert_eq!(buf[0], 0xFF);
         assert_eq!(buf[1], 0xD8);
@@ -355,6 +387,7 @@ mod tests {
         assert_eq!(query.badge_style, "");
         assert_eq!(query.label_style, "i");
         assert_eq!(query.badge_direction, "d");
+        assert!(query.image_size.is_none());
     }
 
     #[test]

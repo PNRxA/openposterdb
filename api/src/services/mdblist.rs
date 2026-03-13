@@ -1,11 +1,14 @@
+use std::sync::Arc;
+
 use crate::error::AppError;
 use crate::id::MediaType;
 use crate::services::retry::{self, MDBLIST_RETRY};
 use serde::Deserialize;
+use zeroize::Zeroizing;
 
 #[derive(Clone)]
 pub struct MdblistClient {
-    api_key: String,
+    api_key: Arc<Zeroizing<String>>,
     http: reqwest::Client,
 }
 
@@ -34,7 +37,7 @@ pub struct MdblistRating {
 
 impl MdblistClient {
     pub fn new(api_key: String, http: reqwest::Client) -> Self {
-        Self { api_key, http }
+        Self { api_key: Arc::new(Zeroizing::new(api_key)), http }
     }
 
     pub async fn get_ratings(
@@ -52,7 +55,7 @@ impl MdblistClient {
         let resp = retry::send_with_retry(&MDBLIST_RETRY, || {
             self.http
                 .get(&url)
-                .query(&[("apikey", &self.api_key)])
+                .query(&[("apikey", self.api_key.as_str())])
                 .send()
         })
         .await?

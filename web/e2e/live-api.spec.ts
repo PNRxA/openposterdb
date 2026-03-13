@@ -143,6 +143,74 @@ test.describe('live API - poster generation', () => {
   })
 })
 
+test.describe('live API - imageSize parameter', () => {
+  test('poster with imageSize=large returns valid JPEG', async ({ request }) => {
+    const { apiKey } = await setupAdminAndKey(request)
+
+    const res = await request.get(
+      `/${apiKey}/imdb/poster-default/${TEST_IMDB_ID}.jpg?imageSize=large`,
+      { timeout: 60_000 },
+    )
+
+    if (res.status() !== 200) {
+      test.skip(true, 'Real API keys not configured — skipping live tests')
+      return
+    }
+
+    expect(res.headers()['content-type']).toBe('image/jpeg')
+    const body = await res.body()
+    expect(body[0]).toBe(0xff)
+    expect(body[1]).toBe(0xd8)
+    expect(body.length).toBeGreaterThan(10_000)
+  })
+
+  test('poster with imageSize=small returns 400', async ({ request }) => {
+    const { apiKey } = await setupAdminAndKey(request)
+
+    const res = await request.get(
+      `/${apiKey}/imdb/poster-default/${TEST_IMDB_ID}.jpg?imageSize=small`,
+    )
+    expect(res.status()).toBe(400)
+  })
+
+  test('poster with invalid imageSize returns 400', async ({ request }) => {
+    const { apiKey } = await setupAdminAndKey(request)
+
+    const res = await request.get(
+      `/${apiKey}/imdb/poster-default/${TEST_IMDB_ID}.jpg?imageSize=huge`,
+    )
+    expect(res.status()).toBe(400)
+  })
+
+  test('backdrop with imageSize=small is accepted', async ({ request }) => {
+    const { apiKey } = await setupAdminAndKey(request)
+
+    const res = await request.get(
+      `/${apiKey}/imdb/backdrop-default/${TEST_IMDB_ID}.jpg?imageSize=small`,
+      { timeout: 60_000 },
+    )
+
+    // If fanart keys not configured, skip — but should NOT be 400
+    if (res.status() !== 200) {
+      // small is valid for backdrops, so it should never be 400
+      expect(res.status()).not.toBe(400)
+      test.skip(true, 'Fanart API key not configured or no backdrop available')
+      return
+    }
+
+    expect(res.headers()['content-type']).toBe('image/jpeg')
+  })
+
+  test('logo with imageSize=small returns 400', async ({ request }) => {
+    const { apiKey } = await setupAdminAndKey(request)
+
+    const res = await request.get(
+      `/${apiKey}/imdb/logo-default/${TEST_IMDB_ID}.png?imageSize=small`,
+    )
+    expect(res.status()).toBe(400)
+  })
+})
+
 test.describe('live API - preview endpoints', () => {
   test('key preview returns valid JPEG', async ({ request }) => {
     const { apiKey } = await setupAdminAndKey(request)

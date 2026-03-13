@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 use super::auth::AuthUser;
 use super::middleware::ApiKeyUser;
 use crate::error::AppError;
-use crate::services::db::{self, validate_fanart_lang, validate_poster_source, validate_poster_position, validate_ratings_limit, validate_ratings_order, default_ratings_limit, default_logo_backdrop_ratings_limit, default_ratings_order, default_poster_position, default_poster_badge_style, default_logo_badge_style, default_backdrop_badge_style, validate_badge_style, default_label_style, validate_label_style, default_poster_badge_direction, validate_badge_direction};
+use crate::services::db::{self, validate_poster_settings_input, PosterSettingsInput, default_ratings_limit, default_logo_backdrop_ratings_limit, default_ratings_order, default_poster_position, default_poster_badge_style, default_logo_badge_style, default_backdrop_badge_style, default_label_style, default_poster_badge_direction};
 use crate::services::validation;
 use crate::AppState;
 
@@ -120,25 +120,29 @@ pub async fn get_settings(
         .await?
         .ok_or_else(|| AppError::IdNotFound(format!("API key {id} not found")))?;
     let settings = db::get_effective_poster_settings(&state.db, id, None).await;
-    Ok(Json(PosterSettingsResponse {
-        poster_source: settings.poster_source,
-        fanart_lang: settings.fanart_lang,
+    Ok(Json(settings_to_response(&settings, state.fanart.is_some())))
+}
+
+fn settings_to_response(settings: &db::PosterSettings, fanart_available: bool) -> PosterSettingsResponse {
+    PosterSettingsResponse {
+        poster_source: settings.poster_source.to_string(),
+        fanart_lang: settings.fanart_lang.to_string(),
         fanart_textless: settings.fanart_textless,
-        fanart_available: state.fanart.is_some(),
+        fanart_available,
         is_default: settings.is_default,
         ratings_limit: settings.ratings_limit,
-        ratings_order: settings.ratings_order,
-        poster_position: settings.poster_position,
+        ratings_order: settings.ratings_order.to_string(),
+        poster_position: settings.poster_position.to_string(),
         logo_ratings_limit: settings.logo_ratings_limit,
         backdrop_ratings_limit: settings.backdrop_ratings_limit,
-        poster_badge_style: settings.poster_badge_style,
-        logo_badge_style: settings.logo_badge_style,
-        backdrop_badge_style: settings.backdrop_badge_style,
-        poster_label_style: settings.poster_label_style,
-        logo_label_style: settings.logo_label_style,
-        backdrop_label_style: settings.backdrop_label_style,
-        poster_badge_direction: settings.poster_badge_direction,
-    }))
+        poster_badge_style: settings.poster_badge_style.to_string(),
+        logo_badge_style: settings.logo_badge_style.to_string(),
+        backdrop_badge_style: settings.backdrop_badge_style.to_string(),
+        poster_label_style: settings.poster_label_style.to_string(),
+        logo_label_style: settings.logo_label_style.to_string(),
+        backdrop_label_style: settings.backdrop_label_style.to_string(),
+        poster_badge_direction: settings.poster_badge_direction.to_string(),
+    }
 }
 
 #[derive(Deserialize)]
@@ -174,6 +178,23 @@ pub struct UpdateSettingsRequest {
     pub poster_badge_direction: String,
 }
 
+impl PosterSettingsInput for UpdateSettingsRequest {
+    fn poster_source(&self) -> &str { &self.poster_source }
+    fn fanart_lang(&self) -> &str { &self.fanart_lang }
+    fn ratings_limit(&self) -> i32 { self.ratings_limit }
+    fn ratings_order(&self) -> &str { &self.ratings_order }
+    fn poster_position(&self) -> &str { &self.poster_position }
+    fn logo_ratings_limit(&self) -> i32 { self.logo_ratings_limit }
+    fn backdrop_ratings_limit(&self) -> i32 { self.backdrop_ratings_limit }
+    fn poster_badge_style(&self) -> &str { &self.poster_badge_style }
+    fn logo_badge_style(&self) -> &str { &self.logo_badge_style }
+    fn backdrop_badge_style(&self) -> &str { &self.backdrop_badge_style }
+    fn poster_label_style(&self) -> &str { &self.poster_label_style }
+    fn logo_label_style(&self) -> &str { &self.logo_label_style }
+    fn backdrop_label_style(&self) -> &str { &self.backdrop_label_style }
+    fn poster_badge_direction(&self) -> &str { &self.poster_badge_direction }
+}
+
 pub async fn update_settings(
     State(state): State<Arc<AppState>>,
     Path(id): Path<i32>,
@@ -182,20 +203,7 @@ pub async fn update_settings(
     db::find_api_key_by_id(&state.db, id)
         .await?
         .ok_or_else(|| AppError::IdNotFound(format!("API key {id} not found")))?;
-    validate_poster_source(&req.poster_source)?;
-    validate_fanart_lang(&req.fanart_lang)?;
-    validate_ratings_limit(req.ratings_limit)?;
-    validate_ratings_order(&req.ratings_order)?;
-    validate_poster_position(&req.poster_position)?;
-    validate_ratings_limit(req.logo_ratings_limit)?;
-    validate_ratings_limit(req.backdrop_ratings_limit)?;
-    validate_badge_style(&req.poster_badge_style)?;
-    validate_badge_style(&req.logo_badge_style)?;
-    validate_badge_style(&req.backdrop_badge_style)?;
-    validate_label_style(&req.poster_label_style)?;
-    validate_label_style(&req.logo_label_style)?;
-    validate_label_style(&req.backdrop_label_style)?;
-    validate_badge_direction(&req.poster_badge_direction)?;
+    validate_poster_settings_input(&req)?;
     db::upsert_api_key_settings(&state.db, db::UpsertApiKeySettings {
         api_key_id: id,
         poster_source: &req.poster_source,
@@ -251,25 +259,7 @@ pub async fn get_own_settings(
 ) -> Result<Json<PosterSettingsResponse>, AppError> {
     let settings =
         db::get_effective_poster_settings(&state.db, api_key_user.key_id, None).await;
-    Ok(Json(PosterSettingsResponse {
-        poster_source: settings.poster_source,
-        fanart_lang: settings.fanart_lang,
-        fanart_textless: settings.fanart_textless,
-        fanart_available: state.fanart.is_some(),
-        is_default: settings.is_default,
-        ratings_limit: settings.ratings_limit,
-        ratings_order: settings.ratings_order,
-        poster_position: settings.poster_position,
-        logo_ratings_limit: settings.logo_ratings_limit,
-        backdrop_ratings_limit: settings.backdrop_ratings_limit,
-        poster_badge_style: settings.poster_badge_style,
-        logo_badge_style: settings.logo_badge_style,
-        backdrop_badge_style: settings.backdrop_badge_style,
-        poster_label_style: settings.poster_label_style,
-        logo_label_style: settings.logo_label_style,
-        backdrop_label_style: settings.backdrop_label_style,
-        poster_badge_direction: settings.poster_badge_direction,
-    }))
+    Ok(Json(settings_to_response(&settings, state.fanart.is_some())))
 }
 
 pub async fn update_own_settings(
@@ -278,20 +268,7 @@ pub async fn update_own_settings(
     Json(req): Json<UpdateSettingsRequest>,
 ) -> Result<Json<Value>, AppError> {
     let id = api_key_user.key_id;
-    validate_poster_source(&req.poster_source)?;
-    validate_fanart_lang(&req.fanart_lang)?;
-    validate_ratings_limit(req.ratings_limit)?;
-    validate_ratings_order(&req.ratings_order)?;
-    validate_poster_position(&req.poster_position)?;
-    validate_ratings_limit(req.logo_ratings_limit)?;
-    validate_ratings_limit(req.backdrop_ratings_limit)?;
-    validate_badge_style(&req.poster_badge_style)?;
-    validate_badge_style(&req.logo_badge_style)?;
-    validate_badge_style(&req.backdrop_badge_style)?;
-    validate_label_style(&req.poster_label_style)?;
-    validate_label_style(&req.logo_label_style)?;
-    validate_label_style(&req.backdrop_label_style)?;
-    validate_badge_direction(&req.poster_badge_direction)?;
+    validate_poster_settings_input(&req)?;
     db::upsert_api_key_settings(&state.db, db::UpsertApiKeySettings {
         api_key_id: id,
         poster_source: &req.poster_source,

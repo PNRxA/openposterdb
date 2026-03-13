@@ -52,6 +52,32 @@ impl ImageType {
             ImageType::Backdrop => "b",
         }
     }
+
+    /// Cache key prefix for image kind (poster has none).
+    pub fn kind_prefix(self) -> &'static str {
+        match self {
+            ImageType::Poster => "",
+            ImageType::Logo => "_l",
+            ImageType::Backdrop => "_b",
+        }
+    }
+
+    /// Strip the file extension matching this image type from a string.
+    pub fn strip_ext(self, s: &str) -> &str {
+        match self {
+            ImageType::Poster | ImageType::Backdrop => s.strip_suffix(".jpg").unwrap_or(s),
+            ImageType::Logo => s.strip_suffix(".png").unwrap_or(s),
+        }
+    }
+
+    /// Human-readable label.
+    pub fn label(self) -> &'static str {
+        match self {
+            ImageType::Poster => "poster",
+            ImageType::Logo => "logo",
+            ImageType::Backdrop => "backdrop",
+        }
+    }
 }
 
 /// Path for a rendered (composited) image: `{cache_dir}/{subdir}/{id_type}/{id_value}.{ext}`
@@ -74,14 +100,17 @@ pub fn typed_cache_path(
         .join(format!("{id_value}.{ext}")))
 }
 
-/// Path for a TMDB base poster: `{cache_dir}/base/posters/{filename}`
-pub fn base_poster_path(cache_dir: &str, poster_path: &str) -> Result<PathBuf, AppError> {
+/// Path for a TMDB base poster: `{cache_dir}/base/posters/{tmdb_size}/{filename}`
+pub fn base_poster_path(cache_dir: &str, poster_path: &str, tmdb_size: &str) -> Result<PathBuf, AppError> {
     // poster_path is like "/abc123.jpg" from TMDB
     let filename = poster_path.trim_start_matches('/');
     if !is_safe_path_component(filename) {
         return Err(AppError::BadRequest("invalid poster path".into()));
     }
-    Ok(Path::new(cache_dir).join("base").join("posters").join(filename))
+    if !is_safe_path_component(tmdb_size) {
+        return Err(AppError::BadRequest("invalid tmdb size".into()));
+    }
+    Ok(Path::new(cache_dir).join("base").join("posters").join(tmdb_size).join(filename))
 }
 
 /// Path for a fanart base image: `{cache_dir}/base/fanart/{fanart_id}.{ext}`
@@ -321,21 +350,34 @@ mod tests {
 
     #[test]
     fn base_poster_path_strips_leading_slash() {
-        let p = base_poster_path("/tmp/cache", "/abc123.jpg").unwrap();
-        assert_eq!(p, PathBuf::from("/tmp/cache/base/posters/abc123.jpg"));
+        let p = base_poster_path("/tmp/cache", "/abc123.jpg", "w500").unwrap();
+        assert_eq!(p, PathBuf::from("/tmp/cache/base/posters/w500/abc123.jpg"));
     }
 
     #[test]
     fn base_poster_path_no_leading_slash() {
-        let p = base_poster_path("/tmp/cache", "abc123.jpg").unwrap();
-        assert_eq!(p, PathBuf::from("/tmp/cache/base/posters/abc123.jpg"));
+        let p = base_poster_path("/tmp/cache", "abc123.jpg", "w500").unwrap();
+        assert_eq!(p, PathBuf::from("/tmp/cache/base/posters/w500/abc123.jpg"));
+    }
+
+    #[test]
+    fn base_poster_path_original_size() {
+        let p = base_poster_path("/tmp/cache", "/abc123.jpg", "original").unwrap();
+        assert_eq!(p, PathBuf::from("/tmp/cache/base/posters/original/abc123.jpg"));
     }
 
     #[test]
     fn base_poster_path_rejects_traversal() {
-        assert!(base_poster_path("/tmp/cache", "/../etc/passwd").is_err());
-        assert!(base_poster_path("/tmp/cache", "..").is_err());
-        assert!(base_poster_path("/tmp/cache", "").is_err());
+        assert!(base_poster_path("/tmp/cache", "/../etc/passwd", "w500").is_err());
+        assert!(base_poster_path("/tmp/cache", "..", "w500").is_err());
+        assert!(base_poster_path("/tmp/cache", "", "w500").is_err());
+    }
+
+    #[test]
+    fn base_poster_path_rejects_invalid_tmdb_size() {
+        assert!(base_poster_path("/tmp/cache", "abc123.jpg", "..").is_err());
+        assert!(base_poster_path("/tmp/cache", "abc123.jpg", "").is_err());
+        assert!(base_poster_path("/tmp/cache", "abc123.jpg", "../etc").is_err());
     }
 
     #[test]

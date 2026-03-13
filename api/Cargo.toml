@@ -39,3 +39,4 @@ openposterdb-api = { path = ".", features = ["test-support"] }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 base64 = "0.22.1"
+serial_test = "3"

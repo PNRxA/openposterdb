@@ -365,8 +365,8 @@ async fn redirect_hash_is_12_hex_chars() {
 
     let res = app.oneshot(req).await.unwrap();
     let location = res.headers().get("location").unwrap().to_str().unwrap();
-    // /c/{12_hex_chars}/imdb/...
+    // /c/{32_hex_chars}/imdb/...
     let hash = location.strip_prefix("/c/").unwrap().split('/').next().unwrap();
-    assert_eq!(hash.len(), 12, "hash should be 12 chars: {hash}");
+    assert_eq!(hash.len(), 32, "hash should be 32 chars: {hash}");
     assert!(hash.chars().all(|c| c.is_ascii_hexdigit()), "hash should be hex: {hash}");
 }

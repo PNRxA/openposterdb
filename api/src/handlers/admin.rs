@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::cache;
 use crate::error::AppError;
 use crate::poster::serve::{self, FanartImageKind};
-use crate::services::db::{self, validate_fanart_lang, validate_poster_source, validate_poster_position, validate_ratings_limit, validate_ratings_order, default_ratings_limit, default_logo_backdrop_ratings_limit, default_ratings_order, default_poster_position, default_poster_badge_style, default_logo_badge_style, default_backdrop_badge_style, validate_badge_style, default_label_style, validate_label_style, default_poster_badge_direction, validate_badge_direction};
+use crate::services::db::{self, validate_poster_settings_input, PosterSettingsInput, default_ratings_limit, default_logo_backdrop_ratings_limit, default_ratings_order, default_poster_position, default_poster_badge_style, default_logo_badge_style, default_backdrop_badge_style, default_label_style, default_poster_badge_direction};
 use crate::AppState;
 
 #[derive(Serialize)]
@@ -71,14 +71,15 @@ pub struct ListPostersResponse {
     pub page_size: u64,
 }
 
-pub async fn list_posters(
-    State(state): State<Arc<AppState>>,
-    Query(query): Query<ListPostersQuery>,
+async fn list_images(
+    state: &AppState,
+    query: &ListPostersQuery,
+    image_type: cache::ImageType,
 ) -> Result<Json<ListPostersResponse>, AppError> {
     let page = query.page.max(1);
     let page_size = query.page_size.clamp(1, 100);
 
-    let (items, total) = db::list_poster_meta_by_kind(&state.db, cache::ImageType::Poster, page, page_size).await?;
+    let (items, total) = db::list_poster_meta_by_kind(&state.db, image_type, page, page_size).await?;
 
     let items = items
         .into_iter()
@@ -90,12 +91,14 @@ pub async fn list_posters(
         })
         .collect();
 
-    Ok(Json(ListPostersResponse {
-        items,
-        total,
-        page,
-        page_size,
-    }))
+    Ok(Json(ListPostersResponse { items, total, page, page_size }))
+}
+
+pub async fn list_posters(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<ListPostersQuery>,
+) -> Result<Json<ListPostersResponse>, AppError> {
+    list_images(&state, &query, cache::ImageType::Poster).await
 }
 
 pub async fn poster_image(
@@ -140,23 +143,23 @@ pub async fn get_settings(
         .map_err(|e| AppError::Other(e.to_string()))?;
     let free_api_key_enabled = state.is_free_api_key_enabled().await;
     Ok(Json(GlobalSettingsResponse {
-        poster_source: settings.poster_source.clone(),
-        fanart_lang: settings.fanart_lang.clone(),
+        poster_source: settings.poster_source.to_string(),
+        fanart_lang: settings.fanart_lang.to_string(),
         fanart_textless: settings.fanart_textless,
         fanart_available: state.fanart.is_some(),
         ratings_limit: settings.ratings_limit,
-        ratings_order: settings.ratings_order.clone(),
+        ratings_order: settings.ratings_order.to_string(),
         free_api_key_enabled,
-        poster_position: settings.poster_position.clone(),
+        poster_position: settings.poster_position.to_string(),
         logo_ratings_limit: settings.logo_ratings_limit,
         backdrop_ratings_limit: settings.backdrop_ratings_limit,
-        poster_badge_style: settings.poster_badge_style.clone(),
-        logo_badge_style: settings.logo_badge_style.clone(),
-        backdrop_badge_style: settings.backdrop_badge_style.clone(),
-        poster_label_style: settings.poster_label_style.clone(),
-        logo_label_style: settings.logo_label_style.clone(),
-        backdrop_label_style: settings.backdrop_label_style.clone(),
-        poster_badge_direction: settings.poster_badge_direction.clone(),
+        poster_badge_style: settings.poster_badge_style.to_string(),
+        logo_badge_style: settings.logo_badge_style.to_string(),
+        backdrop_badge_style: settings.backdrop_badge_style.to_string(),
+        poster_label_style: settings.poster_label_style.to_string(),
+        logo_label_style: settings.logo_label_style.to_string(),
+        backdrop_label_style: settings.backdrop_label_style.to_string(),
+        poster_badge_direction: settings.poster_badge_direction.to_string(),
     }))
 }
 
@@ -194,24 +197,28 @@ pub struct UpdateGlobalSettingsRequest {
     pub poster_badge_direction: String,
 }
 
+impl PosterSettingsInput for UpdateGlobalSettingsRequest {
+    fn poster_source(&self) -> &str { &self.poster_source }
+    fn fanart_lang(&self) -> &str { &self.fanart_lang }
+    fn ratings_limit(&self) -> i32 { self.ratings_limit }
+    fn ratings_order(&self) -> &str { &self.ratings_order }
+    fn poster_position(&self) -> &str { &self.poster_position }
+    fn logo_ratings_limit(&self) -> i32 { self.logo_ratings_limit }
+    fn backdrop_ratings_limit(&self) -> i32 { self.backdrop_ratings_limit }
+    fn poster_badge_style(&self) -> &str { &self.poster_badge_style }
+    fn logo_badge_style(&self) -> &str { &self.logo_badge_style }
+    fn backdrop_badge_style(&self) -> &str { &self.backdrop_badge_style }
+    fn poster_label_style(&self) -> &str { &self.poster_label_style }
+    fn logo_label_style(&self) -> &str { &self.logo_label_style }
+    fn backdrop_label_style(&self) -> &str { &self.backdrop_label_style }
+    fn poster_badge_direction(&self) -> &str { &self.poster_badge_direction }
+}
+
 pub async fn update_settings(
     State(state): State<Arc<AppState>>,
     Json(req): Json<UpdateGlobalSettingsRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    validate_poster_source(&req.poster_source)?;
-    validate_fanart_lang(&req.fanart_lang)?;
-    validate_ratings_limit(req.ratings_limit)?;
-    validate_ratings_order(&req.ratings_order)?;
-    validate_poster_position(&req.poster_position)?;
-    validate_ratings_limit(req.logo_ratings_limit)?;
-    validate_ratings_limit(req.backdrop_ratings_limit)?;
-    validate_badge_style(&req.poster_badge_style)?;
-    validate_badge_style(&req.logo_badge_style)?;
-    validate_badge_style(&req.backdrop_badge_style)?;
-    validate_label_style(&req.poster_label_style)?;
-    validate_label_style(&req.logo_label_style)?;
-    validate_label_style(&req.backdrop_label_style)?;
-    validate_badge_direction(&req.poster_badge_direction)?;
+    validate_poster_settings_input(&req)?;
     let textless_str = if req.fanart_textless { "true" } else { "false" };
     let limit_str = req.ratings_limit.to_string();
     let logo_limit_str = req.logo_ratings_limit.to_string();
@@ -266,7 +273,7 @@ pub async fn fetch_poster(
         .await
         .map_err(|e| AppError::Other(e.to_string()))?;
 
-    let bytes = serve::handle_inner(&state, &id_type, &id_value, (*settings).clone()).await?;
+    let bytes = serve::handle_inner(&state, &id_type, &id_value, (*settings).clone(), None).await?;
     Ok(serve::jpeg_response(bytes))
 }
 
@@ -276,22 +283,7 @@ pub async fn list_logos(
     State(state): State<Arc<AppState>>,
     Query(query): Query<ListPostersQuery>,
 ) -> Result<Json<ListPostersResponse>, AppError> {
-    let page = query.page.max(1);
-    let page_size = query.page_size.clamp(1, 100);
-
-    let (items, total) = db::list_poster_meta_by_kind(&state.db, cache::ImageType::Logo, page, page_size).await?;
-
-    let items = items
-        .into_iter()
-        .map(|m| PosterMetaItem {
-            cache_key: m.cache_key,
-            release_date: m.release_date,
-            created_at: m.created_at,
-            updated_at: m.updated_at,
-        })
-        .collect();
-
-    Ok(Json(ListPostersResponse { items, total, page, page_size }))
+    list_images(&state, &query, cache::ImageType::Logo).await
 }
 
 pub async fn logo_image(
@@ -314,22 +306,7 @@ pub async fn list_backdrops(
     State(state): State<Arc<AppState>>,
     Query(query): Query<ListPostersQuery>,
 ) -> Result<Json<ListPostersResponse>, AppError> {
-    let page = query.page.max(1);
-    let page_size = query.page_size.clamp(1, 100);
-
-    let (items, total) = db::list_poster_meta_by_kind(&state.db, cache::ImageType::Backdrop, page, page_size).await?;
-
-    let items = items
-        .into_iter()
-        .map(|m| PosterMetaItem {
-            cache_key: m.cache_key,
-            release_date: m.release_date,
-            created_at: m.created_at,
-            updated_at: m.updated_at,
-        })
-        .collect();
-
-    Ok(Json(ListPostersResponse { items, total, page, page_size }))
+    list_images(&state, &query, cache::ImageType::Backdrop).await
 }
 
 pub async fn backdrop_image(
@@ -362,6 +339,11 @@ async fn image_from_cache_key(
     let file_base = id_value.replace(':', "_");
     let path = cache::typed_cache_path(&state.config.cache_dir, image_type, id_type, &file_base)?;
 
+    let canonical_cache_dir = tokio::fs::canonicalize(&state.config.cache_dir)
+        .await
+        .map_err(|e| AppError::Other(format!("Failed to resolve cache dir: {e}")))?;
+
+    // Resolve the target path and verify it falls within the cache directory
     let canonical_path = tokio::fs::canonicalize(&path).await.map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
             AppError::IdNotFound(format!("Image not found: {id_type}/{id_value}"))
@@ -369,9 +351,6 @@ async fn image_from_cache_key(
             AppError::Io(e)
         }
     })?;
-    let canonical_cache_dir = tokio::fs::canonicalize(&state.config.cache_dir)
-        .await
-        .map_err(|e| AppError::Other(format!("Failed to resolve cache dir: {e}")))?;
     if !canonical_path.starts_with(&canonical_cache_dir) {
         return Err(AppError::IdNotFound(format!("Image not found: {id_type}/{id_value}")));
     }
@@ -409,7 +388,7 @@ async fn fetch_fanart_image(
         .await
         .map_err(|e| AppError::Other(e.to_string()))?;
 
-    let bytes = serve::handle_fanart_image_inner(state, id_type, id_value, &settings, fanart_kind).await?;
+    let bytes = serve::handle_fanart_image_inner(state, id_type, id_value, &settings, fanart_kind, None).await?;
 
     Ok((
         [(axum::http::header::CONTENT_TYPE, content_type)],

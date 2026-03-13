@@ -1,10 +1,13 @@
+use std::sync::Arc;
+
 use crate::error::AppError;
 use crate::services::retry::{self, OMDB_RETRY};
 use serde::Deserialize;
+use zeroize::Zeroizing;
 
 #[derive(Clone)]
 pub struct OmdbClient {
-    api_key: String,
+    api_key: Arc<Zeroizing<String>>,
     http: reqwest::Client,
 }
 
@@ -28,7 +31,7 @@ pub struct OmdbRating {
 
 impl OmdbClient {
     pub fn new(api_key: String, http: reqwest::Client) -> Self {
-        Self { api_key, http }
+        Self { api_key: Arc::new(Zeroizing::new(api_key)), http }
     }
 
     pub async fn get_ratings(&self, imdb_id: &str) -> Result<OmdbResponse, AppError> {
@@ -36,7 +39,7 @@ impl OmdbClient {
         let resp = retry::send_with_retry(&OMDB_RETRY, || {
             self.http
                 .get("https://www.omdbapi.com/")
-                .query(&[("apikey", &self.api_key), ("i", &imdb_id)])
+                .query(&[("apikey", self.api_key.as_str()), ("i", imdb_id.as_str())])
                 .send()
         })
         .await?

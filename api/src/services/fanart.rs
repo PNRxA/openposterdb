@@ -1,10 +1,13 @@
+use std::sync::Arc;
+
 use crate::error::AppError;
 use crate::services::retry::{self, FANART_RETRY};
 use serde::Deserialize;
+use zeroize::Zeroizing;
 
 #[derive(Clone)]
 pub struct FanartClient {
-    api_key: String,
+    api_key: Arc<Zeroizing<String>>,
     http: reqwest::Client,
 }
 
@@ -53,13 +56,13 @@ pub enum PosterMatch {
 
 impl FanartClient {
     pub fn new(api_key: String, http: reqwest::Client) -> Self {
-        Self { api_key, http }
+        Self { api_key: Arc::new(Zeroizing::new(api_key)), http }
     }
 
     pub async fn get_movie_images(&self, tmdb_id: u64) -> Result<FanartImages, AppError> {
         let url = format!(
             "https://webservice.fanart.tv/v3/movies/{tmdb_id}?api_key={}",
-            self.api_key
+            self.api_key.as_str()
         );
         let resp = retry::send_with_retry(&FANART_RETRY, || self.http.get(&url).send()).await?;
         if resp.status() == reqwest::StatusCode::NOT_FOUND {
@@ -78,7 +81,7 @@ impl FanartClient {
     pub async fn get_tv_images(&self, id: u64) -> Result<FanartImages, AppError> {
         let url = format!(
             "https://webservice.fanart.tv/v3/tv/{id}?api_key={}",
-            self.api_key
+            self.api_key.as_str()
         );
         let resp = retry::send_with_retry(&FANART_RETRY, || self.http.get(&url).send()).await?;
         if resp.status() == reqwest::StatusCode::NOT_FOUND {
