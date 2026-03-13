@@ -24,9 +24,8 @@ test.describe('logos page', () => {
     await expect(page.locator('th:has-text("Created")')).toBeVisible()
   })
 
-  test('shows empty state when no logos', async ({ page }) => {
-    await expect(page.getByRole('cell', { name: 'No logos cached yet.' })).toBeVisible({ timeout: 15_000 })
-    await expect(page.getByText('0 logos total')).toBeVisible()
+  test('shows logo count', async ({ page }) => {
+    await expect(page.getByText(/\d+ logos? total/)).toBeVisible({ timeout: 15_000 })
   })
 
   test('has refresh button', async ({ page }) => {

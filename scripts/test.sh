@@ -34,13 +34,21 @@ trap cleanup EXIT
 echo "Building container image..."
 $CTR build -t "$IMAGE_NAME" --build-arg CARGO_FEATURES=test-support -f Containerfile .
 
+ENV_ARGS=()
+if [ -f api/.env ]; then
+    echo "Loading API keys from api/.env"
+    while IFS='=' read -r key value; do
+        [[ -z "$key" || "$key" == \#* ]] && continue
+        ENV_ARGS+=(-e "$key=$value")
+    done < api/.env
+fi
+
 echo "Starting container..."
 $CTR rm -f "$CONTAINER_NAME" 2>/dev/null || true
 $CTR run -d --name "$CONTAINER_NAME" \
     -p 3333:3000 \
     --tmpfs /tmp/openposterdb-e2e \
-    -e TMDB_API_KEY=test \
-    -e MDBLIST_API_KEY=test \
+    "${ENV_ARGS[@]}" \
     -e JWT_SECRET=abababababababababababababababababababababababababababababababab \
     -e LISTEN_ADDR=0.0.0.0:3000 \
     -e COOKIE_SECURE=false \
@@ -62,7 +70,7 @@ for i in $(seq 1 60); do
     sleep 1
 done
 
-(cd web && npx playwright test --workers=1 --project=setup --project=settings --project=chromium)
+(cd web && npx playwright test --workers=1 --project=setup --project=settings --project=chromium --project=live)
 
 echo ""
 echo "All tests passed."

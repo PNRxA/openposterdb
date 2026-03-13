@@ -24,9 +24,8 @@ test.describe('backdrops page', () => {
     await expect(page.locator('th:has-text("Created")')).toBeVisible()
   })
 
-  test('shows empty state when no backdrops', async ({ page }) => {
-    await expect(page.getByRole('cell', { name: 'No backdrops cached yet.' })).toBeVisible({ timeout: 15_000 })
-    await expect(page.getByText('0 backdrops total')).toBeVisible()
+  test('shows backdrop count', async ({ page }) => {
+    await expect(page.getByText(/\d+ backdrops? total/)).toBeVisible({ timeout: 15_000 })
   })
 
   test('has refresh button', async ({ page }) => {
