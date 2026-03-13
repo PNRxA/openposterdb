@@ -43,6 +43,8 @@ pub struct PosterParams<'a> {
     pub badge_scale: f32,
     /// TMDB CDN size string (e.g. "w500", "w780", "original").
     pub tmdb_size: Arc<str>,
+    /// When true, skip writing base poster images to disk (CDN handles caching).
+    pub external_cache_only: bool,
 }
 
 pub async fn generate_poster(params: PosterParams<'_>) -> Result<Vec<u8>, AppError> {
@@ -63,10 +65,14 @@ pub async fn generate_poster(params: PosterParams<'_>) -> Result<Vec<u8>, AppErr
         target_width,
         badge_scale,
         tmdb_size,
+        external_cache_only,
     } = params;
 
     let poster_bytes = if let Some(bytes) = poster_bytes_override {
         bytes
+    } else if external_cache_only {
+        // No filesystem cache — always fetch from TMDB
+        tmdb.fetch_poster_bytes(poster_path, &tmdb_size).await?
     } else {
         // Fetch base poster from TMDB, using cache
         let poster_cache = cache::base_poster_path(cache_dir, poster_path, &tmdb_size)?;
@@ -904,6 +910,7 @@ mod tests {
             target_width: 500,
             badge_scale: 1.0,
             tmdb_size: Arc::from("w500"),
+            external_cache_only: false,
         })
         .await;
 
@@ -937,6 +944,7 @@ mod tests {
             target_width: 500,
             badge_scale: 1.0,
             tmdb_size: Arc::from("w500"),
+            external_cache_only: false,
         })
         .await;
 

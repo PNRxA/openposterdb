@@ -75,13 +75,24 @@ async fn main() {
         mem_cache_mb = config.poster_mem_cache_mb,
         secure_cookies,
         cdn_redirects = config.enable_cdn_redirects,
+        external_cache_only = config.external_cache_only,
         "server configuration"
     );
 
+    if config.external_cache_only && !config.enable_cdn_redirects {
+        tracing::warn!(
+            "EXTERNAL_CACHE_ONLY is enabled without ENABLE_CDN_REDIRECTS — \
+             every request after the in-memory cache expires will regenerate the image. \
+             Consider enabling CDN redirects so a CDN can absorb repeat traffic."
+        );
+    }
+
     // Ensure cache and database directories exist
-    tokio::fs::create_dir_all(&config.cache_dir)
-        .await
-        .expect("failed to create cache dir");
+    if !config.external_cache_only {
+        tokio::fs::create_dir_all(&config.cache_dir)
+            .await
+            .expect("failed to create cache dir");
+    }
     tokio::fs::create_dir_all(&config.db_dir)
         .await
         .expect("failed to create db dir");

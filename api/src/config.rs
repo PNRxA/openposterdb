@@ -17,6 +17,7 @@ pub struct Config {
     pub cors_origin: Option<String>,
     pub fanart_api_key: Option<String>,
     pub enable_cdn_redirects: bool,
+    pub external_cache_only: bool,
 }
 
 impl Config {
@@ -52,6 +53,9 @@ impl Config {
             cors_origin: env::var("CORS_ORIGIN").ok(),
             fanart_api_key: env::var("FANART_API_KEY").ok(),
             enable_cdn_redirects: env::var("ENABLE_CDN_REDIRECTS")
+                .map(|v| v == "true" || v == "1")
+                .unwrap_or(false),
+            external_cache_only: env::var("EXTERNAL_CACHE_ONLY")
                 .map(|v| v == "true" || v == "1")
                 .unwrap_or(false),
         };

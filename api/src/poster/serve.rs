@@ -234,6 +234,9 @@ fn spawn_cross_id_cache(
     image_type: cache::ImageType,
     bytes: Bytes,
 ) {
+    if state.config.external_cache_only {
+        return;
+    }
     let permit = match state.cross_id_semaphore.clone().try_acquire_owned() {
         Ok(p) => p,
         Err(_) => {
@@ -311,7 +314,9 @@ async fn check_caches(
 ) -> Result<Option<Bytes>, AppError> {
     // Check in-memory cache
     if let Some(entry) = state.poster_mem_cache.get(cache_key).await {
-        if entry.last_checked.elapsed() >= std::time::Duration::from_secs(60) {
+        if !state.config.external_cache_only
+            && entry.last_checked.elapsed() >= std::time::Duration::from_secs(60)
+        {
             let release_date = cache::read_meta_db(&state.db, cache_key).await;
             let stale_secs = cache::compute_stale_secs(
                 release_date.as_deref(),
@@ -335,6 +340,11 @@ async fn check_caches(
                 .await;
         }
         return Ok(Some(entry.bytes.clone()));
+    }
+
+    // No filesystem cache when external_cache_only — no files or metadata on disk
+    if state.config.external_cache_only {
+        return Ok(None);
     }
 
     // Check filesystem cache
@@ -441,8 +451,10 @@ pub async fn handle_inner(
         .try_get_with(cache_key.clone(), async move {
             let (bytes, rd, _used_fanart, cross_ids) =
                 generate_poster_with_source(&state2, id_type, &id_value2, &settings2, image_size).await?;
-            cache::write(&cache_path2, &bytes).await?;
-            cache::upsert_meta_db(&state2.db, &cache_key2, rd.as_deref(), cache::ImageType::Poster).await?;
+            if !state2.config.external_cache_only {
+                cache::write(&cache_path2, &bytes).await?;
+                cache::upsert_meta_db(&state2.db, &cache_key2, rd.as_deref(), cache::ImageType::Poster).await?;
+            }
             let bytes = Bytes::from(bytes);
             spawn_cross_id_cache(&state2, cross_ids, id_type, cache_suffix.to_string(), cache::ImageType::Poster, bytes.clone());
             Ok::<_, AppError>(bytes)
@@ -563,8 +575,10 @@ async fn try_fanart_path(
             };
             let (cache_key, cache_path) =
                 fanart_variant_paths(&state.config.cache_dir, id_type_str, id_value, &actual_variant, &suffix)?;
-            let _ = cache::write(&cache_path, &bytes).await;
-            let _ = cache::upsert_meta_db(&state.db, &cache_key, rd.as_deref(), cache::ImageType::Poster).await;
+            if !state.config.external_cache_only {
+                let _ = cache::write(&cache_path, &bytes).await;
+                let _ = cache::upsert_meta_db(&state.db, &cache_key, rd.as_deref(), cache::ImageType::Poster).await;
+            }
             let fanart_cache_suffix = format!("{actual_variant}{suffix}");
             let bytes = Bytes::from(bytes);
             spawn_cross_id_cache(state, cross_ids, id_type, fanart_cache_suffix, cache::ImageType::Poster, bytes.clone());
@@ -620,13 +634,15 @@ where
         tracing::info!(key = %cache_key, "background refresh started");
         match generate.await {
             Ok((bytes, rd, image_type, cross_ids)) => {
-                if let Err(e) = cache::write(&cache_path, &bytes).await {
-                    tracing::error!(error = %e, "failed to write cache");
-                }
-                if let Err(e) =
-                    cache::upsert_meta_db(&state.db, &cache_key, rd.as_deref(), image_type).await
-                {
-                    tracing::error!(error = %e, "failed to write meta to db");
+                if !state.config.external_cache_only {
+                    if let Err(e) = cache::write(&cache_path, &bytes).await {
+                        tracing::error!(error = %e, "failed to write cache");
+                    }
+                    if let Err(e) =
+                        cache::upsert_meta_db(&state.db, &cache_key, rd.as_deref(), image_type).await
+                    {
+                        tracing::error!(error = %e, "failed to write meta to db");
+                    }
                 }
                 let bytes = Bytes::from(bytes);
                 if let Some((id_type, suffix)) = cross_id {
@@ -726,6 +742,7 @@ fn trigger_fanart_background_refresh(
             fanart_textless,
             kind,
             &state2.config.cache_dir,
+            state2.config.external_cache_only,
         )
         .await;
 
@@ -804,6 +821,7 @@ async fn generate_poster_with_source(
                 settings.fanart_textless,
                 ImageKind::Poster,
                 &state.config.cache_dir,
+                state.config.external_cache_only,
             )
             .await
         } else {
@@ -837,6 +855,7 @@ async fn generate_poster_with_source(
         target_width,
         badge_scale,
         tmdb_size,
+        external_cache_only: state.config.external_cache_only,
     })
     .await?;
 
@@ -933,6 +952,7 @@ async fn fetch_fanart_image(
     textless: bool,
     kind: ImageKind,
     cache_dir: &str,
+    external_cache_only: bool,
 ) -> Option<FanartResult> {
     let images = fetch_fanart_images(fanart, tmdb, cache, resolved).await?;
     let candidates = select_images_for_kind(&images, kind);
@@ -950,7 +970,9 @@ async fn fetch_fanart_image(
         None => {
             match fanart.fetch_poster_bytes(&url).await {
                 Ok(fresh) => {
-                    let _ = cache::write(&base_path, &fresh).await;
+                    if !external_cache_only {
+                        let _ = cache::write(&base_path, &fresh).await;
+                    }
                     fresh
                 }
                 Err(e) => {
@@ -1128,6 +1150,7 @@ pub async fn handle_fanart_image_inner(
                 fanart_textless,
                 kind,
                 &ctx.state.config.cache_dir,
+                ctx.state.config.external_cache_only,
             )
             .await;
 
@@ -1163,8 +1186,10 @@ pub async fn handle_fanart_image_inner(
                 FanartImageKind::Backdrop => generate::generate_backdrop(image_bytes, badges, ctx.state.font.clone(), ctx.state.config.poster_quality, ctx.type_badge_style, ctx.type_label_style, ctx.state.render_semaphore.clone(), target_width, badge_scale).await?,
             };
 
-            let _ = cache::write(&ctx.cache_path, &bytes).await;
-            let _ = cache::upsert_meta_db(&ctx.state.db, &ctx.cache_key, cross_ids.release_date.as_deref(), image_type).await;
+            if !ctx.state.config.external_cache_only {
+                let _ = cache::write(&ctx.cache_path, &bytes).await;
+                let _ = cache::upsert_meta_db(&ctx.state.db, &ctx.cache_key, cross_ids.release_date.as_deref(), image_type).await;
+            }
             let bytes = Bytes::from(bytes);
             spawn_cross_id_cache(&ctx.state, cross_ids, id_type, ctx.fanart_cache_suffix.to_string(), image_type, bytes.clone());
             Ok::<_, AppError>(bytes)

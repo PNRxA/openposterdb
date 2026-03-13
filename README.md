@@ -171,6 +171,7 @@ See [docker-compose.yml](docker-compose.yml) for the full compose configuration.
 | `ADMIN_USERNAME` | — | Seed admin username on first run |
 | `ADMIN_PASSWORD` | — | Seed admin password on first run |
 | `ENABLE_CDN_REDIRECTS` | `false` | Enable content-addressed CDN redirects (see [CDN Caching](#cdn-caching)) |
+| `EXTERNAL_CACHE_ONLY` | `false` | Skip all image file writes to disk; rely on a CDN for caching (see [External Cache Only](#external-cache-only)) |
 
 ## Cache Architecture
 
@@ -315,6 +316,17 @@ When `ENABLE_CDN_REDIRECTS=true`, authenticated poster requests (`/{api_key}/...
 The redirect response uses `Cache-Control: private, max-age=300` so the CDN does not cache the redirect itself (it contains the API key path). The `/c/` image response uses `Cache-Control: public, max-age=86400, stale-while-revalidate=604800` for long CDN caching. The `/c/` routes are rate-limited by IP.
 
 **Important:** The origin keeps the settings hash → settings mapping in memory with a 5-minute TTL. The CDN must cache the image on the first request to the `/c/` URL; if it doesn't, subsequent requests after the TTL expires will 404 at origin until the next authenticated request re-populates the mapping. Cloudflare and most production CDNs cache on first hit, so this is not an issue in practice.
+
+### External Cache Only
+
+When `EXTERNAL_CACHE_ONLY=true`, the server skips **all** image file writes to disk — both rendered posters and base source images from TMDB/Fanart.tv. The SQLite metadata writes (`poster_meta`) are also skipped. This makes the disk fully stateless, which is useful when deployed behind a CDN like Cloudflare that caches responses at the edge.
+
+- The in-memory (moka) cache still handles short-term request deduplication
+- Request coalescing still prevents duplicate generation for concurrent requests
+- The cache directory is not created on startup
+- Filesystem reads naturally return misses (no files on disk), so every request either hits the in-memory cache or regenerates the image
+- Best used together with `ENABLE_CDN_REDIRECTS=true` so the CDN absorbs the vast majority of traffic
+- The Docker volume is still required for the SQLite database (`DB_DIR`), even when image caching is fully external
 
 ## Acknowledgments
 

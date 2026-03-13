@@ -15,6 +15,8 @@ pub struct TestAppOptions {
     pub cors_origin: Option<String>,
     pub secure_cookies: bool,
     pub enable_cdn_redirects: bool,
+    pub external_cache_only: bool,
+    pub cache_dir_override: Option<String>,
 }
 
 impl Default for TestAppOptions {
@@ -23,6 +25,8 @@ impl Default for TestAppOptions {
             cors_origin: None,
             secure_cookies: false,
             enable_cdn_redirects: false,
+            external_cache_only: false,
+            cache_dir_override: None,
         }
     }
 }
@@ -31,14 +35,16 @@ pub async fn setup_test_app_with_options(opts: TestAppOptions) -> (axum::Router,
     let cors_origin = opts.cors_origin;
     let secure_cookies = opts.secure_cookies;
     let enable_cdn_redirects = opts.enable_cdn_redirects;
-    _setup_test_app(cors_origin, secure_cookies, enable_cdn_redirects).await
+    let external_cache_only = opts.external_cache_only;
+    let cache_dir_override = opts.cache_dir_override;
+    _setup_test_app(cors_origin, secure_cookies, enable_cdn_redirects, external_cache_only, cache_dir_override).await
 }
 
 pub async fn setup_test_app_with_cors(cors_origin: Option<String>) -> (axum::Router, Arc<AppState>) {
-    _setup_test_app(cors_origin, false, false).await
+    _setup_test_app(cors_origin, false, false, false, None).await
 }
 
-async fn _setup_test_app(cors_origin: Option<String>, secure_cookies: bool, enable_cdn_redirects: bool) -> (axum::Router, Arc<AppState>) {
+async fn _setup_test_app(cors_origin: Option<String>, secure_cookies: bool, enable_cdn_redirects: bool, external_cache_only: bool, cache_dir_override: Option<String>) -> (axum::Router, Arc<AppState>) {
     let sqlite_opts = sqlx::sqlite::SqliteConnectOptions::new()
         .filename(":memory:")
         .create_if_missing(true)
@@ -96,7 +102,7 @@ async fn _setup_test_app(cors_origin: Option<String>, secure_cookies: bool, enab
         config: Config {
             tmdb_api_key: "test".into(),
             omdb_api_key: None,
-            cache_dir: "/tmp/openposterdb-test".into(),
+            cache_dir: cache_dir_override.unwrap_or_else(|| "/tmp/openposterdb-test".into()),
             db_dir: "/tmp/openposterdb-test".into(),
             listen_addr: "127.0.0.1:0".into(),
             ratings_min_stale_secs: 86400,
@@ -109,6 +115,7 @@ async fn _setup_test_app(cors_origin: Option<String>, secure_cookies: bool, enab
             cors_origin,
             fanart_api_key: Some("test".into()),
             enable_cdn_redirects,
+            external_cache_only,
         },
         tmdb: TmdbClient::new("test".into(), http.clone()),
         omdb: None,
