@@ -967,7 +967,7 @@ fn trigger_fanart_background_refresh(
 
         let image_bytes = fanart_result
             .map(|r| r.bytes)
-            .ok_or_else(|| AppError::Other("no fanart image available".into()))?;
+            .ok_or_else(|| AppError::IdNotFound("no fanart image available".into()))?;
 
         let image_type: cache::ImageType = fanart_kind.into();
 
@@ -1279,7 +1279,7 @@ pub async fn handle_fanart_image_inner(
     let lang_known_missing = state.fanart_negative.get(&neg_lang_key).await.is_some();
 
     if lang_known_missing && (!fanart_textless || textless_known_missing) {
-        return Err(AppError::Other(format!("no {label} available").into()));
+        return Err(AppError::IdNotFound(format!("no {label} available").into()));
     }
 
     let variant = match kind {
@@ -1412,7 +1412,7 @@ pub async fn handle_fanart_image_inner(
                         ctx.state.fanart_negative.insert(ctx.neg_textless_key, ()).await;
                     }
                     ctx.state.fanart_negative.insert(ctx.neg_lang_key, ()).await;
-                    return Err(AppError::Other(format!("no {} available", ctx.label).into()));
+                    return Err(AppError::IdNotFound(format!("no {} available", ctx.label).into()));
                 }
             };
 

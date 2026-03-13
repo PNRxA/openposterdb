@@ -326,7 +326,8 @@ async fn logo_negative_cache_short_circuits_request() {
     let api_key = create_api_key(&app, &token, "logo-neg").await;
 
     // Pre-populate the negative cache for this ID's logo
-    state.fanart_negative.insert("imdb/tt9999999:logo:fanart:en:neg".to_string(), ()).await;
+    // Key format: "{id_type}/{id_value}{kind_prefix}_f_{lang}_neg"
+    state.fanart_negative.insert("imdb/tt9999999_l_f_en_neg".to_string(), ()).await;
     state.fanart_negative.run_pending_tasks().await;
 
     // Request should fail immediately via the negative cache check.
@@ -335,8 +336,7 @@ async fn logo_negative_cache_short_circuits_request() {
         .body(Body::empty())
         .unwrap();
     let res = app.oneshot(req).await.unwrap();
-    // AppError::Other("no logo available") → 500
-    assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
@@ -345,8 +345,8 @@ async fn backdrop_negative_cache_short_circuits_request() {
     let token = common::setup_admin(&app).await;
     let api_key = create_api_key(&app, &token, "backdrop-neg").await;
 
-    // Pre-populate the negative cache — backdrop uses empty-string lang key
-    state.fanart_negative.insert("imdb/tt9999999:backdrop:fanart::neg".to_string(), ()).await;
+    // Key format: "{id_type}/{id_value}{kind_prefix}_f_{lang}_neg" (backdrop lang is empty)
+    state.fanart_negative.insert("imdb/tt9999999_b_f__neg".to_string(), ()).await;
     state.fanart_negative.run_pending_tasks().await;
 
     let req = Request::builder()
@@ -354,7 +354,7 @@ async fn backdrop_negative_cache_short_circuits_request() {
         .body(Body::empty())
         .unwrap();
     let res = app.oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
@@ -363,7 +363,7 @@ async fn logo_negative_cache_with_fallback_returns_placeholder() {
     let token = common::setup_admin(&app).await;
     let api_key = create_api_key(&app, &token, "logo-neg-fb").await;
 
-    state.fanart_negative.insert("imdb/tt9999999:logo:fanart:en:neg".to_string(), ()).await;
+    state.fanart_negative.insert("imdb/tt9999999_l_f_en_neg".to_string(), ()).await;
     state.fanart_negative.run_pending_tasks().await;
 
     // With fallback=true, negative cache miss should still return placeholder PNG
