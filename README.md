@@ -164,7 +164,7 @@ See [docker-compose.yml](docker-compose.yml) for the full compose configuration.
 | `RATINGS_MAX_AGE_SECS` | `31536000` | Film age after which ratings stop refreshing |
 | `POSTER_STALE_SECS` | `0` | Base poster cache lifetime (0 = never re-fetch) |
 | `COOKIE_SECURE` | `true` | HTTPS-only cookies |
-| `RUST_LOG` | `info` | Log level filter — supports per-module overrides (e.g. `debug`, `warn`, `openposterdb=debug,sea_orm=warn`) |
+| `RUST_LOG` | `warn` | Log level filter — levels: `error`, `warn`, `info`, `debug`, `trace`. Supports comma-separated per-module overrides (e.g. `warn,openposterdb=info` to keep dependencies quiet while showing app logs) |
 | `FANART_API_KEY` | — | [Fanart.tv](https://fanart.tv/get-an-api-key/) key (enables Fanart.tv as alternative poster source; required for logo and backdrop endpoints) |
 | `CORS_ORIGIN` | — | Allowed origin for admin requests |
 | `RENDER_CONCURRENCY` | `CPUs × 2` | Max concurrent image render tasks |

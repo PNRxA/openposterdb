@@ -16,7 +16,7 @@ services:
       FANART_API_KEY: ${FANART_API_KEY:-}
 
       # Optional
-      # RUST_LOG: ${RUST_LOG:-info}  # Log level (e.g. debug, warn, or per-module: openposterdb=debug,sea_orm=warn)
+      RUST_LOG: ${RUST_LOG:-warn}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       LISTEN_ADDR: 0.0.0.0:3000
