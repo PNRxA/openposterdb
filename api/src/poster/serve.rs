@@ -1019,7 +1019,7 @@ async fn generate_poster_with_source(
         .ok_or_else(|| {
             let id_desc = resolved.imdb_id.as_deref()
                 .unwrap_or_else(|| "unknown");
-            AppError::Other(format!("no poster available for {id_desc} / tmdb:{} (TMDB has no poster_path)", resolved.tmdb_id))
+            AppError::IdNotFound(format!("no poster available for {id_desc} / tmdb:{} (TMDB has no poster_path)", resolved.tmdb_id))
         })?;
 
     // Try to fetch poster bytes from fanart.tv if configured
