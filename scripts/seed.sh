@@ -243,8 +243,10 @@ head -n "$SELECTED" "$TMPFILE" | while IFS=$'\t' read -r year id type title; do
       ;;
     all)
       fetch_out=$(fetch_asset "$BASE_URL" "$API_KEY" "$id" "poster" "jpg") || result="FAIL"
-      fetch_asset "$BASE_URL" "$API_KEY" "$id" "logo" "png" > /dev/null || true
-      fetch_asset "$BASE_URL" "$API_KEY" "$id" "backdrop" "jpg" > /dev/null || true
+      logo_result="OK"
+      fetch_out_logo=$(fetch_asset "$BASE_URL" "$API_KEY" "$id" "logo" "png") || logo_result="SKIP"
+      backdrop_result="OK"
+      fetch_out_backdrop=$(fetch_asset "$BASE_URL" "$API_KEY" "$id" "backdrop" "jpg") || backdrop_result="SKIP"
       ;;
   esac
 
@@ -254,21 +256,30 @@ head -n "$SELECTED" "$TMPFILE" | while IFS=$'\t' read -r year id type title; do
     FAIL=$((FAIL + 1))
   fi
 
-  # Parse latency and optional HTTP status from fetch output
-  latency=$(echo "$fetch_out" | awk '{print $1}')
-  http_code=$(echo "$fetch_out" | awk '{print $2}')
+  # Print a log line for a single asset fetch
+  log_asset() {
+    local out="$1" res="$2" asset_label="$3"
+    local lat hc lat_str
+    lat=$(echo "$out" | awk '{print $1}')
+    hc=$(echo "$out" | awk '{print $2}')
+    if [[ -n "$lat" ]]; then
+      lat_str="$(awk "BEGIN {printf \"%.0f\", $lat * 1000}")ms"
+    else
+      lat_str="-"
+    fi
+    if [[ "$res" == "OK" ]]; then
+      printf "[%d/%d] %-4s %6s  [%s] %-10s %s - %s%s\n" "$COUNT" "$SELECTED" "$res" "$lat_str" "$year" "$type" "$id" "$title" "$asset_label"
+    else
+      printf "[%d/%d] %-4s %6s  [%s] %-10s %s - %s%s (HTTP %s)\n" "$COUNT" "$SELECTED" "$res" "$lat_str" "$year" "$type" "$id" "$title" "$asset_label" "${hc:-?}"
+    fi
+  }
 
-  if [[ -n "$latency" ]]; then
-    ms=$(awk "BEGIN {printf \"%.0f\", $latency * 1000}")
-    latency_str="${ms}ms"
+  if [[ "$ASSETS" == "all" ]]; then
+    log_asset "$fetch_out" "$result" " [poster]"
+    log_asset "${fetch_out_logo:-}" "$logo_result" " [logo]"
+    log_asset "${fetch_out_backdrop:-}" "$backdrop_result" " [backdrop]"
   else
-    latency_str="-"
-  fi
-
-  if [[ "$result" == "OK" ]]; then
-    printf "[%d/%d] %-4s %6s  [%s] %-10s %s - %s\n" "$COUNT" "$SELECTED" "$result" "$latency_str" "$year" "$type" "$id" "$title"
-  else
-    printf "[%d/%d] %-4s %6s  [%s] %-10s %s - %s (HTTP %s)\n" "$COUNT" "$SELECTED" "$result" "$latency_str" "$year" "$type" "$id" "$title" "${http_code:-?}"
+    log_asset "$fetch_out" "$result" ""
   fi
 done
 
