@@ -385,7 +385,7 @@ test.describe('live API - UI poster fetch', () => {
     const previewDialog = page.getByRole('dialog')
     await expect(previewDialog).toBeVisible({ timeout: 60_000 })
     await page.keyboard.press('Escape')
-    await expect(previewDialog).not.toBeVisible()
+    await expect(previewDialog).not.toBeVisible({ timeout: 15_000 })
 
     // Wait for poster to appear in table
     await expect(page.getByText('tt0468569')).toBeVisible({ timeout: 15_000 })

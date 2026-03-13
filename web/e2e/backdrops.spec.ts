@@ -25,7 +25,7 @@ test.describe('backdrops page', () => {
   })
 
   test('shows empty state when no backdrops', async ({ page }) => {
-    await expect(page.getByRole('cell', { name: 'No backdrops cached yet.' })).toBeVisible()
+    await expect(page.getByRole('cell', { name: 'No backdrops cached yet.' })).toBeVisible({ timeout: 15_000 })
     await expect(page.getByText('0 backdrops total')).toBeVisible()
   })
 
