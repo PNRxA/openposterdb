@@ -2,7 +2,7 @@
 import { version } from "../../package.json";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Image, KeyRound, Zap, Shield, Github, ExternalLink } from "lucide-vue-next";
+import { Image, KeyRound, Zap, Shield, Github, ExternalLink, BookOpen } from "lucide-vue-next";
 import FreeApiKeyCard from "@/components/FreeApiKeyCard.vue";
 
 const features = [
@@ -119,6 +119,12 @@ const backdrops = [
           <div class="pt-4 flex items-center justify-center gap-3">
             <Button as-child size="lg">
               <router-link to="/login">Sign in</router-link>
+            </Button>
+            <Button as-child variant="outline" size="lg">
+              <router-link to="/docs">
+                <BookOpen class="h-5 w-5" />
+                API Docs
+              </router-link>
             </Button>
             <Button as-child variant="outline" size="lg">
               <a

@@ -126,6 +126,11 @@ const router = createRouter({
       component: () => import('@/views/SetupView.vue'),
     },
     {
+      path: '/docs',
+      name: 'docs',
+      component: () => import('@/views/DocsView.vue'),
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: '/',
     },

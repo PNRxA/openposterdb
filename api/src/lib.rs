@@ -87,6 +87,7 @@ impl AppState {
 }
 
 pub static FONT_BYTES: &[u8] = include_bytes!("../assets/fonts/Inter-Bold.ttf");
+pub static OPENAPI_SPEC_TEMPLATE: &str = include_str!("openapi.json");
 
 pub const SCHEMA_SQL: &[&str] = &[
     "CREATE TABLE IF NOT EXISTS poster_meta (
@@ -353,6 +354,20 @@ pub fn build_app(state: Arc<AppState>) -> Router {
         .merge(routes::auth::auth_routes())
         .merge(admin_routes)
         .merge(key_self_routes)
+        .route(
+            "/api/openapi.json",
+            axum::routing::get(|| async {
+                let spec = OPENAPI_SPEC_TEMPLATE
+                    .replace("{{VERSION}}", env!("CARGO_PKG_VERSION"));
+                (
+                    [
+                        (header::CONTENT_TYPE, "application/json"),
+                        (header::CACHE_CONTROL, "public, max-age=86400"),
+                    ],
+                    spec,
+                )
+            }),
+        )
         .layer(CompressionLayer::new());
 
     let poster_route = {
