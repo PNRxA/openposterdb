@@ -155,10 +155,6 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
         "duplicate column",
     ),
     (
-        "ALTER TABLE poster_meta RENAME TO image_meta",
-        "no such table",
-    ),
-    (
         "ALTER TABLE image_meta ADD COLUMN image_type TEXT NOT NULL DEFAULT 'poster'",
         "duplicate column",
     ),
