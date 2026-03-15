@@ -30,6 +30,7 @@ chrono = "0.4.44"
 zeroize = { version = "1.8.2", features = ["derive"] }
 tower = { version = "0.5.3", features = ["util"] }
 tower_governor = "0.8.0"
+utoipa = { version = "5.4.0", features = ["axum_extras"] }
 
 [features]
 test-support = []

@@ -81,7 +81,53 @@ impl AppState {
 }
 
 pub static FONT_BYTES: &[u8] = include_bytes!("../assets/fonts/Inter-Bold.ttf");
-pub static OPENAPI_SPEC_TEMPLATE: &str = include_str!("openapi.json");
+
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    info(
+        title = "OpenPosterDB API",
+        description = "API for generating and serving posters, logos, and backdrops with rating overlays for movies, TV shows, and collections.",
+        license(name = "MIT"),
+    ),
+    tags(
+        (name = "Images", description = "Poster, logo, and backdrop image endpoints"),
+        (name = "Auth", description = "API key validation"),
+    ),
+    servers((url = "/", description = "This instance")),
+    paths(
+        handlers::image::handler,
+        handlers::image::logo_handler,
+        handlers::image::backdrop_handler,
+        handlers::image::is_valid_handler,
+    ),
+)]
+pub struct ApiDoc;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use utoipa::OpenApi;
+
+    #[test]
+    fn openapi_spec_has_expected_paths() {
+        let spec = ApiDoc::openapi();
+        let paths: Vec<&str> = spec.paths.paths.keys().map(|k: &String| k.as_str()).collect();
+        assert!(paths.contains(&"/{api_key}/{id_type}/poster-default/{id_value}"));
+        assert!(paths.contains(&"/{api_key}/{id_type}/logo-default/{id_value}"));
+        assert!(paths.contains(&"/{api_key}/{id_type}/backdrop-default/{id_value}"));
+        assert!(paths.contains(&"/{api_key}/isValid"));
+        assert_eq!(paths.len(), 4);
+    }
+
+    #[test]
+    fn openapi_spec_serializes_to_valid_json() {
+        let spec = ApiDoc::openapi();
+        let json = spec.to_json().expect("spec should serialize to JSON");
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("should be valid JSON");
+        assert_eq!(parsed["openapi"], "3.1.0");
+        assert_eq!(parsed["info"]["title"], "OpenPosterDB API");
+    }
+}
 
 pub const SCHEMA_SQL: &[&str] = &[
     "CREATE TABLE IF NOT EXISTS image_meta (

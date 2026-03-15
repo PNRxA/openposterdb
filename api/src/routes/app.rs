@@ -3,16 +3,24 @@ use std::sync::Arc;
 use axum::http::header::{self, HeaderValue};
 use axum::http::Request;
 use axum::middleware;
+use axum::response::IntoResponse;
 use axum::Router;
 use tower_http::compression::CompressionLayer;
 use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
 use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::trace::{MakeSpan, TraceLayer};
 
+use utoipa::OpenApi;
+
 use crate::config::Config;
 use crate::handlers;
-use crate::AppState;
-use crate::OPENAPI_SPEC_TEMPLATE;
+use crate::{ApiDoc, AppState};
+
+static OPENAPI_JSON: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+    let mut spec = ApiDoc::openapi();
+    spec.info.version = env!("CARGO_PKG_VERSION").to_string();
+    spec.to_json().expect("OpenAPI spec must serialize")
+});
 
 fn build_cors_layer(config: &Config) -> CorsLayer {
     match config.cors_origin {
@@ -105,14 +113,12 @@ pub fn build_app(state: Arc<AppState>) -> Router {
         .route(
             "/api/openapi.json",
             axum::routing::get(|| async {
-                let spec = OPENAPI_SPEC_TEMPLATE
-                    .replace("{{VERSION}}", env!("CARGO_PKG_VERSION"));
                 (
                     [
                         (header::CONTENT_TYPE, "application/json"),
                         (header::CACHE_CONTROL, "public, max-age=86400"),
                     ],
-                    spec,
+                    OPENAPI_JSON.as_str(),
                 )
             }),
         )
@@ -137,7 +143,6 @@ pub fn build_app(state: Arc<AppState>) -> Router {
     // image requests (64-char hex first segment) so API consumers get JSON
     // errors instead of HTML.
     if let Some(ref dir) = state.config.static_dir {
-        use axum::response::IntoResponse;
         use tower::ServiceExt as _;
         use tower_http::services::{ServeDir, ServeFile};
 

@@ -16,13 +16,51 @@ use crate::AppState;
 
 pub const FREE_API_KEY: &str = "t0-free-rpdb";
 
-#[derive(Debug, Deserialize)]
+/// OpenAPI-only enum for the `id_type` path parameter.
+#[derive(utoipa::ToSchema)]
+#[schema(rename_all = "lowercase")]
+#[allow(dead_code)]
+enum IdTypeParam {
+    Imdb,
+    Tmdb,
+    Tvdb,
+}
+
+/// OpenAPI-only enum for the `fallback` query parameter.
+#[derive(utoipa::ToSchema)]
+#[allow(dead_code)]
+enum FallbackParam {
+    #[schema(rename = "true")]
+    True,
+}
+
+/// OpenAPI-only enum for the `imageSize` query parameter.
+#[derive(utoipa::ToSchema)]
+#[allow(dead_code)]
+enum ImageSizeParam {
+    #[schema(rename = "small")]
+    Small,
+    #[schema(rename = "medium")]
+    Medium,
+    #[schema(rename = "large")]
+    Large,
+    #[schema(rename = "very-large")]
+    VeryLarge,
+}
+
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct ImageQuery {
+    /// When set to `true`, returns a placeholder image instead of 404 when the media item is not found.
     #[serde(default)]
+    #[param(value_type = Option<FallbackParam>, example = "true")]
     pub fallback: Option<String>,
+    /// Language code for Fanart.tv image selection (e.g. `en`, `de`, `pt-BR`). 2-5 alphanumeric characters or hyphens.
     #[serde(default)]
+    #[param(value_type = Option<String>, pattern = r"^[a-zA-Z0-9\-]{2,5}$")]
     pub lang: Option<String>,
+    /// Output image size. `small` is only valid for backdrops. Defaults to `medium`.
     #[serde(default, rename = "imageSize")]
+    #[param(rename = "imageSize", default = "medium", value_type = Option<ImageSizeParam>)]
     pub image_size: Option<String>,
 }
 
@@ -110,6 +148,21 @@ async fn resolve_settings(
     Ok(settings)
 }
 
+#[utoipa::path(
+    get,
+    path = "/{api_key}/isValid",
+    operation_id = "isValid",
+    tag = "Auth",
+    summary = "Validate API key",
+    description = "Returns 200 OK if the provided API key is valid. Useful for verifying that an API key is correctly configured.",
+    params(
+        ("api_key" = String, Path, description = "Your API key (64-character hex string). Use `t0-free-rpdb` as a free public key if enabled on this instance."),
+    ),
+    responses(
+        (status = 200, description = "API key is valid"),
+        (status = 401, description = "Invalid or missing API key."),
+    ),
+)]
 pub async fn is_valid_handler(
     State(state): State<Arc<AppState>>,
     Path(api_key): Path<String>,
@@ -303,6 +356,27 @@ async fn image_handler_inner(
     serve_image(&state, id_type_str, id_value_raw, &settings, use_fallback, kind, image_size).await
 }
 
+#[utoipa::path(
+    get,
+    path = "/{api_key}/{id_type}/poster-default/{id_value}",
+    operation_id = "getPoster",
+    tag = "Images",
+    summary = "Get poster",
+    description = "Returns a JPEG poster image with rating badge overlays for the given media item.",
+    params(
+        ("api_key" = String, Path, description = "Your API key (64-character hex string). Use `t0-free-rpdb` as a free public key if enabled on this instance."),
+        ("id_type" = IdTypeParam, Path, description = "The type of media ID being used.", example = "imdb"),
+        ("id_value" = String, Path, description = "The media ID value. For IMDB use the `tt` prefixed ID (e.g. `tt1234567`). For TMDB prefix with `movie-` or `series-` (e.g. `movie-550`, `series-1399`). For TVDB use the numeric ID."),
+        ImageQuery,
+    ),
+    responses(
+        (status = 200, description = "Poster image", content_type = "image/jpeg", body = Vec<u8>,
+            headers(("Cache-Control" = String, description = "Cache directive, e.g. `public, max-age=3600, stale-while-revalidate=86400`"))),
+        (status = 400, description = "Invalid request — bad ID type, image size, or language format."),
+        (status = 401, description = "Invalid or missing API key."),
+        (status = 404, description = "Media item not found. Use `?fallback=true` to get a placeholder image instead."),
+    ),
+)]
 pub async fn handler(
     State(state): State<Arc<AppState>>,
     Path((api_key, id_type_str, id_value)): Path<(String, String, String)>,
@@ -311,6 +385,28 @@ pub async fn handler(
     image_handler_inner(state, &api_key, &id_type_str, &id_value, query, cache::ImageType::Poster).await
 }
 
+#[utoipa::path(
+    get,
+    path = "/{api_key}/{id_type}/logo-default/{id_value}",
+    operation_id = "getLogo",
+    tag = "Images",
+    summary = "Get logo",
+    description = "Returns a PNG logo image with rating badge overlays for the given media item. Requires the Fanart.tv integration to be configured on the server.",
+    params(
+        ("api_key" = String, Path, description = "Your API key (64-character hex string). Use `t0-free-rpdb` as a free public key if enabled on this instance."),
+        ("id_type" = IdTypeParam, Path, description = "The type of media ID being used.", example = "imdb"),
+        ("id_value" = String, Path, description = "The media ID value. For IMDB use the `tt` prefixed ID (e.g. `tt1234567`). For TMDB prefix with `movie-` or `series-` (e.g. `movie-550`, `series-1399`). For TVDB use the numeric ID."),
+        ImageQuery,
+    ),
+    responses(
+        (status = 200, description = "Logo image", content_type = "image/png", body = Vec<u8>,
+            headers(("Cache-Control" = String, description = "Cache directive, e.g. `public, max-age=3600, stale-while-revalidate=86400`"))),
+        (status = 400, description = "Invalid request — bad ID type, image size, or language format."),
+        (status = 401, description = "Invalid or missing API key."),
+        (status = 404, description = "Media item not found. Use `?fallback=true` to get a placeholder image instead."),
+        (status = 501, description = "Fanart.tv integration is not configured on this server. Logos and backdrops require a Fanart.tv API key."),
+    ),
+)]
 pub async fn logo_handler(
     State(state): State<Arc<AppState>>,
     Path((api_key, id_type_str, id_value)): Path<(String, String, String)>,
@@ -319,6 +415,28 @@ pub async fn logo_handler(
     image_handler_inner(state, &api_key, &id_type_str, &id_value, query, cache::ImageType::Logo).await
 }
 
+#[utoipa::path(
+    get,
+    path = "/{api_key}/{id_type}/backdrop-default/{id_value}",
+    operation_id = "getBackdrop",
+    tag = "Images",
+    summary = "Get backdrop",
+    description = "Returns a JPEG backdrop image with rating badge overlays for the given media item. Requires the Fanart.tv integration to be configured on the server.",
+    params(
+        ("api_key" = String, Path, description = "Your API key (64-character hex string). Use `t0-free-rpdb` as a free public key if enabled on this instance."),
+        ("id_type" = IdTypeParam, Path, description = "The type of media ID being used.", example = "imdb"),
+        ("id_value" = String, Path, description = "The media ID value. For IMDB use the `tt` prefixed ID (e.g. `tt1234567`). For TMDB prefix with `movie-` or `series-` (e.g. `movie-550`, `series-1399`). For TVDB use the numeric ID."),
+        ImageQuery,
+    ),
+    responses(
+        (status = 200, description = "Backdrop image", content_type = "image/jpeg", body = Vec<u8>,
+            headers(("Cache-Control" = String, description = "Cache directive, e.g. `public, max-age=3600, stale-while-revalidate=86400`"))),
+        (status = 400, description = "Invalid request — bad ID type, image size, or language format."),
+        (status = 401, description = "Invalid or missing API key."),
+        (status = 404, description = "Media item not found. Use `?fallback=true` to get a placeholder image instead."),
+        (status = 501, description = "Fanart.tv integration is not configured on this server. Logos and backdrops require a Fanart.tv API key."),
+    ),
+)]
 pub async fn backdrop_handler(
     State(state): State<Arc<AppState>>,
     Path((api_key, id_type_str, id_value)): Path<(String, String, String)>,
