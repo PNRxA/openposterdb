@@ -415,9 +415,14 @@ Use the same Caddy + OpenPosterDB compose setup from the [reverse proxy section]
    - **When**: URI Path starts with `/assets/`
    - **Then**: **Eligible for cache**, set **Edge TTL** to 1 year, **Browser TTL** to 1 year
    - These files are immutable — when the app is redeployed, Vite generates new filenames, so stale cache entries are never served.
-   - The SPA's `index.html` is served without a file extension on all non-API routes, so Cloudflare will not cache it by default. This is the desired behavior — it ensures users always load the latest HTML that references the current hashed assets.
+   - The SPA's `index.html` is served without a file extension on all non-API routes, so Cloudflare will not cache it by default without a rule (see below).
 
-6. **Browser TTL** (optional): Under **Caching > Configuration**, set **Browser Cache TTL** to **Respect Existing Headers** so the origin's `Cache-Control` headers are passed through to clients.
+6. **Web Console (origin-down resilience)**: The origin sets `Cache-Control: public, max-age=60, stale-while-revalidate=3600, stale-if-error=86400` on all SPA responses (HTML and static files). Add a cache rule to let Cloudflare respect these headers for the HTML shell:
+   - **When**: Hostname equals the domain **AND** URI Path does not match `/api/*`, `/c/*`, or `/assets/*`
+   - **Then**: **Eligible for cache**, **Edge TTL** = **Respect origin**
+   - This keeps `index.html` fresh (60 s browser TTL) during normal operation, but allows Cloudflare to serve a stale copy for up to 24 hours (`stale-if-error`) when the origin is unreachable — making the full web console available from cache during outages. Hashed `/assets/` files are already cached by the rule above.
+
+7. **Browser TTL** (optional): Under **Caching > Configuration**, set **Browser Cache TTL** to **Respect Existing Headers** so the origin's `Cache-Control` headers are passed through to clients.
 
 #### How the CDN flow works
 

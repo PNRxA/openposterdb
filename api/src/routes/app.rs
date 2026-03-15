@@ -147,7 +147,14 @@ pub fn build_app(state: Arc<AppState>) -> Router {
         use tower_http::services::{ServeDir, ServeFile};
 
         let index = format!("{dir}/index.html");
-        let spa = ServeDir::new(dir).fallback(ServeFile::new(index));
+        let spa = tower::ServiceBuilder::new()
+            .layer(SetResponseHeaderLayer::if_not_present(
+                header::CACHE_CONTROL,
+                HeaderValue::from_static(
+                    "public, max-age=60, stale-while-revalidate=3600, stale-if-error=86400",
+                ),
+            ))
+            .service(ServeDir::new(dir).fallback(ServeFile::new(index)));
 
         app = app.fallback_service(tower::service_fn(move |req: Request<axum::body::Body>| {
             let spa = spa.clone();
