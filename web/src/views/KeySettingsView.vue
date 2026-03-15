@@ -79,7 +79,7 @@ function handleLogout() {
     <div class="w-full max-w-md space-y-6">
       <div class="flex items-center justify-between">
         <div>
-          <h1 class="text-2xl font-bold">Poster Settings</h1>
+          <h1 class="text-2xl font-bold">Image Settings</h1>
           <p v-if="keyName" class="text-sm text-muted-foreground">
             {{ keyName }}
             <span class="font-mono">({{ keyPrefix }}...)</span>

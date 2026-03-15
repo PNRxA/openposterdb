@@ -31,45 +31,39 @@ test.describe('settings', () => {
 
   test('settings page loads with heading', async ({ page }) => {
     await expect(page.locator('h1')).toContainText('Settings')
-    await expect(page.locator('text=Global Poster Defaults')).toBeVisible()
+    await expect(page.locator('text=Global Image Settings')).toBeVisible()
   })
 
-  test('displays poster source dropdown defaulting to TMDB', async ({ page }) => {
-    const select = page.getByTestId('poster-source-select')
-    await expect(select).toBeVisible()
-    await expect(select).toHaveValue('t')
+  test('fanart checkbox is visible', async ({ page }) => {
+    await expect(page.getByTestId('fanart-checkbox')).toBeVisible()
   })
 
-  test('fanart option is enabled when API key is configured', async ({ page }) => {
-    const fanartOption = page.locator('option[value="f"]')
-    await expect(fanartOption).toBeEnabled()
-    await expect(fanartOption).not.toContainText('no API key')
+  test('fanart checkbox enables language and textless options', async ({ page }) => {
+    // Child options should be visible but disabled initially
+    await expect(page.getByTestId('fanart-lang-select')).toBeVisible()
+    await expect(page.getByTestId('fanart-lang-select')).toBeDisabled()
+    await expect(page.getByTestId('textless-checkbox')).toBeVisible()
+    await expect(page.getByTestId('textless-checkbox')).toBeDisabled()
+
+    // Enable fanart
+    await page.getByTestId('fanart-checkbox').check()
+
+    // Now child options should be enabled
+    await expect(page.getByTestId('fanart-lang-select')).toBeEnabled()
+    await expect(page.getByTestId('textless-checkbox')).toBeEnabled()
   })
 
-  test('fanart options appear when fanart is selected', async ({ page }) => {
-    // Language and textless should not be visible initially
-    await expect(page.locator('label:has-text("Language")')).not.toBeVisible()
-    await expect(page.locator('label:has-text("Prefer textless")')).not.toBeVisible()
+  test('enabling fanart auto-saves', async ({ page }) => {
+    await page.getByTestId('fanart-checkbox').check()
 
-    // Select fanart
-    await page.getByTestId('poster-source-select').selectOption('f')
-
-    // Now language and textless should appear
-    await expect(page.locator('label:has-text("Language")')).toBeVisible()
-    await expect(page.locator('label:has-text("Prefer textless")')).toBeVisible()
-  })
-
-  test('auto-saves and shows confirmation', async ({ page }) => {
-    // Change a setting to trigger auto-save
-    await page.getByTestId('poster-source-select').selectOption('f')
-
-    // Wait for debounced auto-save + confirmation
+    // Wait for auto-save confirmation
     await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 })
   })
 
-  test('settings persist after auto-save and reload', async ({ page }) => {
-    // Select fanart and configure
-    await page.getByTestId('poster-source-select').selectOption('f')
+  test('fanart options persist after auto-save and reload', async ({ page }) => {
+    // Enable fanart and textless
+    await page.getByTestId('fanart-checkbox').check()
+    await page.getByTestId('textless-checkbox').check()
 
     // Wait for auto-save confirmation
     await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 })
@@ -78,8 +72,9 @@ test.describe('settings', () => {
     await page.reload()
     await expect(page.locator('h1')).toContainText('Settings')
 
-    // Settings should be preserved
-    await expect(page.getByTestId('poster-source-select')).toHaveValue('f')
+    // Fanart and textless should be checked
+    await expect(page.getByTestId('fanart-checkbox')).toBeChecked()
+    await expect(page.getByTestId('textless-checkbox')).toBeChecked()
   })
 
   test('refresh button is visible and clickable', async ({ page }) => {

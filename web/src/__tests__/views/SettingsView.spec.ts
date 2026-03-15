@@ -76,10 +76,10 @@ describe('SettingsView', () => {
     const wrapper = mountView()
     await flushPromises()
     expect(wrapper.text()).toContain('Settings')
-    expect(wrapper.text()).toContain('Global Poster Defaults')
+    expect(wrapper.text()).toContain('Global Image Settings')
   })
 
-  it('loads and displays current settings', async () => {
+  it('loads and displays current settings with fanart enabled', async () => {
     mockAdminApi.getSettings.mockResolvedValue({
       ok: true,
       json: () =>
@@ -94,27 +94,20 @@ describe('SettingsView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    const select = wrapper.find('select')
-    expect(select.element.value).toBe('f')
+    const fanartCheckbox = wrapper.find('[data-testid="fanart-checkbox"]')
+    expect((fanartCheckbox.element as HTMLInputElement).checked).toBe(true)
+    const textlessCheckbox = wrapper.find('[data-testid="textless-checkbox"]')
+    expect((textlessCheckbox.element as HTMLInputElement).checked).toBe(true)
   })
 
-  it('shows fanart options only when fanart is selected', async () => {
+  it('shows fanart checkbox when fanart is available', async () => {
     const wrapper = mountView()
     await flushPromises()
 
-    // Default is tmdb — language/textless fields should be hidden
-    expect(wrapper.text()).not.toContain('Language')
-    expect(wrapper.text()).not.toContain('Prefer textless')
-
-    // Switch to fanart
-    await wrapper.find('select').setValue('f')
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('Language')
-    expect(wrapper.text()).toContain('Prefer textless')
+    expect(wrapper.find('[data-testid="fanart-checkbox"]').exists()).toBe(true)
   })
 
-  it('disables fanart option when not available', async () => {
+  it('hides fanart options when not available', async () => {
     mockAdminApi.getSettings.mockResolvedValue({
       ok: true,
       json: () =>
@@ -127,20 +120,19 @@ describe('SettingsView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    const fanartOption = wrapper.find('option[value="f"]')
-    expect(fanartOption.attributes('disabled')).toBeDefined()
-    expect(fanartOption.text()).toContain('no API key')
+    expect(wrapper.find('[data-testid="fanart-checkbox"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Fanart.tv API key')
   })
 
-  it('auto-saves when settings change', async () => {
+  it('auto-saves when fanart checkbox is toggled', async () => {
     vi.useFakeTimers()
     mockAdminApi.updateSettings.mockResolvedValue({ ok: true })
 
     const wrapper = mountView()
     await flushPromises()
 
-    // Change poster source to trigger auto-save
-    await wrapper.find('select').setValue('f')
+    // Check fanart to trigger auto-save
+    await wrapper.find('[data-testid="fanart-checkbox"]').setValue(true)
     vi.advanceTimersByTime(700)
     await flushPromises()
 
@@ -161,7 +153,7 @@ describe('SettingsView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    await wrapper.find('select').setValue('f')
+    await wrapper.find('[data-testid="fanart-checkbox"]').setValue(true)
     vi.advanceTimersByTime(700)
     await flushPromises()
 
@@ -179,7 +171,7 @@ describe('SettingsView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    await wrapper.find('select').setValue('f')
+    await wrapper.find('[data-testid="fanart-checkbox"]').setValue(true)
     vi.advanceTimersByTime(700)
     await flushPromises()
 
@@ -203,8 +195,8 @@ describe('SettingsView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    // Change something to trigger auto-save
-    await wrapper.find('select').setValue('f')
+    // Toggle fanart to trigger auto-save
+    await wrapper.find('[data-testid="fanart-checkbox"]').setValue(true)
     vi.advanceTimersByTime(700)
     await flushPromises()
 
@@ -224,7 +216,7 @@ describe('SettingsView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    await wrapper.find('select').setValue('f')
+    await wrapper.find('[data-testid="fanart-checkbox"]').setValue(true)
     vi.advanceTimersByTime(700)
     await flushPromises()
 
@@ -302,8 +294,8 @@ describe('SettingsView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    // Change something to trigger auto-save
-    await wrapper.find('select').setValue('f')
+    // Toggle fanart to trigger auto-save
+    await wrapper.find('[data-testid="fanart-checkbox"]').setValue(true)
     vi.advanceTimersByTime(700)
     await flushPromises()
 

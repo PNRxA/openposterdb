@@ -147,6 +147,6 @@ describe('KeySettingsView', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    expect(wrapper.find('h1').text()).toContain('Poster Settings')
+    expect(wrapper.find('h1').text()).toContain('Image Settings')
   })
 })

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { Loader2, Check } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,6 +25,45 @@ export interface RenderSettings {
   poster_badge_direction: string
 }
 
+const LANGUAGES = [
+  { code: 'ar', name: 'Arabic' },
+  { code: 'bg', name: 'Bulgarian' },
+  { code: 'ca', name: 'Catalan' },
+  { code: 'zh', name: 'Chinese' },
+  { code: 'hr', name: 'Croatian' },
+  { code: 'cs', name: 'Czech' },
+  { code: 'da', name: 'Danish' },
+  { code: 'nl', name: 'Dutch' },
+  { code: 'en', name: 'English' },
+  { code: 'fi', name: 'Finnish' },
+  { code: 'fr', name: 'French' },
+  { code: 'de', name: 'German' },
+  { code: 'el', name: 'Greek' },
+  { code: 'he', name: 'Hebrew' },
+  { code: 'hi', name: 'Hindi' },
+  { code: 'hu', name: 'Hungarian' },
+  { code: 'id', name: 'Indonesian' },
+  { code: 'it', name: 'Italian' },
+  { code: 'ja', name: 'Japanese' },
+  { code: 'ko', name: 'Korean' },
+  { code: 'ms', name: 'Malay' },
+  { code: 'no', name: 'Norwegian' },
+  { code: 'fa', name: 'Persian' },
+  { code: 'pl', name: 'Polish' },
+  { code: 'pt', name: 'Portuguese' },
+  { code: 'ro', name: 'Romanian' },
+  { code: 'ru', name: 'Russian' },
+  { code: 'sr', name: 'Serbian' },
+  { code: 'sk', name: 'Slovak' },
+  { code: 'sl', name: 'Slovenian' },
+  { code: 'es', name: 'Spanish' },
+  { code: 'sv', name: 'Swedish' },
+  { code: 'th', name: 'Thai' },
+  { code: 'tr', name: 'Turkish' },
+  { code: 'uk', name: 'Ukrainian' },
+  { code: 'vi', name: 'Vietnamese' },
+] as const
+
 const ALL_RATING_SOURCES = [
   { key: 'imdb', label: 'IMDb', color: '#b4910f' },
   { key: 'tmdb', label: 'TMDB', color: '#019b58' },
@@ -47,9 +86,10 @@ const props = defineProps<{
   fetchBackdropPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string) => Promise<Response>
 }>()
 
-const editSource = ref(props.settings.poster_source)
-const editLang = ref(props.settings.fanart_lang)
+const editFanart = ref(props.settings.poster_source === 'f')
+const editLang = ref(props.settings.fanart_lang || 'en')
 const editTextless = ref(props.settings.fanart_textless)
+const editSource = computed(() => editFanart.value ? 'f' : 't')
 const editRatingsLimit = ref(props.settings.ratings_limit)
 const editRatingsOrder = ref<string[]>(parseOrder(props.settings.ratings_order))
 const editPosterPosition = ref(props.settings.poster_position || 'bc')
@@ -64,8 +104,8 @@ const editBackdropLabelStyle = ref(props.settings.backdrop_label_style || 'i')
 const editPosterBadgeDirection = ref(props.settings.poster_badge_direction || 'd')
 
 function applySettings(s: RenderSettings) {
-  editSource.value = s.poster_source
-  editLang.value = s.fanart_lang
+  editFanart.value = s.poster_source === 'f'
+  editLang.value = s.fanart_lang || 'en'
   editTextless.value = s.fanart_textless
   editRatingsLimit.value = s.ratings_limit
   editRatingsOrder.value = parseOrder(s.ratings_order)
@@ -341,13 +381,14 @@ onBeforeUnmount(() => {
 
 let syncing = false
 const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
-const selectClass = 'flex h-9 w-full max-w-xs rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+const selectBaseClass = 'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+const selectClass = selectBaseClass + ' max-w-xs'
 </script>
 
 <template>
   <div class="space-y-4">
     <div class="flex items-center gap-2">
-      <h3 class="text-sm font-semibold">Poster Settings</h3>
+      <h3 class="text-sm font-semibold">Image Settings</h3>
       <span
         v-if="resetSettings && currentSettings.is_default"
         class="text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded"
@@ -356,45 +397,55 @@ const selectClass = 'flex h-9 w-full max-w-xs rounded-md border border-input bg-
       </span>
     </div>
 
-    <!-- Section 1: Global Settings -->
-    <div class="space-y-2">
-      <label class="text-sm font-medium">Poster Source</label>
-      <select
-        v-model="editSource"
-        data-testid="poster-source-select"
-        :class="selectClass"
-      >
-        <option value="t">TMDB</option>
-        <option value="f" :disabled="!currentSettings.fanart_available">
-          Fanart.tv{{ !currentSettings.fanart_available ? ' (no API key)' : '' }}
-        </option>
-      </select>
-    </div>
-
-    <template v-if="editSource === 'f'">
-      <div class="space-y-2">
-        <label class="text-sm font-medium">Language</label>
-        <Input
-          v-model="editLang"
-          type="text"
-          placeholder="en"
-          class="max-w-[120px]"
-          maxlength="5"
-          pattern="[a-zA-Z0-9\-]{2,5}"
-          title="2-5 alphanumeric characters (e.g. en, pt-BR)"
-        />
-      </div>
-
+    <!-- Fanart options -->
+    <template v-if="currentSettings.fanart_available">
       <div class="flex items-center gap-2">
         <input
-          :id="inputId('textless')"
-          v-model="editTextless"
+          :id="inputId('fanart')"
+          v-model="editFanart"
           type="checkbox"
           class="h-4 w-4 rounded border-input"
+          data-testid="fanart-checkbox"
         />
-        <label :for="inputId('textless')" class="text-sm font-medium">Prefer textless posters</label>
+        <label :for="inputId('fanart')" class="text-sm font-medium">Use Fanart.tv for custom language and textless posters</label>
+      </div>
+
+      <div class="pl-6 space-y-3" :class="{ 'opacity-50': !editFanart }">
+        <div class="space-y-1">
+          <div class="flex items-center gap-3">
+            <label :for="inputId('fanart-lang')" class="text-sm font-medium">Language</label>
+            <select
+              :id="inputId('fanart-lang')"
+              v-model="editLang"
+              :class="selectBaseClass"
+              class="max-w-[200px]"
+              :disabled="!editFanart"
+              data-testid="fanart-lang-select"
+            >
+              <option v-for="lang in LANGUAGES" :key="lang.code" :value="lang.code">
+                {{ lang.code }} - {{ lang.name }}
+              </option>
+            </select>
+          </div>
+          <p class="text-xs text-muted-foreground">Best effort — falls back to English if unavailable.</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <input
+            :id="inputId('textless')"
+            v-model="editTextless"
+            type="checkbox"
+            class="h-4 w-4 rounded border-input"
+            :disabled="!editFanart"
+            data-testid="textless-checkbox"
+          />
+          <label :for="inputId('textless')" class="text-sm font-medium">Prefer textless posters</label>
+        </div>
       </div>
     </template>
+    <p v-else class="text-sm text-muted-foreground">
+      Fanart.tv options require a <span class="font-medium">Fanart.tv API key</span>.
+    </p>
 
     <div class="space-y-2 pt-2">
       <h3 class="text-sm font-semibold">Rating Display</h3>

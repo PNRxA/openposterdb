@@ -201,6 +201,41 @@ describe('RenderSettingsForm', () => {
     expect(fetchPreview).toHaveBeenCalledWith(3, expect.any(String), 'l', 'h', 'i', 'd')
   })
 
+  it('hides fanart options when fanart_available is false', () => {
+    const wrapper = mountForm({ fanart_available: false })
+    expect(wrapper.find('[data-testid="fanart-checkbox"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Fanart.tv API key')
+  })
+
+  it('shows fanart checkbox when fanart_available is true', () => {
+    const wrapper = mountForm({ fanart_available: true })
+    expect(wrapper.find('[data-testid="fanart-checkbox"]').exists()).toBe(true)
+  })
+
+  it('checks fanart checkbox when source is fanart', () => {
+    const wrapper = mountForm({ poster_source: 'f' })
+    const checkbox = wrapper.find('[data-testid="fanart-checkbox"]')
+    expect((checkbox.element as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('enables language and textless when fanart is checked', () => {
+    const wrapper = mountForm({ poster_source: 'f' })
+    expect((wrapper.find('[data-testid="textless-checkbox"]').element as HTMLInputElement).disabled).toBe(false)
+    expect((wrapper.find('[data-testid="fanart-lang-select"]').element as HTMLInputElement).disabled).toBe(false)
+  })
+
+  it('disables language and textless when fanart is unchecked', () => {
+    const wrapper = mountForm({ poster_source: 't' })
+    expect((wrapper.find('[data-testid="textless-checkbox"]').element as HTMLInputElement).disabled).toBe(true)
+    expect((wrapper.find('[data-testid="fanart-lang-select"]').element as HTMLInputElement).disabled).toBe(true)
+  })
+
+  it('defaults language to en when fanart_lang is empty', () => {
+    const wrapper = mountForm({ poster_source: 'f', fanart_lang: '' })
+    const langSelect = wrapper.find('[data-testid="fanart-lang-select"]')
+    expect((langSelect.element as HTMLSelectElement).value).toBe('en')
+  })
+
   it('renders badge direction dropdown', () => {
     const wrapper = mountForm()
     const select = wrapper.find('[data-testid="poster-badge-direction-select"]')

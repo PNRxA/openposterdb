@@ -115,7 +115,7 @@ async function toggleFreeApiKey() {
       </div>
 
       <div class="rounded-lg border p-6 space-y-4">
-        <h2 class="text-lg font-semibold">Global Poster Defaults</h2>
+        <h2 class="text-lg font-semibold">Global Image Settings</h2>
         <p class="text-sm text-muted-foreground">
           These defaults apply to all API keys unless overridden per-key.
         </p>
