@@ -380,7 +380,7 @@ const selectClass = selectBaseClass + ' max-w-xs'
 <template>
   <div class="space-y-4">
     <div class="flex items-center gap-2">
-      <h3 class="text-sm font-semibold">Image Settings</h3>
+      <p class="text-sm font-semibold">Image Settings</p>
       <span
         v-if="resetSettings && currentSettings.is_default"
         class="text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded"
@@ -440,7 +440,7 @@ const selectClass = selectBaseClass + ' max-w-xs'
     </p>
 
     <div class="space-y-2 pt-2">
-      <h3 class="text-sm font-semibold">Rating Display</h3>
+      <p class="text-sm font-semibold">Rating Display</p>
 
       <div class="space-y-2">
         <label class="text-sm font-medium">Rating order</label>
@@ -498,8 +498,9 @@ const selectClass = selectBaseClass + ' max-w-xs'
         </div>
         <div class="space-y-3 flex-1 min-w-0">
           <div class="space-y-2">
-            <label class="text-sm font-medium">Badge position</label>
+            <label :for="inputId('poster-position')" class="text-sm font-medium">Badge position</label>
             <select
+              :id="inputId('poster-position')"
               v-model="editPosterPosition"
               data-testid="poster-position-select"
               :class="selectClass"
@@ -515,8 +516,9 @@ const selectClass = selectBaseClass + ' max-w-xs'
             </select>
           </div>
           <div class="space-y-2">
-            <label class="text-sm font-medium">Badge direction</label>
+            <label :for="inputId('poster-badge-direction')" class="text-sm font-medium">Badge direction</label>
             <select
+              :id="inputId('poster-badge-direction')"
               v-model="editPosterBadgeDirection"
               data-testid="poster-badge-direction-select"
               :class="selectClass"
@@ -527,8 +529,9 @@ const selectClass = selectBaseClass + ' max-w-xs'
             </select>
           </div>
           <div class="space-y-2">
-            <label class="text-sm font-medium">Badge style</label>
+            <label :for="inputId('poster-badge-style')" class="text-sm font-medium">Badge style</label>
             <select
+              :id="inputId('poster-badge-style')"
               v-model="editPosterBadgeStyle"
               :class="selectClass"
             >
@@ -538,8 +541,9 @@ const selectClass = selectBaseClass + ' max-w-xs'
             </select>
           </div>
           <div class="space-y-2">
-            <label class="text-sm font-medium">Label style</label>
+            <label :for="inputId('poster-label-style')" class="text-sm font-medium">Label style</label>
             <select
+              :id="inputId('poster-label-style')"
               v-model="editPosterLabelStyle"
               :class="selectClass"
             >
@@ -588,8 +592,9 @@ const selectClass = selectBaseClass + ' max-w-xs'
         </div>
         <div class="space-y-3 flex-1 min-w-0">
           <div class="space-y-2">
-            <label class="text-sm font-medium">Badge style</label>
+            <label :for="inputId('logo-badge-style')" class="text-sm font-medium">Badge style</label>
             <select
+              :id="inputId('logo-badge-style')"
               v-model="editLogoBadgeStyle"
               :class="selectClass"
             >
@@ -598,8 +603,9 @@ const selectClass = selectBaseClass + ' max-w-xs'
             </select>
           </div>
           <div class="space-y-2">
-            <label class="text-sm font-medium">Label style</label>
+            <label :for="inputId('logo-label-style')" class="text-sm font-medium">Label style</label>
             <select
+              :id="inputId('logo-label-style')"
               v-model="editLogoLabelStyle"
               :class="selectClass"
             >
@@ -645,8 +651,9 @@ const selectClass = selectBaseClass + ' max-w-xs'
         </div>
         <div class="space-y-3 flex-1 min-w-0">
           <div class="space-y-2">
-            <label class="text-sm font-medium">Badge style</label>
+            <label :for="inputId('backdrop-badge-style')" class="text-sm font-medium">Badge style</label>
             <select
+              :id="inputId('backdrop-badge-style')"
               v-model="editBackdropBadgeStyle"
               :class="selectClass"
             >
@@ -655,8 +662,9 @@ const selectClass = selectBaseClass + ' max-w-xs'
             </select>
           </div>
           <div class="space-y-2">
-            <label class="text-sm font-medium">Label style</label>
+            <label :for="inputId('backdrop-label-style')" class="text-sm font-medium">Label style</label>
             <select
+              :id="inputId('backdrop-label-style')"
               v-model="editBackdropLabelStyle"
               :class="selectClass"
             >

@@ -11,7 +11,7 @@ const posters = [
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col items-center justify-center px-4 py-16">
+  <main class="min-h-screen flex flex-col items-center justify-center px-4 py-16">
     <div class="max-w-2xl w-full text-center space-y-8">
       <!-- Scattered posters -->
       <div class="flex justify-center items-end gap-3 sm:gap-4">
@@ -42,7 +42,7 @@ const posters = [
       <!-- Actions -->
       <NavButtons primary-label="Go home" primary-to="/" />
     </div>
-  </div>
+  </main>
 </template>
 
 <style scoped>

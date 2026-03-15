@@ -40,7 +40,7 @@ async function handleSetup() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center">
+  <main class="min-h-screen flex items-center justify-center">
     <div class="w-full max-w-sm space-y-6">
       <div class="text-center">
         <h1 class="text-2xl font-bold">OpenPosterDB Setup</h1>
@@ -87,5 +87,5 @@ async function handleSetup() {
         </Button>
       </form>
     </div>
-  </div>
+  </main>
 </template>

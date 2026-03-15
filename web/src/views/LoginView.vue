@@ -63,7 +63,7 @@ function toggleMode() {
 </script>
 
 <template>
-  <div v-if="!checking" class="min-h-screen flex items-center justify-center">
+  <main v-if="!checking" class="min-h-screen flex items-center justify-center">
     <div class="w-full max-w-sm space-y-6">
       <div class="text-center">
         <h1 class="text-2xl font-bold">OpenPosterDB</h1>
@@ -128,5 +128,5 @@ function toggleMode() {
 
       <FreeApiKeyCard />
     </div>
-  </div>
+  </main>
 </template>

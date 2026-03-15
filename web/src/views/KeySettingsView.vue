@@ -75,7 +75,7 @@ function handleLogout() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center">
+  <main class="min-h-screen flex items-center justify-center">
     <div class="w-full max-w-md space-y-6">
       <div class="flex items-center justify-between">
         <div>
@@ -104,5 +104,5 @@ function handleLogout() {
         />
       </div>
     </div>
-  </div>
+  </main>
 </template>

@@ -79,7 +79,9 @@ async function handleFetch() {
       <p class="text-sm font-medium">Try it out</p>
       <form class="flex flex-col sm:flex-row gap-2" @submit.prevent="handleFetch">
         <select
+          id="free-id-type"
           v-model="idType"
+          aria-label="ID type"
           class="rounded-md border border-input bg-background px-3 py-2 text-sm"
         >
           <option value="imdb">IMDb</option>
@@ -87,7 +89,9 @@ async function handleFetch() {
           <option value="tvdb">TVDB</option>
         </select>
         <select
+          id="free-image-type"
           v-model="imageType"
+          aria-label="Image type"
           class="rounded-md border border-input bg-background px-3 py-2 text-sm"
         >
           <option value="poster">Poster</option>

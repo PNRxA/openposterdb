@@ -108,7 +108,7 @@ const backdrops = [
 
 <template>
   <div class="min-h-screen flex flex-col">
-    <div class="flex-1 flex flex-col items-center px-4 py-16">
+    <main class="flex-1 flex flex-col items-center px-4 py-16">
       <div class="max-w-5xl w-full space-y-20">
         <!-- Hero -->
         <div class="text-center space-y-3">
@@ -323,6 +323,6 @@ const backdrops = [
         </div>
 
       </div>
-    </div>
+    </main>
   </div>
 </template>
