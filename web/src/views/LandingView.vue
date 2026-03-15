@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Image, KeyRound, Zap, Shield, ExternalLink } from "lucide-vue-next";
 import NavButtons from "@/components/NavButtons.vue";
 import FreeApiKeyCard from "@/components/FreeApiKeyCard.vue";
+import BlurImage from "@/components/BlurImage.vue";
 
 const features = [
   {
@@ -147,11 +148,12 @@ const backdrops = [
           </p>
           <div class="flex flex-wrap justify-center gap-4">
             <div v-for="p in posters" :key="p.src" class="space-y-1">
-              <img
+              <BlurImage
                 :src="p.src"
                 :alt="p.alt || p.label"
-                loading="lazy"
-                class="rounded-lg shadow-xl max-w-[160px]"
+                :width="160"
+                :height="240"
+                class="rounded-lg shadow-xl"
               />
               <p class="text-xs text-muted-foreground">{{ p.label }}</p>
             </div>
@@ -169,12 +171,14 @@ const backdrops = [
           </p>
           <div class="flex flex-wrap items-end justify-center gap-6">
             <div v-for="l in logos" :key="l.src" class="space-y-2">
-              <img
-                :src="l.src"
-                :alt="l.alt || l.label"
-                loading="lazy"
-                class="rounded-lg shadow-md max-w-[200px] bg-neutral-900 p-3"
-              />
+              <div class="rounded-lg shadow-md bg-neutral-900 p-3">
+                <BlurImage
+                  :src="l.src"
+                  :alt="l.alt || l.label"
+                  :width="200"
+                  :height="122"
+                />
+              </div>
               <p class="text-xs text-muted-foreground">{{ l.label }}</p>
             </div>
           </div>
@@ -188,11 +192,12 @@ const backdrops = [
           </p>
           <div class="flex flex-wrap justify-center gap-4">
             <div v-for="b in backdrops" :key="b.src" class="space-y-1">
-              <img
+              <BlurImage
                 :src="b.src"
                 :alt="b.alt || b.label"
-                loading="lazy"
-                class="rounded-lg shadow-md max-w-[360px] w-full"
+                :width="360"
+                :height="203"
+                class="rounded-lg shadow-md"
               />
               <p class="text-xs text-muted-foreground">{{ b.label }}</p>
             </div>
@@ -207,11 +212,12 @@ const backdrops = [
           </p>
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 justify-items-center">
             <div v-for="p in positions" :key="p.src" class="space-y-2">
-              <img
+              <BlurImage
                 :src="p.src"
                 :alt="p.label"
-                loading="lazy"
-                class="rounded-lg shadow-md w-full max-w-[160px]"
+                :width="160"
+                :height="240"
+                class="rounded-lg shadow-md"
               />
               <p class="text-xs text-muted-foreground">{{ p.label }}</p>
             </div>
@@ -227,11 +233,12 @@ const backdrops = [
           </p>
           <div class="flex flex-wrap items-end justify-center gap-6">
             <div v-for="s in styles" :key="s.src" class="space-y-2">
-              <img
+              <BlurImage
                 :src="s.src"
                 :alt="s.label"
-                loading="lazy"
-                class="rounded-lg shadow-md max-w-[200px]"
+                :width="200"
+                :height="300"
+                class="rounded-lg shadow-md"
               />
               <p class="text-xs text-muted-foreground">{{ s.label }}</p>
             </div>
@@ -246,11 +253,12 @@ const backdrops = [
           </p>
           <div class="flex flex-wrap items-end justify-center gap-6">
             <div v-for="l in labels" :key="l.src" class="space-y-2">
-              <img
+              <BlurImage
                 :src="l.src"
                 :alt="l.label"
-                loading="lazy"
-                class="rounded-lg shadow-md max-w-[200px]"
+                :width="200"
+                :height="300"
+                class="rounded-lg shadow-md"
               />
               <p class="text-xs text-muted-foreground">{{ l.label }}</p>
             </div>
