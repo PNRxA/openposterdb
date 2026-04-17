@@ -78,6 +78,10 @@ pub struct ImageQuery {
     #[serde(default)]
     #[param(value_type = Option<String>)]
     pub badge_size: Option<BadgeSize>,
+    /// Fractional badge scaling override multiplier (0.25-4.0). Applied on top of `badge_size`.
+    #[serde(default)]
+    #[param(value_type = Option<f32>, example = 1.15)]
+    pub badge_scale: Option<f32>,
     /// Badge stacking direction (poster only): `d` (default), `h` (horizontal), `v` (vertical).
     #[serde(default)]
     #[param(value_type = Option<String>)]
@@ -108,6 +112,7 @@ impl ImageQuery {
             || self.badge_style.is_some()
             || self.label_style.is_some()
             || self.badge_size.is_some()
+            || self.badge_scale.is_some()
             || self.badge_direction.is_some()
             || self.position.is_some()
             || self.image_source.is_some()
@@ -275,6 +280,15 @@ fn apply_query_overrides(
             cache::ImageType::Logo => s.logo_badge_size = size,
             cache::ImageType::Backdrop => s.backdrop_badge_size = size,
             cache::ImageType::Episode => s.episode_badge_size = size,
+        }
+    }
+    if let Some(scale) = query.badge_scale {
+        db::validate_badge_scale_override(scale).map_err(|e| e.into_response())?;
+        match kind {
+            cache::ImageType::Poster => s.poster_badge_scale_override = scale,
+            cache::ImageType::Logo => s.logo_badge_scale_override = scale,
+            cache::ImageType::Backdrop => s.backdrop_badge_scale_override = scale,
+            cache::ImageType::Episode => s.episode_badge_scale_override = scale,
         }
     }
 
@@ -709,6 +723,7 @@ mod tests {
             badge_style: None,
             label_style: None,
             badge_size: None,
+            badge_scale: None,
             badge_direction: None,
             position: None,
             image_source: None,
@@ -747,6 +762,7 @@ mod tests {
         assert_eq!(result.poster_badge_style, BadgeStyle::Horizontal);
         assert_eq!(result.poster_label_style, LabelStyle::Icon);
         assert_eq!(result.poster_badge_size, BadgeSize::Large);
+        assert_eq!(result.poster_badge_scale_override, 1.0);
         assert_eq!(result.poster_badge_direction, BadgeDirection::Horizontal);
         assert_eq!(result.poster_position, BadgePosition::TopLeft);
         assert_eq!(result.image_source, ImageSource::Fanart);
@@ -778,6 +794,7 @@ mod tests {
         assert_eq!(result.logo_badge_style, BadgeStyle::Vertical);
         assert_eq!(result.logo_label_style, LabelStyle::Text);
         assert_eq!(result.logo_badge_size, BadgeSize::Small);
+        assert_eq!(result.logo_badge_scale_override, 1.0);
         // Poster-only fields unchanged
         assert_eq!(result.poster_position, original_position);
         assert_eq!(result.poster_badge_direction, original_direction);
@@ -806,6 +823,7 @@ mod tests {
         assert_eq!(result.backdrop_badge_style, BadgeStyle::Default);
         assert_eq!(result.backdrop_position, BadgePosition::BottomCenter);
         assert_eq!(result.backdrop_badge_direction, BadgeDirection::Horizontal);
+        assert_eq!(result.backdrop_badge_scale_override, 1.0);
 
         // Poster fields unchanged
         assert_eq!(result.poster_position, original_poster_position);
@@ -844,5 +862,37 @@ mod tests {
         let result =
             apply_query_overrides(settings, &query, cache::ImageType::Poster).unwrap();
         assert!(!result.textless);
+    }
+
+    #[test]
+    fn apply_query_overrides_applies_badge_scale_override() {
+        let settings = Arc::new(db::RenderSettings::default());
+        let query = ImageQuery {
+            badge_scale: Some(1.125),
+            ..empty_query()
+        };
+
+        let poster = apply_query_overrides(settings.clone(), &query, cache::ImageType::Poster).unwrap();
+        assert_eq!(poster.poster_badge_scale_override, 1.125);
+
+        let logo = apply_query_overrides(settings.clone(), &query, cache::ImageType::Logo).unwrap();
+        assert_eq!(logo.logo_badge_scale_override, 1.125);
+
+        let backdrop = apply_query_overrides(settings.clone(), &query, cache::ImageType::Backdrop).unwrap();
+        assert_eq!(backdrop.backdrop_badge_scale_override, 1.125);
+
+        let episode = apply_query_overrides(settings, &query, cache::ImageType::Episode).unwrap();
+        assert_eq!(episode.episode_badge_scale_override, 1.125);
+    }
+
+    #[test]
+    fn apply_query_overrides_rejects_invalid_badge_scale_override() {
+        let settings = Arc::new(db::RenderSettings::default());
+        let query = ImageQuery {
+            badge_scale: Some(0.2),
+            ..empty_query()
+        };
+        let result = apply_query_overrides(settings, &query, cache::ImageType::Poster);
+        assert!(result.is_err());
     }
 }

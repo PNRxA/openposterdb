@@ -127,6 +127,7 @@ GET /{api_key}/isValid
 - `?badge_style={h|v|d}`: badge layout — `h` (horizontal), `v` (vertical), `d` (default)
 - `?label_style={t|i|o}`: label rendering — `t` (text), `i` (icon), `o` (official provider logos)
 - `?badge_size={xs|s|m|l|xl}`: badge scale — extra-small, small, medium, large, extra-large
+- `?badge_scale={decimal}`: fractional badge scaling override multiplier (range `0.25` to `4.0`). Applied on top of `badge_size` (example: `?badge_size=l&badge_scale=1.1`)
 - `?image_source={t|f}`: image source — `t` (TMDB, default), `f` (Fanart.tv). Applies to all image types. The non-selected source is used as fallback
 - `?badge_direction={d|h|v}`: badge stacking direction — `d` (default), `h` (horizontal), `v` (vertical). Applies to poster, backdrop, and episode endpoints
 - `?position={bc|tc|l|r|tl|tr|bl|br}`: badge anchor position. Applies to poster, backdrop, and episode endpoints
@@ -134,7 +135,7 @@ GET /{api_key}/isValid
 - `?blur={true|false}`: apply Gaussian blur for spoiler protection (episode only). Badges remain sharp over the blurred still image
 - RPDB-compatible — use `http://localhost:3000` as the base URL (drop-in replacement for `https://api.ratingposterdb.com`). Old parameter names `?poster_source=` and `?fanart_textless=` are accepted as aliases
 
-`textless` is poster-only. `blur` is episode-only. `badge_direction` and `position` are silently ignored on logo endpoints. For shared parameters (`ratings_limit`, `badge_style`, `label_style`, `badge_size`, `image_source`), the override is applied to the correct image-type-specific setting (e.g. `?badge_style=h` on the poster endpoint sets `poster_badge_style`, on the logo endpoint sets `logo_badge_style`).
+`textless` is poster-only. `blur` is episode-only. `badge_direction` and `position` are silently ignored on logo endpoints. For shared parameters (`ratings_limit`, `badge_style`, `label_style`, `badge_size`, `badge_scale`, `image_source`), the override is applied to the correct image-type-specific setting (e.g. `?badge_style=h` on the poster endpoint sets `poster_badge_style`, on the logo endpoint sets `logo_badge_style`).
 
 Management endpoints (auth, keys, settings) are under `/api/` and return JSON.
 
@@ -321,6 +322,7 @@ Cache keys uniquely identify a rendered image. They are used as keys in the in-m
 | Label style | `.l{style}` | `.lt`, `.li`, `.lo` | `t` = text labels, `i` = icon labels, `o` = official provider logos |
 | Badge direction | `.d{dir}` | `.dh`, `.dv` | `h` = horizontal, `v` = vertical (resolved from `d` = default) |
 | Badge size | `.b{size}` | `.bm`, `.bxl` | `xs` = extra-small, `s` = small, `m` = medium (default), `l` = large, `xl` = extra-large |
+| Badge scale override | `.bo{permille}` | `.bo1125` | Optional fractional multiplier (1.125x shown). Omitted when scale is 1.0 |
 | Image size | `.z{size}` | `.zm`, `.zl` | `s` = small, `m` = medium (default), `l` = large, `vl` = very-large |
 
 ### Image Kind Prefixes

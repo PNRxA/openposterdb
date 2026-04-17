@@ -35,14 +35,18 @@ export interface RenderSettings {
   backdrop_label_style: string
   poster_badge_direction: string
   poster_badge_size: string
+  poster_badge_scale_override: number
   logo_badge_size: string
+  logo_badge_scale_override: number
   backdrop_badge_size: string
+  backdrop_badge_scale_override: number
   backdrop_position: string
   backdrop_badge_direction: string
   episode_ratings_limit: number
   episode_badge_style: string
   episode_label_style: string
   episode_badge_size: string
+  episode_badge_scale_override: number
   episode_position: string
   episode_badge_direction: string
   episode_blur: boolean
@@ -54,11 +58,20 @@ const props = defineProps<{
   loadSettings: () => Promise<RenderSettings | null>
   saveSettings: (s: SaveSettingsPayload) => Promise<string | null>
   resetSettings?: () => Promise<boolean>
-  fetchPreview: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string, badgeSize?: string) => Promise<Response>
-  fetchLogoPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string) => Promise<Response>
-  fetchBackdropPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string) => Promise<Response>
-  fetchEpisodePreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, blur?: boolean) => Promise<Response>
+  fetchPreview: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string, badgeSize?: string, badgeScale?: number) => Promise<Response>
+  fetchLogoPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, badgeScale?: number) => Promise<Response>
+  fetchBackdropPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, badgeScale?: number) => Promise<Response>
+  fetchEpisodePreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, blur?: boolean, badgeScale?: number) => Promise<Response>
 }>()
+
+const MIN_BADGE_SCALE = 0.25
+const MAX_BADGE_SCALE = 4
+
+function clampBadgeScale(value: unknown): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return 1
+  return Math.min(MAX_BADGE_SCALE, Math.max(MIN_BADGE_SCALE, parsed))
+}
 
 const editFanart = ref(props.settings.image_source === 'f')
 const editLang = ref(props.settings.lang || 'en')
@@ -77,14 +90,18 @@ const editLogoLabelStyle = ref(props.settings.logo_label_style || 'o')
 const editBackdropLabelStyle = ref(props.settings.backdrop_label_style || 'o')
 const editPosterBadgeDirection = ref(props.settings.poster_badge_direction || 'd')
 const editPosterBadgeSize = ref(props.settings.poster_badge_size || 'm')
+const editPosterBadgeScaleOverride = ref(clampBadgeScale(props.settings.poster_badge_scale_override ?? 1))
 const editLogoBadgeSize = ref(props.settings.logo_badge_size || 'm')
+const editLogoBadgeScaleOverride = ref(clampBadgeScale(props.settings.logo_badge_scale_override ?? 1))
 const editBackdropBadgeSize = ref(props.settings.backdrop_badge_size || 'm')
+const editBackdropBadgeScaleOverride = ref(clampBadgeScale(props.settings.backdrop_badge_scale_override ?? 1))
 const editBackdropPosition = ref(props.settings.backdrop_position || 'tr')
 const editBackdropBadgeDirection = ref(props.settings.backdrop_badge_direction || 'v')
 const editEpisodeRatingsLimit = ref(props.settings.episode_ratings_limit ?? 1)
 const editEpisodeBadgeStyle = ref(props.settings.episode_badge_style || 'v')
 const editEpisodeLabelStyle = ref(props.settings.episode_label_style || 'o')
 const editEpisodeBadgeSize = ref(props.settings.episode_badge_size || 'l')
+const editEpisodeBadgeScaleOverride = ref(clampBadgeScale(props.settings.episode_badge_scale_override ?? 1))
 const editEpisodePosition = ref(props.settings.episode_position || 'tr')
 const editEpisodeBadgeDirection = ref(props.settings.episode_badge_direction || 'v')
 const editEpisodeBlur = ref(props.settings.episode_blur ?? false)
@@ -106,14 +123,18 @@ function applySettings(s: RenderSettings) {
   editBackdropLabelStyle.value = s.backdrop_label_style || 'o'
   editPosterBadgeDirection.value = s.poster_badge_direction || 'd'
   editPosterBadgeSize.value = s.poster_badge_size || 'm'
+  editPosterBadgeScaleOverride.value = clampBadgeScale(s.poster_badge_scale_override ?? 1)
   editLogoBadgeSize.value = s.logo_badge_size || 'm'
+  editLogoBadgeScaleOverride.value = clampBadgeScale(s.logo_badge_scale_override ?? 1)
   editBackdropBadgeSize.value = s.backdrop_badge_size || 'm'
+  editBackdropBadgeScaleOverride.value = clampBadgeScale(s.backdrop_badge_scale_override ?? 1)
   editBackdropPosition.value = s.backdrop_position || 'tr'
   editBackdropBadgeDirection.value = s.backdrop_badge_direction || 'v'
   editEpisodeRatingsLimit.value = s.episode_ratings_limit ?? 1
   editEpisodeBadgeStyle.value = s.episode_badge_style || 'v'
   editEpisodeLabelStyle.value = s.episode_label_style || 'o'
   editEpisodeBadgeSize.value = s.episode_badge_size || 'l'
+  editEpisodeBadgeScaleOverride.value = clampBadgeScale(s.episode_badge_scale_override ?? 1)
   editEpisodePosition.value = s.episode_position || 'tr'
   editEpisodeBadgeDirection.value = s.episode_badge_direction || 'v'
   editEpisodeBlur.value = s.episode_blur ?? false
@@ -169,14 +190,18 @@ async function autoSave() {
       backdrop_label_style: editBackdropLabelStyle.value,
       poster_badge_direction: editPosterBadgeDirection.value,
       poster_badge_size: editPosterBadgeSize.value,
+      poster_badge_scale_override: clampBadgeScale(editPosterBadgeScaleOverride.value),
       logo_badge_size: editLogoBadgeSize.value,
+      logo_badge_scale_override: clampBadgeScale(editLogoBadgeScaleOverride.value),
       backdrop_badge_size: editBackdropBadgeSize.value,
+      backdrop_badge_scale_override: clampBadgeScale(editBackdropBadgeScaleOverride.value),
       backdrop_position: editBackdropPosition.value,
       backdrop_badge_direction: editBackdropBadgeDirection.value,
       episode_ratings_limit: editEpisodeRatingsLimit.value,
       episode_badge_style: editEpisodeBadgeStyle.value,
       episode_label_style: editEpisodeLabelStyle.value,
       episode_badge_size: editEpisodeBadgeSize.value,
+      episode_badge_scale_override: clampBadgeScale(editEpisodeBadgeScaleOverride.value),
       episode_position: editEpisodePosition.value,
       episode_badge_direction: editEpisodeBadgeDirection.value,
       episode_blur: editEpisodeBlur.value,
@@ -206,7 +231,7 @@ async function autoSave() {
 
 // Auto-save on any setting change
 watch(
-  [editSource, editLang, editTextless, editRatingsLimit, editRatingsOrder, editPosterPosition, editLogoRatingsLimit, editBackdropRatingsLimit, editPosterBadgeStyle, editLogoBadgeStyle, editBackdropBadgeStyle, editPosterLabelStyle, editLogoLabelStyle, editBackdropLabelStyle, editPosterBadgeDirection, editPosterBadgeSize, editLogoBadgeSize, editBackdropBadgeSize, editBackdropPosition, editBackdropBadgeDirection, editEpisodeRatingsLimit, editEpisodeBadgeStyle, editEpisodeLabelStyle, editEpisodeBadgeSize, editEpisodePosition, editEpisodeBadgeDirection, editEpisodeBlur],
+  [editSource, editLang, editTextless, editRatingsLimit, editRatingsOrder, editPosterPosition, editLogoRatingsLimit, editBackdropRatingsLimit, editPosterBadgeStyle, editLogoBadgeStyle, editBackdropBadgeStyle, editPosterLabelStyle, editLogoLabelStyle, editBackdropLabelStyle, editPosterBadgeDirection, editPosterBadgeSize, editPosterBadgeScaleOverride, editLogoBadgeSize, editLogoBadgeScaleOverride, editBackdropBadgeSize, editBackdropBadgeScaleOverride, editBackdropPosition, editBackdropBadgeDirection, editEpisodeRatingsLimit, editEpisodeBadgeStyle, editEpisodeLabelStyle, editEpisodeBadgeSize, editEpisodeBadgeScaleOverride, editEpisodePosition, editEpisodeBadgeDirection, editEpisodeBlur],
   () => {
     if (syncing) return
     autoSave()
@@ -265,15 +290,15 @@ function onPreviewLoad(state: PreviewState, e: Event) {
 
 async function fetchPreviewImage(
   state: PreviewState,
-  fetcher: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string, badgeSize?: string) => Promise<Response>,
-  extraArgs?: { posterPosition?: string; badgeStyle?: string; labelStyle?: string; badgeDirection?: string; badgeSize?: string },
+  fetcher: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string, badgeSize?: string, badgeScale?: number) => Promise<Response>,
+  extraArgs?: { posterPosition?: string; badgeStyle?: string; labelStyle?: string; badgeDirection?: string; badgeSize?: string; badgeScale?: number },
 ) {
   state.loading = true
   state.error = false
   const generation = ++state.generation
 
   try {
-    const res = await fetcher(editRatingsLimit.value, editRatingsOrder.value.join(','), extraArgs?.posterPosition, extraArgs?.badgeStyle, extraArgs?.labelStyle, extraArgs?.badgeDirection, extraArgs?.badgeSize)
+    const res = await fetcher(editRatingsLimit.value, editRatingsOrder.value.join(','), extraArgs?.posterPosition, extraArgs?.badgeStyle, extraArgs?.labelStyle, extraArgs?.badgeDirection, extraArgs?.badgeSize, extraArgs?.badgeScale)
     if (generation !== state.generation) return
     if (!res.ok) {
       state.error = true
@@ -298,24 +323,24 @@ let backdropPreviewTimer: ReturnType<typeof setTimeout> | null = null
 let episodePreviewTimer: ReturnType<typeof setTimeout> | null = null
 
 function updatePosterPreview() {
-  fetchPreviewImage(posterPreview.value, props.fetchPreview, { posterPosition: editPosterPosition.value, badgeStyle: editPosterBadgeStyle.value, labelStyle: editPosterLabelStyle.value, badgeDirection: editPosterBadgeDirection.value, badgeSize: editPosterBadgeSize.value })
+  fetchPreviewImage(posterPreview.value, props.fetchPreview, { posterPosition: editPosterPosition.value, badgeStyle: editPosterBadgeStyle.value, labelStyle: editPosterLabelStyle.value, badgeDirection: editPosterBadgeDirection.value, badgeSize: editPosterBadgeSize.value, badgeScale: clampBadgeScale(editPosterBadgeScaleOverride.value) })
 }
 
 function updateLogoPreview() {
   if (props.fetchLogoPreview) {
-    fetchPreviewImage(logoPreview.value, (_limit, order) => props.fetchLogoPreview!(editLogoRatingsLimit.value, order, editLogoBadgeStyle.value, editLogoLabelStyle.value, editLogoBadgeSize.value))
+    fetchPreviewImage(logoPreview.value, (_limit, order) => props.fetchLogoPreview!(editLogoRatingsLimit.value, order, editLogoBadgeStyle.value, editLogoLabelStyle.value, editLogoBadgeSize.value, clampBadgeScale(editLogoBadgeScaleOverride.value)))
   }
 }
 
 function updateBackdropPreview() {
   if (props.fetchBackdropPreview) {
-    fetchPreviewImage(backdropPreview.value, (_limit, order) => props.fetchBackdropPreview!(editBackdropRatingsLimit.value, order, editBackdropBadgeStyle.value, editBackdropLabelStyle.value, editBackdropBadgeSize.value, editBackdropPosition.value, editBackdropBadgeDirection.value))
+    fetchPreviewImage(backdropPreview.value, (_limit, order) => props.fetchBackdropPreview!(editBackdropRatingsLimit.value, order, editBackdropBadgeStyle.value, editBackdropLabelStyle.value, editBackdropBadgeSize.value, editBackdropPosition.value, editBackdropBadgeDirection.value, clampBadgeScale(editBackdropBadgeScaleOverride.value)))
   }
 }
 
 function updateEpisodePreview() {
   if (props.fetchEpisodePreview) {
-    fetchPreviewImage(episodePreview.value, (_limit, order) => props.fetchEpisodePreview!(editEpisodeRatingsLimit.value, order, editEpisodeBadgeStyle.value, editEpisodeLabelStyle.value, editEpisodeBadgeSize.value, editEpisodePosition.value, editEpisodeBadgeDirection.value, editEpisodeBlur.value))
+    fetchPreviewImage(episodePreview.value, (_limit, order) => props.fetchEpisodePreview!(editEpisodeRatingsLimit.value, order, editEpisodeBadgeStyle.value, editEpisodeLabelStyle.value, editEpisodeBadgeSize.value, editEpisodePosition.value, editEpisodeBadgeDirection.value, editEpisodeBlur.value, clampBadgeScale(editEpisodeBadgeScaleOverride.value)))
   }
 }
 
@@ -340,28 +365,28 @@ watch([editRatingsOrder], () => {
 }, { deep: true })
 
 // Poster-only settings
-watch([editRatingsLimit, editPosterPosition, editPosterBadgeStyle, editPosterLabelStyle, editPosterBadgeDirection, editPosterBadgeSize], () => {
+watch([editRatingsLimit, editPosterPosition, editPosterBadgeStyle, editPosterLabelStyle, editPosterBadgeDirection, editPosterBadgeSize, editPosterBadgeScaleOverride], () => {
   if (syncing) return
   if (posterPreviewTimer) clearTimeout(posterPreviewTimer)
   posterPreviewTimer = setTimeout(updatePosterPreview, 500)
 })
 
 // Logo-only settings
-watch([editLogoRatingsLimit, editLogoBadgeStyle, editLogoLabelStyle, editLogoBadgeSize], () => {
+watch([editLogoRatingsLimit, editLogoBadgeStyle, editLogoLabelStyle, editLogoBadgeSize, editLogoBadgeScaleOverride], () => {
   if (syncing) return
   if (logoPreviewTimer) clearTimeout(logoPreviewTimer)
   logoPreviewTimer = setTimeout(updateLogoPreview, 500)
 })
 
 // Backdrop-only settings
-watch([editBackdropRatingsLimit, editBackdropBadgeStyle, editBackdropLabelStyle, editBackdropBadgeSize, editBackdropPosition, editBackdropBadgeDirection], () => {
+watch([editBackdropRatingsLimit, editBackdropBadgeStyle, editBackdropLabelStyle, editBackdropBadgeSize, editBackdropBadgeScaleOverride, editBackdropPosition, editBackdropBadgeDirection], () => {
   if (syncing) return
   if (backdropPreviewTimer) clearTimeout(backdropPreviewTimer)
   backdropPreviewTimer = setTimeout(updateBackdropPreview, 500)
 })
 
 // Episode-only settings
-watch([editEpisodeRatingsLimit, editEpisodeBadgeStyle, editEpisodeLabelStyle, editEpisodeBadgeSize, editEpisodePosition, editEpisodeBadgeDirection, editEpisodeBlur], () => {
+watch([editEpisodeRatingsLimit, editEpisodeBadgeStyle, editEpisodeLabelStyle, editEpisodeBadgeSize, editEpisodeBadgeScaleOverride, editEpisodePosition, editEpisodeBadgeDirection, editEpisodeBlur], () => {
   if (syncing) return
   if (episodePreviewTimer) clearTimeout(episodePreviewTimer)
   episodePreviewTimer = setTimeout(updateEpisodePreview, 500)
@@ -547,6 +572,22 @@ const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
           </div>
           <div class="space-y-1">
             <div class="flex items-center gap-3">
+              <Label :for="inputId('poster-badge-scale-override')">Badge scale</Label>
+              <Input
+                :id="inputId('poster-badge-scale-override')"
+                v-model.number="editPosterBadgeScaleOverride"
+                type="number"
+                :min="MIN_BADGE_SCALE"
+                :max="MAX_BADGE_SCALE"
+                :step="0.05"
+                class="w-[96px]"
+                data-testid="poster-badge-scale-override-input"
+              />
+            </div>
+            <p class="text-xs text-muted-foreground">Range: {{ MIN_BADGE_SCALE }} to {{ MAX_BADGE_SCALE }}</p>
+          </div>
+          <div class="space-y-1">
+            <div class="flex items-center gap-3">
               <Label :for="inputId('ratings-limit')">Max ratings</Label>
               <Input
                 :id="inputId('ratings-limit')"
@@ -638,6 +679,22 @@ const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
                 <SelectItem value="xl">Extra Large</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div class="space-y-1">
+            <div class="flex items-center gap-3">
+              <Label :for="inputId('logo-badge-scale-override')">Badge scale</Label>
+              <Input
+                :id="inputId('logo-badge-scale-override')"
+                v-model.number="editLogoBadgeScaleOverride"
+                type="number"
+                :min="MIN_BADGE_SCALE"
+                :max="MAX_BADGE_SCALE"
+                :step="0.05"
+                class="w-[96px]"
+                data-testid="logo-badge-scale-override-input"
+              />
+            </div>
+            <p class="text-xs text-muted-foreground">Range: {{ MIN_BADGE_SCALE }} to {{ MAX_BADGE_SCALE }}</p>
           </div>
           <div class="space-y-1">
             <div class="flex items-center gap-3">
@@ -763,6 +820,22 @@ const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
           </div>
           <div class="space-y-1">
             <div class="flex items-center gap-3">
+              <Label :for="inputId('backdrop-badge-scale-override')">Badge scale</Label>
+              <Input
+                :id="inputId('backdrop-badge-scale-override')"
+                v-model.number="editBackdropBadgeScaleOverride"
+                type="number"
+                :min="MIN_BADGE_SCALE"
+                :max="MAX_BADGE_SCALE"
+                :step="0.05"
+                class="w-[96px]"
+                data-testid="backdrop-badge-scale-override-input"
+              />
+            </div>
+            <p class="text-xs text-muted-foreground">Range: {{ MIN_BADGE_SCALE }} to {{ MAX_BADGE_SCALE }}</p>
+          </div>
+          <div class="space-y-1">
+            <div class="flex items-center gap-3">
               <Label :for="inputId('backdrop-ratings-limit')">Max ratings</Label>
               <Input
                 :id="inputId('backdrop-ratings-limit')"
@@ -882,6 +955,22 @@ const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
                 <SelectItem value="xl">Extra Large</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div class="space-y-1">
+            <div class="flex items-center gap-3">
+              <Label :for="inputId('episode-badge-scale-override')">Badge scale</Label>
+              <Input
+                :id="inputId('episode-badge-scale-override')"
+                v-model.number="editEpisodeBadgeScaleOverride"
+                type="number"
+                :min="MIN_BADGE_SCALE"
+                :max="MAX_BADGE_SCALE"
+                :step="0.05"
+                class="w-[96px]"
+                data-testid="episode-badge-scale-override-input"
+              />
+            </div>
+            <p class="text-xs text-muted-foreground">Range: {{ MIN_BADGE_SCALE }} to {{ MAX_BADGE_SCALE }}</p>
           </div>
           <div class="space-y-1">
             <div class="flex items-center gap-3">

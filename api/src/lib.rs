@@ -192,7 +192,11 @@ pub const SCHEMA_SQL: &[&str] = &[
         poster_label_style     TEXT NOT NULL DEFAULT 'i',
         logo_label_style       TEXT NOT NULL DEFAULT 'i',
         backdrop_label_style   TEXT NOT NULL DEFAULT 'i',
-        poster_badge_direction TEXT NOT NULL DEFAULT 'd'
+        poster_badge_direction TEXT NOT NULL DEFAULT 'd',
+        poster_badge_scale_override REAL NOT NULL DEFAULT 1.0,
+        logo_badge_scale_override REAL NOT NULL DEFAULT 1.0,
+        backdrop_badge_scale_override REAL NOT NULL DEFAULT 1.0,
+        episode_badge_scale_override REAL NOT NULL DEFAULT 1.0
     )",
 ];
 
@@ -338,6 +342,22 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
     ),
     (
         "ALTER TABLE api_key_settings ADD COLUMN backdrop_badge_direction TEXT NOT NULL DEFAULT 'v'",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN poster_badge_scale_override REAL NOT NULL DEFAULT 1.0",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN logo_badge_scale_override REAL NOT NULL DEFAULT 1.0",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN backdrop_badge_scale_override REAL NOT NULL DEFAULT 1.0",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN episode_badge_scale_override REAL NOT NULL DEFAULT 1.0",
         "duplicate column",
     ),
 ];

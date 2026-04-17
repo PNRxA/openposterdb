@@ -100,6 +100,7 @@ fn preview_render_settings(
     badge_style: BadgeStyle,
     label_style: db::LabelStyle,
     badge_size: db::BadgeSize,
+    badge_scale_override: f32,
     position: BadgePosition,
     badge_direction: BadgeDirection,
     ratings_limit: i32,
@@ -113,6 +114,7 @@ fn preview_render_settings(
             s.poster_badge_style = badge_style;
             s.poster_label_style = label_style;
             s.poster_badge_size = badge_size;
+            s.poster_badge_scale_override = badge_scale_override;
             s.poster_position = position;
             s.poster_badge_direction = badge_direction;
         }
@@ -121,12 +123,14 @@ fn preview_render_settings(
             s.logo_badge_style = badge_style;
             s.logo_label_style = label_style;
             s.logo_badge_size = badge_size;
+            s.logo_badge_scale_override = badge_scale_override;
         }
         cache::ImageType::Backdrop => {
             s.backdrop_ratings_limit = ratings_limit;
             s.backdrop_badge_style = badge_style;
             s.backdrop_label_style = label_style;
             s.backdrop_badge_size = badge_size;
+            s.backdrop_badge_scale_override = badge_scale_override;
             s.backdrop_position = position;
             s.backdrop_badge_direction = badge_direction;
         }
@@ -135,6 +139,7 @@ fn preview_render_settings(
             s.episode_badge_style = badge_style;
             s.episode_label_style = label_style;
             s.episode_badge_size = badge_size;
+            s.episode_badge_scale_override = badge_scale_override;
             s.episode_position = position;
             s.episode_badge_direction = badge_direction;
         }
@@ -159,9 +164,13 @@ pub async fn preview_poster(
 ) -> Result<Response, AppError> {
     let image_size = parse_preview_image_size(&query.image_size, cache::ImageType::Poster)?;
     let badge_size = query.badge_size.unwrap_or(db::default_badge_size());
+    let badge_scale_override = query.badge_scale.unwrap_or(db::default_badge_scale_override());
+    db::validate_badge_scale_override(badge_scale_override)?;
     let resolved_size = serve::resolve_image_size(image_size);
     let target_width = resolved_size.poster_target_width();
-    let badge_scale = resolved_size.badge_scale(cache::ImageType::Poster) * badge_size.scale_factor();
+    let badge_scale = resolved_size.badge_scale(cache::ImageType::Poster)
+        * badge_size.scale_factor()
+        * badge_scale_override;
 
     let ratings_limit = query.ratings_limit.unwrap_or(PREVIEW_POSTER_RATINGS_LIMIT);
     db::validate_ratings_limit(ratings_limit)?;
@@ -174,7 +183,7 @@ pub async fn preview_poster(
     let badge_direction = query.badge_direction.unwrap_or(db::default_poster_badge_direction()).resolve(position);
     let badge_style = raw_badge_style.resolve(badge_direction);
     let ratings_suffix = ratings::ratings_cache_suffix(ratings_order, ratings_limit);
-    let preview_settings = preview_render_settings(cache::ImageType::Poster, badge_style, label_style, badge_size, position, badge_direction, ratings_limit, ratings_order);
+    let preview_settings = preview_render_settings(cache::ImageType::Poster, badge_style, label_style, badge_size, badge_scale_override, position, badge_direction, ratings_limit, ratings_order);
     let suffix = serve::settings_cache_suffix_with_ratings(&preview_settings, cache::ImageType::Poster, image_size, &ratings_suffix);
     let cache_key = format!("preview:{suffix}");
     let cache_path = cache::preview_path(&state.config.cache_dir, cache::ImageType::Poster, &suffix, "jpg")?;
@@ -217,9 +226,13 @@ pub async fn preview_logo(
 ) -> Result<Response, AppError> {
     let image_size = parse_preview_image_size(&query.image_size, cache::ImageType::Logo)?;
     let badge_size = query.badge_size.unwrap_or(db::default_badge_size());
+    let badge_scale_override = query.badge_scale.unwrap_or(db::default_badge_scale_override());
+    db::validate_badge_scale_override(badge_scale_override)?;
     let resolved_size = serve::resolve_image_size(image_size);
     let target_width = resolved_size.logo_target_width();
-    let badge_scale = resolved_size.badge_scale(cache::ImageType::Logo) * badge_size.scale_factor();
+    let badge_scale = resolved_size.badge_scale(cache::ImageType::Logo)
+        * badge_size.scale_factor()
+        * badge_scale_override;
 
     let ratings_limit = query.ratings_limit.unwrap_or(PREVIEW_LOGO_BACKDROP_RATINGS_LIMIT);
     db::validate_ratings_limit(ratings_limit)?;
@@ -229,7 +242,7 @@ pub async fn preview_logo(
     let badge_style = query.badge_style.unwrap_or(BadgeStyle::Horizontal).resolve(BadgeDirection::Vertical);
     let label_style = query.label_style.unwrap_or(db::default_label_style());
     let ratings_suffix = ratings::ratings_cache_suffix(ratings_order, ratings_limit);
-    let preview_settings = preview_render_settings(cache::ImageType::Logo, badge_style, label_style, badge_size, BadgePosition::BottomCenter, BadgeDirection::Horizontal, ratings_limit, ratings_order);
+    let preview_settings = preview_render_settings(cache::ImageType::Logo, badge_style, label_style, badge_size, badge_scale_override, BadgePosition::BottomCenter, BadgeDirection::Horizontal, ratings_limit, ratings_order);
     let suffix = serve::settings_cache_suffix_with_ratings(&preview_settings, cache::ImageType::Logo, image_size, &ratings_suffix);
     let cache_key = format!("preview-logo:{suffix}");
     let cache_path = cache::preview_path(&state.config.cache_dir, cache::ImageType::Logo, &suffix, "png")?;
@@ -269,9 +282,13 @@ pub async fn preview_backdrop(
 ) -> Result<Response, AppError> {
     let image_size = parse_preview_image_size(&query.image_size, cache::ImageType::Backdrop)?;
     let badge_size = query.badge_size.unwrap_or(db::default_badge_size());
+    let badge_scale_override = query.badge_scale.unwrap_or(db::default_badge_scale_override());
+    db::validate_badge_scale_override(badge_scale_override)?;
     let resolved_size = serve::resolve_image_size(image_size);
     let target_width = resolved_size.backdrop_target_width();
-    let badge_scale = resolved_size.badge_scale(cache::ImageType::Backdrop) * badge_size.scale_factor();
+    let badge_scale = resolved_size.badge_scale(cache::ImageType::Backdrop)
+        * badge_size.scale_factor()
+        * badge_scale_override;
 
     let ratings_limit = query.ratings_limit.unwrap_or(PREVIEW_LOGO_BACKDROP_RATINGS_LIMIT);
     db::validate_ratings_limit(ratings_limit)?;
@@ -283,7 +300,7 @@ pub async fn preview_backdrop(
     let badge_style = query.badge_style.unwrap_or(BadgeStyle::Vertical).resolve(badge_direction);
     let label_style = query.label_style.unwrap_or(db::default_label_style());
     let ratings_suffix = ratings::ratings_cache_suffix(ratings_order, ratings_limit);
-    let preview_settings = preview_render_settings(cache::ImageType::Backdrop, badge_style, label_style, badge_size, position, badge_direction, ratings_limit, ratings_order);
+    let preview_settings = preview_render_settings(cache::ImageType::Backdrop, badge_style, label_style, badge_size, badge_scale_override, position, badge_direction, ratings_limit, ratings_order);
     let suffix = serve::settings_cache_suffix_with_ratings(&preview_settings, cache::ImageType::Backdrop, image_size, &ratings_suffix);
     let cache_key = format!("preview-backdrop:{suffix}");
     let cache_path = cache::preview_path(&state.config.cache_dir, cache::ImageType::Backdrop, &suffix, "jpg")?;
@@ -345,9 +362,13 @@ pub async fn preview_episode(
 ) -> Result<Response, AppError> {
     let image_size = parse_preview_image_size(&query.image_size, cache::ImageType::Episode)?;
     let badge_size = query.badge_size.unwrap_or(db::BadgeSize::Large);
+    let badge_scale_override = query.badge_scale.unwrap_or(db::default_badge_scale_override());
+    db::validate_badge_scale_override(badge_scale_override)?;
     let resolved_size = serve::resolve_image_size(image_size);
     let target_width = resolved_size.episode_target_width();
-    let badge_scale = resolved_size.badge_scale(cache::ImageType::Episode) * badge_size.scale_factor();
+    let badge_scale = resolved_size.badge_scale(cache::ImageType::Episode)
+        * badge_size.scale_factor()
+        * badge_scale_override;
 
     let ratings_limit = query.ratings_limit.unwrap_or(db::default_episode_ratings_limit());
     db::validate_ratings_limit(ratings_limit)?;
@@ -360,7 +381,7 @@ pub async fn preview_episode(
     let label_style = query.label_style.unwrap_or(db::default_label_style());
     let blur = query.blur.unwrap_or(false);
     let ratings_suffix = ratings::ratings_cache_suffix(ratings_order, ratings_limit);
-    let mut preview_settings = preview_render_settings(cache::ImageType::Episode, badge_style, label_style, badge_size, position, badge_direction, ratings_limit, ratings_order);
+    let mut preview_settings = preview_render_settings(cache::ImageType::Episode, badge_style, label_style, badge_size, badge_scale_override, position, badge_direction, ratings_limit, ratings_order);
     preview_settings.episode_blur = blur;
     let suffix = serve::settings_cache_suffix_with_ratings(&preview_settings, cache::ImageType::Episode, image_size, &ratings_suffix);
     let cache_key = format!("preview-episode:{suffix}");

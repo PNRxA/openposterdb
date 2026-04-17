@@ -73,8 +73,21 @@ describe('selfApi', () => {
       backdrop_label_style: 't',
       poster_badge_direction: 'd',
       poster_badge_size: 'l',
+      poster_badge_scale_override: 1,
       logo_badge_size: 's',
+      logo_badge_scale_override: 1,
       backdrop_badge_size: 'xl',
+      backdrop_badge_scale_override: 1,
+      backdrop_position: 'tr',
+      backdrop_badge_direction: 'v',
+      episode_ratings_limit: 1,
+      episode_badge_style: 'v',
+      episode_label_style: 'o',
+      episode_badge_size: 'l',
+      episode_badge_scale_override: 1,
+      episode_position: 'tr',
+      episode_badge_direction: 'v',
+      episode_blur: false,
     })
 
     const [url, options] = fetchMock.mock.calls[0]
@@ -98,8 +111,21 @@ describe('selfApi', () => {
       backdrop_label_style: 't',
       poster_badge_direction: 'd',
       poster_badge_size: 'l',
+      poster_badge_scale_override: 1,
       logo_badge_size: 's',
+      logo_badge_scale_override: 1,
       backdrop_badge_size: 'xl',
+      backdrop_badge_scale_override: 1,
+      backdrop_position: 'tr',
+      backdrop_badge_direction: 'v',
+      episode_ratings_limit: 1,
+      episode_badge_style: 'v',
+      episode_label_style: 'o',
+      episode_badge_size: 'l',
+      episode_badge_scale_override: 1,
+      episode_position: 'tr',
+      episode_badge_direction: 'v',
+      episode_blur: false,
     })
   })
 
@@ -222,7 +248,7 @@ describe('selfApi', () => {
     const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
     vi.stubGlobal('fetch', fetchMock)
 
-    await selfApi.previewEpisode(3, 'imdb,rt', undefined, undefined, undefined, undefined, undefined, true)
+    await selfApi.previewEpisode(3, 'imdb,rt', undefined, undefined, undefined, undefined, undefined, true, undefined)
 
     const [url] = fetchMock.mock.calls[0]
     expect(url).toContain('blur=true')
@@ -232,7 +258,7 @@ describe('selfApi', () => {
     const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
     vi.stubGlobal('fetch', fetchMock)
 
-    await selfApi.previewEpisode(3, 'imdb,rt', undefined, undefined, undefined, undefined, undefined, false)
+    await selfApi.previewEpisode(3, 'imdb,rt', undefined, undefined, undefined, undefined, undefined, false, undefined)
 
     const [url] = fetchMock.mock.calls[0]
     expect(url).not.toContain('blur')
@@ -269,12 +295,18 @@ describe('selfApi', () => {
       backdrop_label_style: 't',
       poster_badge_direction: 'd',
       poster_badge_size: 'l',
+      poster_badge_scale_override: 1,
       logo_badge_size: 's',
+      logo_badge_scale_override: 1,
       backdrop_badge_size: 'xl',
+      backdrop_badge_scale_override: 1,
+      backdrop_position: 'tr',
+      backdrop_badge_direction: 'v',
       episode_ratings_limit: 1,
       episode_badge_style: 'v',
       episode_label_style: 'o',
       episode_badge_size: 'l',
+      episode_badge_scale_override: 1,
       episode_position: 'tr',
       episode_badge_direction: 'v',
       episode_blur: false,
@@ -286,6 +318,7 @@ describe('selfApi', () => {
     expect(body.episode_badge_style).toBe('v')
     expect(body.episode_label_style).toBe('o')
     expect(body.episode_badge_size).toBe('l')
+    expect(body.episode_badge_scale_override).toBe(1)
     expect(body.episode_position).toBe('tr')
     expect(body.episode_badge_direction).toBe('v')
     expect(body.episode_blur).toBe(false)

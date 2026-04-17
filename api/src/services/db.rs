@@ -495,6 +495,28 @@ pub fn default_badge_size() -> BadgeSize {
     BadgeSize::Medium
 }
 
+pub fn default_badge_scale_override() -> f32 {
+    1.0
+}
+
+/// Validate a fractional badge scale override.
+///
+/// Allowed range is 0.25x to 4.0x to keep rendering stable and avoid extreme
+/// badge sizes that can break layout.
+pub fn validate_badge_scale_override(scale: f32) -> Result<(), AppError> {
+    if !scale.is_finite() {
+        return Err(AppError::BadRequest(
+            "badge_scale must be a finite decimal number".into(),
+        ));
+    }
+    if !(0.25..=4.0).contains(&scale) {
+        return Err(AppError::BadRequest(
+            "badge_scale must be between 0.25 and 4.0".into(),
+        ));
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BadgeSize {
     ExtraSmall,
@@ -611,11 +633,23 @@ pub fn validate_render_settings(
     logo_ratings_limit: i32,
     backdrop_ratings_limit: i32,
     episode_ratings_limit: i32,
+    poster_badge_scale_override: f32,
+    logo_badge_scale_override: f32,
+    backdrop_badge_scale_override: f32,
+    episode_badge_scale_override: f32,
 ) -> Result<(), AppError> {
     validate_lang(lang)?;
     validate_ratings_order(ratings_order)?;
     for limit in [ratings_limit, logo_ratings_limit, backdrop_ratings_limit, episode_ratings_limit] {
         validate_ratings_limit(limit)?;
+    }
+    for scale in [
+        poster_badge_scale_override,
+        logo_badge_scale_override,
+        backdrop_badge_scale_override,
+        episode_badge_scale_override,
+    ] {
+        validate_badge_scale_override(scale)?;
     }
     Ok(())
 }
@@ -1196,6 +1230,20 @@ mod tests {
     }
 
     #[test]
+    fn validate_badge_scale_override_accepts_fractional_values() {
+        assert!(validate_badge_scale_override(0.25).is_ok());
+        assert!(validate_badge_scale_override(1.0).is_ok());
+        assert!(validate_badge_scale_override(1.125).is_ok());
+        assert!(validate_badge_scale_override(4.0).is_ok());
+    }
+
+    #[test]
+    fn validate_badge_scale_override_rejects_out_of_range() {
+        assert!(validate_badge_scale_override(0.24).is_err());
+        assert!(validate_badge_scale_override(4.01).is_err());
+    }
+
+    #[test]
     fn parse_global_render_settings_with_all_enum_fields() {
         let mut globals = HashMap::new();
         globals.insert("image_source".into(), "f".into());
@@ -1633,14 +1681,18 @@ pub struct UpsertApiKeySettings<'a> {
     pub backdrop_label_style: &'a str,
     pub poster_badge_direction: &'a str,
     pub poster_badge_size: &'a str,
+    pub poster_badge_scale_override: f32,
     pub logo_badge_size: &'a str,
+    pub logo_badge_scale_override: f32,
     pub backdrop_badge_size: &'a str,
+    pub backdrop_badge_scale_override: f32,
     pub backdrop_position: &'a str,
     pub backdrop_badge_direction: &'a str,
     pub episode_ratings_limit: i32,
     pub episode_badge_style: &'a str,
     pub episode_label_style: &'a str,
     pub episode_badge_size: &'a str,
+    pub episode_badge_scale_override: f32,
     pub episode_position: &'a str,
     pub episode_badge_direction: &'a str,
     pub episode_blur: bool,
@@ -1668,14 +1720,18 @@ pub async fn upsert_api_key_settings(
         backdrop_label_style: Set(params.backdrop_label_style.to_string()),
         poster_badge_direction: Set(params.poster_badge_direction.to_string()),
         poster_badge_size: Set(params.poster_badge_size.to_string()),
+        poster_badge_scale_override: Set(params.poster_badge_scale_override),
         logo_badge_size: Set(params.logo_badge_size.to_string()),
+        logo_badge_scale_override: Set(params.logo_badge_scale_override),
         backdrop_badge_size: Set(params.backdrop_badge_size.to_string()),
+        backdrop_badge_scale_override: Set(params.backdrop_badge_scale_override),
         backdrop_position: Set(params.backdrop_position.to_string()),
         backdrop_badge_direction: Set(params.backdrop_badge_direction.to_string()),
         episode_ratings_limit: Set(params.episode_ratings_limit),
         episode_badge_style: Set(params.episode_badge_style.to_string()),
         episode_label_style: Set(params.episode_label_style.to_string()),
         episode_badge_size: Set(params.episode_badge_size.to_string()),
+        episode_badge_scale_override: Set(params.episode_badge_scale_override),
         episode_position: Set(params.episode_position.to_string()),
         episode_badge_direction: Set(params.episode_badge_direction.to_string()),
         episode_blur: Set(params.episode_blur),
@@ -1700,14 +1756,18 @@ pub async fn upsert_api_key_settings(
                     api_key_settings::Column::BackdropLabelStyle,
                     api_key_settings::Column::PosterBadgeDirection,
                     api_key_settings::Column::PosterBadgeSize,
+                    api_key_settings::Column::PosterBadgeScaleOverride,
                     api_key_settings::Column::LogoBadgeSize,
+                    api_key_settings::Column::LogoBadgeScaleOverride,
                     api_key_settings::Column::BackdropBadgeSize,
+                    api_key_settings::Column::BackdropBadgeScaleOverride,
                     api_key_settings::Column::BackdropPosition,
                     api_key_settings::Column::BackdropBadgeDirection,
                     api_key_settings::Column::EpisodeRatingsLimit,
                     api_key_settings::Column::EpisodeBadgeStyle,
                     api_key_settings::Column::EpisodeLabelStyle,
                     api_key_settings::Column::EpisodeBadgeSize,
+                    api_key_settings::Column::EpisodeBadgeScaleOverride,
                     api_key_settings::Column::EpisodePosition,
                     api_key_settings::Column::EpisodeBadgeDirection,
                     api_key_settings::Column::EpisodeBlur,
@@ -1752,14 +1812,22 @@ pub struct RenderSettings {
     pub backdrop_label_style: LabelStyle,
     pub poster_badge_direction: BadgeDirection,
     pub poster_badge_size: BadgeSize,
+    #[serde(skip_serializing)]
+    pub poster_badge_scale_override: f32,
     pub logo_badge_size: BadgeSize,
+    #[serde(skip_serializing)]
+    pub logo_badge_scale_override: f32,
     pub backdrop_badge_size: BadgeSize,
+    #[serde(skip_serializing)]
+    pub backdrop_badge_scale_override: f32,
     pub backdrop_position: BadgePosition,
     pub backdrop_badge_direction: BadgeDirection,
     pub episode_ratings_limit: i32,
     pub episode_badge_style: BadgeStyle,
     pub episode_label_style: LabelStyle,
     pub episode_badge_size: BadgeSize,
+    #[serde(skip_serializing)]
+    pub episode_badge_scale_override: f32,
     pub episode_position: BadgePosition,
     pub episode_badge_direction: BadgeDirection,
     pub episode_blur: bool,
@@ -1785,14 +1853,18 @@ impl Default for RenderSettings {
             backdrop_label_style: LabelStyle::Official,
             poster_badge_direction: BadgeDirection::Default,
             poster_badge_size: BadgeSize::Medium,
+            poster_badge_scale_override: default_badge_scale_override(),
             logo_badge_size: BadgeSize::Medium,
+            logo_badge_scale_override: default_badge_scale_override(),
             backdrop_badge_size: BadgeSize::Medium,
+            backdrop_badge_scale_override: default_badge_scale_override(),
             backdrop_position: default_backdrop_position(),
             backdrop_badge_direction: default_backdrop_badge_direction(),
             episode_ratings_limit: default_episode_ratings_limit(),
             episode_badge_style: default_episode_badge_style(),
             episode_label_style: default_label_style(),
             episode_badge_size: default_episode_badge_size(),
+            episode_badge_scale_override: default_badge_scale_override(),
             episode_position: default_episode_position(),
             episode_badge_direction: default_episode_badge_direction(),
             episode_blur: false,
@@ -1813,6 +1885,27 @@ pub fn parse_global_render_settings(globals: &HashMap<String, String>) -> Render
     fn global_or<T: Copy>(globals: &HashMap<String, String>, key: &str, parse: fn(&str) -> Result<T, AppError>, default: T) -> T {
         globals.get(key).map(|s| parse_setting_or_default(s, key, parse, default)).unwrap_or(default)
     }
+
+    fn parse_badge_scale_override_or_default(
+        globals: &HashMap<String, String>,
+        key: &str,
+        default: f32,
+    ) -> f32 {
+        match globals.get(key) {
+            Some(v) => match v.parse::<f32>() {
+                Ok(scale) => parse_setting_or_default(v, key, |_| {
+                    validate_badge_scale_override(scale)?;
+                    Ok(scale)
+                }, default),
+                Err(_) => {
+                    tracing::warn!(key, value = %v, "invalid setting value in DB, using default");
+                    default
+                }
+            },
+            None => default,
+        }
+    }
+
     RenderSettings {
         image_source: global_or(globals, "image_source", ImageSource::parse, defaults.image_source),
         lang: arc_or("lang", defaults.lang),
@@ -1843,8 +1936,11 @@ pub fn parse_global_render_settings(globals: &HashMap<String, String>) -> Render
         backdrop_label_style: global_or(globals, "backdrop_label_style", LabelStyle::parse, defaults.backdrop_label_style),
         poster_badge_direction: global_or(globals, "poster_badge_direction", BadgeDirection::parse, defaults.poster_badge_direction),
         poster_badge_size: global_or(globals, "poster_badge_size", BadgeSize::parse, defaults.poster_badge_size),
+        poster_badge_scale_override: parse_badge_scale_override_or_default(globals, "poster_badge_scale_override", defaults.poster_badge_scale_override),
         logo_badge_size: global_or(globals, "logo_badge_size", BadgeSize::parse, defaults.logo_badge_size),
+        logo_badge_scale_override: parse_badge_scale_override_or_default(globals, "logo_badge_scale_override", defaults.logo_badge_scale_override),
         backdrop_badge_size: global_or(globals, "backdrop_badge_size", BadgeSize::parse, defaults.backdrop_badge_size),
+        backdrop_badge_scale_override: parse_badge_scale_override_or_default(globals, "backdrop_badge_scale_override", defaults.backdrop_badge_scale_override),
         backdrop_position: global_or(globals, "backdrop_position", BadgePosition::parse, defaults.backdrop_position),
         backdrop_badge_direction: global_or(globals, "backdrop_badge_direction", BadgeDirection::parse, defaults.backdrop_badge_direction),
         episode_ratings_limit: globals
@@ -1854,6 +1950,7 @@ pub fn parse_global_render_settings(globals: &HashMap<String, String>) -> Render
         episode_badge_style: global_or(globals, "episode_badge_style", BadgeStyle::parse, defaults.episode_badge_style),
         episode_label_style: global_or(globals, "episode_label_style", LabelStyle::parse, defaults.episode_label_style),
         episode_badge_size: global_or(globals, "episode_badge_size", BadgeSize::parse, defaults.episode_badge_size),
+        episode_badge_scale_override: parse_badge_scale_override_or_default(globals, "episode_badge_scale_override", defaults.episode_badge_scale_override),
         episode_position: global_or(globals, "episode_position", BadgePosition::parse, defaults.episode_position),
         episode_badge_direction: global_or(globals, "episode_badge_direction", BadgeDirection::parse, defaults.episode_badge_direction),
         episode_blur: globals
@@ -1889,14 +1986,18 @@ pub async fn get_effective_render_settings(
                 backdrop_label_style: parse_setting_or_default(&s.backdrop_label_style, "backdrop_label_style", LabelStyle::parse, LabelStyle::Official),
                 poster_badge_direction: parse_setting_or_default(&s.poster_badge_direction, "poster_badge_direction", BadgeDirection::parse, BadgeDirection::Default),
                 poster_badge_size: parse_setting_or_default(&s.poster_badge_size, "poster_badge_size", BadgeSize::parse, BadgeSize::Medium),
+                poster_badge_scale_override: s.poster_badge_scale_override,
                 logo_badge_size: parse_setting_or_default(&s.logo_badge_size, "logo_badge_size", BadgeSize::parse, BadgeSize::Medium),
+                logo_badge_scale_override: s.logo_badge_scale_override,
                 backdrop_badge_size: parse_setting_or_default(&s.backdrop_badge_size, "backdrop_badge_size", BadgeSize::parse, BadgeSize::Medium),
+                backdrop_badge_scale_override: s.backdrop_badge_scale_override,
                 backdrop_position: parse_setting_or_default(&s.backdrop_position, "backdrop_position", BadgePosition::parse, default_backdrop_position()),
                 backdrop_badge_direction: parse_setting_or_default(&s.backdrop_badge_direction, "backdrop_badge_direction", BadgeDirection::parse, default_backdrop_badge_direction()),
                 episode_ratings_limit: s.episode_ratings_limit,
                 episode_badge_style: parse_setting_or_default(&s.episode_badge_style, "episode_badge_style", BadgeStyle::parse, default_episode_badge_style()),
                 episode_label_style: parse_setting_or_default(&s.episode_label_style, "episode_label_style", LabelStyle::parse, LabelStyle::Official),
                 episode_badge_size: parse_setting_or_default(&s.episode_badge_size, "episode_badge_size", BadgeSize::parse, default_episode_badge_size()),
+                episode_badge_scale_override: s.episode_badge_scale_override,
                 episode_position: parse_setting_or_default(&s.episode_position, "episode_position", BadgePosition::parse, default_episode_position()),
                 episode_badge_direction: parse_setting_or_default(&s.episode_badge_direction, "episode_badge_direction", BadgeDirection::parse, default_episode_badge_direction()),
                 episode_blur: s.episode_blur,

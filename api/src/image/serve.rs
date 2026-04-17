@@ -99,6 +99,19 @@ pub fn badge_direction_cache_suffix(dir: &str) -> String {
     format!(".d{dir}")
 }
 
+/// Returns a cache key suffix for fractional badge scaling overrides.
+///
+/// The suffix is omitted when `scale == 1.0` (no override). Values are encoded
+/// in permille so `1.125` becomes `.bo1125`.
+pub fn badge_scale_override_cache_suffix(scale: f32) -> String {
+    if (scale - 1.0).abs() < f32::EPSILON {
+        String::new()
+    } else {
+        let permille = (scale * 1000.0).round() as i32;
+        format!(".bo{permille}")
+    }
+}
+
 /// Resolve an optional image size, defaulting to Medium.
 pub fn resolve_image_size(size: Option<ImageSize>) -> ImageSize {
     size.unwrap_or(ImageSize::Medium)
@@ -161,14 +174,18 @@ pub fn settings_cache_suffix_with_ratings(
         backdrop_label_style: _,
         poster_badge_direction: _,
         poster_badge_size: _,
+        poster_badge_scale_override: _,
         logo_badge_size: _,
+        logo_badge_scale_override: _,
         backdrop_badge_size: _,
+        backdrop_badge_scale_override: _,
         backdrop_position: _,
         backdrop_badge_direction: _,
         episode_ratings_limit: _,
         episode_badge_style: _,
         episode_label_style: _,
         episode_badge_size: _,
+        episode_badge_scale_override: _,
         episode_position: _,
         episode_badge_direction: _,
         episode_blur: _,
@@ -185,13 +202,15 @@ pub fn settings_cache_suffix_with_ratings(
             let ls = label_style_cache_suffix(settings.poster_label_style.as_str());
             let bd = badge_direction_cache_suffix(settings.poster_badge_direction.as_str());
             let bsz = settings.poster_badge_size.cache_suffix();
-            format!("{rs}{ps}{bs}{ls}{bd}{bsz}{is_suffix}")
+            let bso = badge_scale_override_cache_suffix(settings.poster_badge_scale_override);
+            format!("{rs}{ps}{bs}{ls}{bd}{bsz}{bso}{is_suffix}")
         }
         cache::ImageType::Logo => {
             let bs = badge_style_cache_suffix(settings.logo_badge_style.as_str());
             let ls = label_style_cache_suffix(settings.logo_label_style.as_str());
             let bsz = settings.logo_badge_size.cache_suffix();
-            format!("{rs}{bs}{ls}{bsz}{is_suffix}")
+            let bso = badge_scale_override_cache_suffix(settings.logo_badge_scale_override);
+            format!("{rs}{bs}{ls}{bsz}{bso}{is_suffix}")
         }
         cache::ImageType::Backdrop => {
             let ps = position_cache_suffix(settings.backdrop_position.as_str());
@@ -199,7 +218,8 @@ pub fn settings_cache_suffix_with_ratings(
             let ls = label_style_cache_suffix(settings.backdrop_label_style.as_str());
             let bd = badge_direction_cache_suffix(settings.backdrop_badge_direction.as_str());
             let bsz = settings.backdrop_badge_size.cache_suffix();
-            format!("{rs}{ps}{bs}{ls}{bd}{bsz}{is_suffix}")
+            let bso = badge_scale_override_cache_suffix(settings.backdrop_badge_scale_override);
+            format!("{rs}{ps}{bs}{ls}{bd}{bsz}{bso}{is_suffix}")
         }
         cache::ImageType::Episode => {
             let ps = position_cache_suffix(settings.episode_position.as_str());
@@ -207,8 +227,9 @@ pub fn settings_cache_suffix_with_ratings(
             let ls = label_style_cache_suffix(settings.episode_label_style.as_str());
             let bd = badge_direction_cache_suffix(settings.episode_badge_direction.as_str());
             let bsz = settings.episode_badge_size.cache_suffix();
+            let bso = badge_scale_override_cache_suffix(settings.episode_badge_scale_override);
             let blur = if settings.episode_blur { ".blur" } else { "" };
-            format!("{rs}{ps}{bs}{ls}{bd}{bsz}{blur}{is_suffix}")
+            format!("{rs}{ps}{bs}{ls}{bd}{bsz}{bso}{blur}{is_suffix}")
         }
     }
 }
@@ -1076,14 +1097,18 @@ fn trigger_logo_backdrop_refresh(
         let params = LbRenderParams::from_settings(lb_kind, &settings);
         let resolved_size = resolve_image_size(image_size);
         let badge_size_factor = params.badge_size.scale_factor();
+        let badge_scale_override = match lb_kind {
+            LogoBackdropKind::Logo => settings.logo_badge_scale_override,
+            LogoBackdropKind::Backdrop => settings.backdrop_badge_scale_override,
+        };
         let (target_width, badge_scale) = match lb_kind {
             LogoBackdropKind::Logo => (
                 resolved_size.logo_target_width(),
-                resolved_size.badge_scale(cache::ImageType::Logo) * badge_size_factor,
+                resolved_size.badge_scale(cache::ImageType::Logo) * badge_size_factor * badge_scale_override,
             ),
             LogoBackdropKind::Backdrop => (
                 resolved_size.backdrop_target_width(),
-                resolved_size.badge_scale(cache::ImageType::Backdrop) * badge_size_factor,
+                resolved_size.badge_scale(cache::ImageType::Backdrop) * badge_size_factor * badge_scale_override,
             ),
         };
         let bytes = match lb_kind {
@@ -1120,7 +1145,9 @@ async fn generate_episode(
         resolved_size.poster_target_width()
     };
     let scale_image_type = if is_episode_still { cache::ImageType::Episode } else { cache::ImageType::Poster };
-    let badge_scale = resolved_size.badge_scale(scale_image_type) * settings.episode_badge_size.scale_factor();
+    let badge_scale = resolved_size.badge_scale(scale_image_type)
+        * settings.episode_badge_size.scale_factor()
+        * settings.episode_badge_scale_override;
     let tmdb_size: Arc<str> = resolved_size.tmdb_size().into();
 
     let image_bytes = if state.config.external_cache_only {
@@ -1268,7 +1295,9 @@ async fn generate_poster_with_source(
 
     let resolved_size = resolve_image_size(image_size);
     let target_width = resolved_size.poster_target_width();
-    let badge_scale = resolved_size.badge_scale(cache::ImageType::Poster) * settings.poster_badge_size.scale_factor();
+    let badge_scale = resolved_size.badge_scale(cache::ImageType::Poster)
+        * settings.poster_badge_size.scale_factor()
+        * settings.poster_badge_scale_override;
     let tmdb_size: Arc<str> = resolved_size.tmdb_size().into();
 
     let bytes = generate::generate_poster(generate::ImageParams {
@@ -1804,6 +1833,7 @@ pub async fn handle_logo_backdrop_inner(
         type_badge_direction: BadgeDirection,
         type_badge_size: BadgeSize,
         badge_size_factor: f32,
+        badge_scale_override: f32,
         label: &'static str,
         resolved: id::ResolvedId,
         badges: Vec<ratings::RatingBadge>,
@@ -1825,6 +1855,10 @@ pub async fn handle_logo_backdrop_inner(
         type_badge_direction: params.badge_direction,
         type_badge_size: params.badge_size,
         badge_size_factor: params.badge_size.scale_factor(),
+        badge_scale_override: match lb_kind {
+            LogoBackdropKind::Logo => settings.logo_badge_scale_override,
+            LogoBackdropKind::Backdrop => settings.backdrop_badge_scale_override,
+        },
         label,
         resolved: resolved.clone(),
         badges,
@@ -1898,11 +1932,15 @@ pub async fn handle_logo_backdrop_inner(
             let (target_width, badge_scale) = match lb_kind {
                 LogoBackdropKind::Logo => (
                     resolved_size.logo_target_width(),
-                    resolved_size.badge_scale(cache::ImageType::Logo) * ctx.badge_size_factor,
+                    resolved_size.badge_scale(cache::ImageType::Logo)
+                        * ctx.badge_size_factor
+                        * ctx.badge_scale_override,
                 ),
                 LogoBackdropKind::Backdrop => (
                     resolved_size.backdrop_target_width(),
-                    resolved_size.badge_scale(cache::ImageType::Backdrop) * ctx.badge_size_factor,
+                    resolved_size.badge_scale(cache::ImageType::Backdrop)
+                        * ctx.badge_size_factor
+                        * ctx.badge_scale_override,
                 ),
             };
             let bytes = match lb_kind {
@@ -2210,6 +2248,14 @@ mod tests {
         assert_ne!(medium, large);
         assert!(medium.ends_with(".zm"));
         assert!(large.ends_with(".zl"));
+    }
+
+    #[test]
+    fn settings_cache_suffix_includes_badge_scale_override() {
+        let mut s = RenderSettings::default();
+        s.poster_badge_scale_override = 1.125;
+        let suffix = settings_cache_suffix(&s, cache::ImageType::Poster, None);
+        assert!(suffix.contains(".bo1125"));
     }
 
     #[test]

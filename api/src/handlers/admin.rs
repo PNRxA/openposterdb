@@ -129,14 +129,18 @@ pub struct GlobalSettingsResponse {
     pub backdrop_label_style: LabelStyle,
     pub poster_badge_direction: BadgeDirection,
     pub poster_badge_size: BadgeSize,
+    pub poster_badge_scale_override: f32,
     pub logo_badge_size: BadgeSize,
+    pub logo_badge_scale_override: f32,
     pub backdrop_badge_size: BadgeSize,
+    pub backdrop_badge_scale_override: f32,
     pub backdrop_position: BadgePosition,
     pub backdrop_badge_direction: BadgeDirection,
     pub episode_ratings_limit: i32,
     pub episode_badge_style: BadgeStyle,
     pub episode_label_style: LabelStyle,
     pub episode_badge_size: BadgeSize,
+    pub episode_badge_scale_override: f32,
     pub episode_position: BadgePosition,
     pub episode_badge_direction: BadgeDirection,
     pub episode_blur: bool,
@@ -176,14 +180,18 @@ pub async fn get_settings(
         backdrop_label_style: settings.backdrop_label_style,
         poster_badge_direction: settings.poster_badge_direction,
         poster_badge_size: settings.poster_badge_size,
+        poster_badge_scale_override: settings.poster_badge_scale_override,
         logo_badge_size: settings.logo_badge_size,
+        logo_badge_scale_override: settings.logo_badge_scale_override,
         backdrop_badge_size: settings.backdrop_badge_size,
+        backdrop_badge_scale_override: settings.backdrop_badge_scale_override,
         backdrop_position: settings.backdrop_position,
         backdrop_badge_direction: settings.backdrop_badge_direction,
         episode_ratings_limit: settings.episode_ratings_limit,
         episode_badge_style: settings.episode_badge_style,
         episode_label_style: settings.episode_label_style,
         episode_badge_size: settings.episode_badge_size,
+        episode_badge_scale_override: settings.episode_badge_scale_override,
         episode_position: settings.episode_position,
         episode_badge_direction: settings.episode_badge_direction,
         episode_blur: settings.episode_blur,
@@ -225,10 +233,16 @@ pub struct UpdateGlobalSettingsRequest {
     pub poster_badge_direction: BadgeDirection,
     #[serde(default = "db::default_badge_size")]
     pub poster_badge_size: BadgeSize,
+    #[serde(default = "db::default_badge_scale_override")]
+    pub poster_badge_scale_override: f32,
     #[serde(default = "db::default_badge_size")]
     pub logo_badge_size: BadgeSize,
+    #[serde(default = "db::default_badge_scale_override")]
+    pub logo_badge_scale_override: f32,
     #[serde(default = "db::default_badge_size")]
     pub backdrop_badge_size: BadgeSize,
+    #[serde(default = "db::default_badge_scale_override")]
+    pub backdrop_badge_scale_override: f32,
     #[serde(default = "db::default_backdrop_position")]
     pub backdrop_position: BadgePosition,
     #[serde(default = "db::default_backdrop_badge_direction")]
@@ -241,6 +255,8 @@ pub struct UpdateGlobalSettingsRequest {
     pub episode_label_style: LabelStyle,
     #[serde(default = "db::default_episode_badge_size")]
     pub episode_badge_size: BadgeSize,
+    #[serde(default = "db::default_badge_scale_override")]
+    pub episode_badge_scale_override: f32,
     #[serde(default = "db::default_episode_position")]
     pub episode_position: BadgePosition,
     #[serde(default = "db::default_episode_badge_direction")]
@@ -253,12 +269,27 @@ pub async fn update_settings(
     State(state): State<Arc<AppState>>,
     Json(req): Json<UpdateGlobalSettingsRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    db::validate_render_settings(&req.lang, req.ratings_limit, &req.ratings_order, req.logo_ratings_limit, req.backdrop_ratings_limit, req.episode_ratings_limit)?;
+    db::validate_render_settings(
+        &req.lang,
+        req.ratings_limit,
+        &req.ratings_order,
+        req.logo_ratings_limit,
+        req.backdrop_ratings_limit,
+        req.episode_ratings_limit,
+        req.poster_badge_scale_override,
+        req.logo_badge_scale_override,
+        req.backdrop_badge_scale_override,
+        req.episode_badge_scale_override,
+    )?;
     let textless_str = if req.textless { "true" } else { "false" };
     let limit_str = req.ratings_limit.to_string();
     let logo_limit_str = req.logo_ratings_limit.to_string();
     let backdrop_limit_str = req.backdrop_ratings_limit.to_string();
     let episode_limit_str = req.episode_ratings_limit.to_string();
+    let poster_scale_str = req.poster_badge_scale_override.to_string();
+    let logo_scale_str = req.logo_badge_scale_override.to_string();
+    let backdrop_scale_str = req.backdrop_badge_scale_override.to_string();
+    let episode_scale_str = req.episode_badge_scale_override.to_string();
     let episode_blur_str = if req.episode_blur { "true" } else { "false" };
     let mut batch: Vec<(&str, &str)> = vec![
         ("image_source", req.image_source.as_str()),
@@ -277,14 +308,18 @@ pub async fn update_settings(
         ("backdrop_label_style", req.backdrop_label_style.as_str()),
         ("poster_badge_direction", req.poster_badge_direction.as_str()),
         ("poster_badge_size", req.poster_badge_size.as_str()),
+        ("poster_badge_scale_override", &poster_scale_str),
         ("logo_badge_size", req.logo_badge_size.as_str()),
+        ("logo_badge_scale_override", &logo_scale_str),
         ("backdrop_badge_size", req.backdrop_badge_size.as_str()),
+        ("backdrop_badge_scale_override", &backdrop_scale_str),
         ("backdrop_position", req.backdrop_position.as_str()),
         ("backdrop_badge_direction", req.backdrop_badge_direction.as_str()),
         ("episode_ratings_limit", &episode_limit_str),
         ("episode_badge_style", req.episode_badge_style.as_str()),
         ("episode_label_style", req.episode_label_style.as_str()),
         ("episode_badge_size", req.episode_badge_size.as_str()),
+        ("episode_badge_scale_override", &episode_scale_str),
         ("episode_position", req.episode_position.as_str()),
         ("episode_badge_direction", req.episode_badge_direction.as_str()),
         ("episode_blur", episode_blur_str),

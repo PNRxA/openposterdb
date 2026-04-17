@@ -111,14 +111,18 @@ pub struct RenderSettingsResponse {
     pub backdrop_label_style: LabelStyle,
     pub poster_badge_direction: BadgeDirection,
     pub poster_badge_size: BadgeSize,
+    pub poster_badge_scale_override: f32,
     pub logo_badge_size: BadgeSize,
+    pub logo_badge_scale_override: f32,
     pub backdrop_badge_size: BadgeSize,
+    pub backdrop_badge_scale_override: f32,
     pub backdrop_position: BadgePosition,
     pub backdrop_badge_direction: BadgeDirection,
     pub episode_ratings_limit: i32,
     pub episode_badge_style: BadgeStyle,
     pub episode_label_style: LabelStyle,
     pub episode_badge_size: BadgeSize,
+    pub episode_badge_scale_override: f32,
     pub episode_position: BadgePosition,
     pub episode_badge_direction: BadgeDirection,
     pub episode_blur: bool,
@@ -155,14 +159,18 @@ fn settings_to_response(settings: &db::RenderSettings, fanart_available: bool) -
         backdrop_label_style: settings.backdrop_label_style,
         poster_badge_direction: settings.poster_badge_direction,
         poster_badge_size: settings.poster_badge_size,
+        poster_badge_scale_override: settings.poster_badge_scale_override,
         logo_badge_size: settings.logo_badge_size,
+        logo_badge_scale_override: settings.logo_badge_scale_override,
         backdrop_badge_size: settings.backdrop_badge_size,
+        backdrop_badge_scale_override: settings.backdrop_badge_scale_override,
         backdrop_position: settings.backdrop_position,
         backdrop_badge_direction: settings.backdrop_badge_direction,
         episode_ratings_limit: settings.episode_ratings_limit,
         episode_badge_style: settings.episode_badge_style,
         episode_label_style: settings.episode_label_style,
         episode_badge_size: settings.episode_badge_size,
+        episode_badge_scale_override: settings.episode_badge_scale_override,
         episode_position: settings.episode_position,
         episode_badge_direction: settings.episode_badge_direction,
         episode_blur: settings.episode_blur,
@@ -203,10 +211,16 @@ pub struct UpdateSettingsRequest {
     pub poster_badge_direction: BadgeDirection,
     #[serde(default = "db::default_badge_size")]
     pub poster_badge_size: BadgeSize,
+    #[serde(default = "db::default_badge_scale_override")]
+    pub poster_badge_scale_override: f32,
     #[serde(default = "db::default_badge_size")]
     pub logo_badge_size: BadgeSize,
+    #[serde(default = "db::default_badge_scale_override")]
+    pub logo_badge_scale_override: f32,
     #[serde(default = "db::default_badge_size")]
     pub backdrop_badge_size: BadgeSize,
+    #[serde(default = "db::default_badge_scale_override")]
+    pub backdrop_badge_scale_override: f32,
     #[serde(default = "db::default_backdrop_position")]
     pub backdrop_position: BadgePosition,
     #[serde(default = "db::default_backdrop_badge_direction")]
@@ -219,6 +233,8 @@ pub struct UpdateSettingsRequest {
     pub episode_label_style: LabelStyle,
     #[serde(default = "db::default_episode_badge_size")]
     pub episode_badge_size: BadgeSize,
+    #[serde(default = "db::default_badge_scale_override")]
+    pub episode_badge_scale_override: f32,
     #[serde(default = "db::default_episode_position")]
     pub episode_position: BadgePosition,
     #[serde(default = "db::default_episode_badge_direction")]
@@ -246,14 +262,18 @@ fn build_upsert(id: i32, req: &UpdateSettingsRequest) -> db::UpsertApiKeySetting
         backdrop_label_style: req.backdrop_label_style.as_str(),
         poster_badge_direction: req.poster_badge_direction.as_str(),
         poster_badge_size: req.poster_badge_size.as_str(),
+        poster_badge_scale_override: req.poster_badge_scale_override,
         logo_badge_size: req.logo_badge_size.as_str(),
+        logo_badge_scale_override: req.logo_badge_scale_override,
         backdrop_badge_size: req.backdrop_badge_size.as_str(),
+        backdrop_badge_scale_override: req.backdrop_badge_scale_override,
         backdrop_position: req.backdrop_position.as_str(),
         backdrop_badge_direction: req.backdrop_badge_direction.as_str(),
         episode_ratings_limit: req.episode_ratings_limit,
         episode_badge_style: req.episode_badge_style.as_str(),
         episode_label_style: req.episode_label_style.as_str(),
         episode_badge_size: req.episode_badge_size.as_str(),
+        episode_badge_scale_override: req.episode_badge_scale_override,
         episode_position: req.episode_position.as_str(),
         episode_badge_direction: req.episode_badge_direction.as_str(),
         episode_blur: req.episode_blur,
@@ -268,7 +288,18 @@ pub async fn update_settings(
     db::find_api_key_by_id(&state.db, id)
         .await?
         .ok_or_else(|| AppError::IdNotFound(format!("API key {id} not found")))?;
-    db::validate_render_settings(&req.lang, req.ratings_limit, &req.ratings_order, req.logo_ratings_limit, req.backdrop_ratings_limit, req.episode_ratings_limit)?;
+    db::validate_render_settings(
+        &req.lang,
+        req.ratings_limit,
+        &req.ratings_order,
+        req.logo_ratings_limit,
+        req.backdrop_ratings_limit,
+        req.episode_ratings_limit,
+        req.poster_badge_scale_override,
+        req.logo_badge_scale_override,
+        req.backdrop_badge_scale_override,
+        req.episode_badge_scale_override,
+    )?;
     db::upsert_api_key_settings(&state.db, build_upsert(id, &req)).await?;
     state.settings_cache.invalidate(&id).await;
     Ok(Json(json!({ "ok": true })))
@@ -316,7 +347,18 @@ pub async fn update_own_settings(
     Json(req): Json<UpdateSettingsRequest>,
 ) -> Result<Json<Value>, AppError> {
     let id = api_key_user.key_id;
-    db::validate_render_settings(&req.lang, req.ratings_limit, &req.ratings_order, req.logo_ratings_limit, req.backdrop_ratings_limit, req.episode_ratings_limit)?;
+    db::validate_render_settings(
+        &req.lang,
+        req.ratings_limit,
+        &req.ratings_order,
+        req.logo_ratings_limit,
+        req.backdrop_ratings_limit,
+        req.episode_ratings_limit,
+        req.poster_badge_scale_override,
+        req.logo_badge_scale_override,
+        req.backdrop_badge_scale_override,
+        req.episode_badge_scale_override,
+    )?;
     db::upsert_api_key_settings(&state.db, build_upsert(id, &req)).await?;
     state.settings_cache.invalidate(&id).await;
     Ok(Json(json!({ "ok": true })))

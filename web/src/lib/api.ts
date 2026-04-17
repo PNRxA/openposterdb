@@ -81,14 +81,18 @@ export interface SaveSettingsPayload {
   backdrop_label_style: string
   poster_badge_direction: string
   poster_badge_size: string
+  poster_badge_scale_override: number
   logo_badge_size: string
+  logo_badge_scale_override: number
   backdrop_badge_size: string
+  backdrop_badge_scale_override: number
   backdrop_position: string
   backdrop_badge_direction: string
   episode_ratings_limit: number
   episode_badge_style: string
   episode_label_style: string
   episode_badge_size: string
+  episode_badge_scale_override: number
   episode_position: string
   episode_badge_direction: string
   episode_blur: boolean
@@ -136,14 +140,14 @@ export const adminApi = {
     get(`/api/admin/episodes/${key}/image`),
   fetchEpisode: (idType: string, idValue: string): Promise<Response> =>
     post(`/api/admin/episodes/${idType}/${idValue}/fetch`),
-  previewPoster: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string, badgeSize?: string): Promise<Response> =>
-    get(buildUrl('/api/admin/preview/poster', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, position: posterPosition, badge_style: badgeStyle, label_style: labelStyle, badge_direction: badgeDirection, badge_size: badgeSize })),
-  previewLogo: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string): Promise<Response> =>
-    get(buildUrl('/api/admin/preview/logo', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, badge_style: badgeStyle, label_style: labelStyle, badge_size: badgeSize })),
-  previewBackdrop: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string): Promise<Response> =>
-    get(buildUrl('/api/admin/preview/backdrop', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, badge_style: badgeStyle, label_style: labelStyle, badge_size: badgeSize, position, badge_direction: badgeDirection })),
-  previewEpisode: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, blur?: boolean): Promise<Response> =>
-    get(buildUrl('/api/admin/preview/episode', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, badge_style: badgeStyle, label_style: labelStyle, badge_size: badgeSize, position, badge_direction: badgeDirection, blur: blur ? 'true' : undefined })),
+  previewPoster: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string, badgeSize?: string, badgeScale?: number): Promise<Response> =>
+    get(buildUrl('/api/admin/preview/poster', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, position: posterPosition, badge_style: badgeStyle, label_style: labelStyle, badge_direction: badgeDirection, badge_size: badgeSize, badge_scale: badgeScale })),
+  previewLogo: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, badgeScale?: number): Promise<Response> =>
+    get(buildUrl('/api/admin/preview/logo', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, badge_style: badgeStyle, label_style: labelStyle, badge_size: badgeSize, badge_scale: badgeScale })),
+  previewBackdrop: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, badgeScale?: number): Promise<Response> =>
+    get(buildUrl('/api/admin/preview/backdrop', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, badge_style: badgeStyle, label_style: labelStyle, badge_size: badgeSize, position, badge_direction: badgeDirection, badge_scale: badgeScale })),
+  previewEpisode: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, blur?: boolean, badgeScale?: number): Promise<Response> =>
+    get(buildUrl('/api/admin/preview/episode', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, badge_style: badgeStyle, label_style: labelStyle, badge_size: badgeSize, position, badge_direction: badgeDirection, blur: blur ? 'true' : undefined, badge_scale: badgeScale })),
 }
 
 // --- Self-service API (API key session JWT auth) ---
@@ -175,14 +179,14 @@ export const selfApi = {
     }),
   resetSettings: (): Promise<Response> =>
     keyRequest('/api/key/me/settings', { method: 'DELETE' }),
-  previewPoster: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string, badgeSize?: string): Promise<Response> =>
-    keyRequest(buildUrl('/api/key/me/preview/poster', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, position: posterPosition, badge_style: badgeStyle, label_style: labelStyle, badge_direction: badgeDirection, badge_size: badgeSize })),
-  previewLogo: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string): Promise<Response> =>
-    keyRequest(buildUrl('/api/key/me/preview/logo', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, badge_style: badgeStyle, label_style: labelStyle, badge_size: badgeSize })),
-  previewBackdrop: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string): Promise<Response> =>
-    keyRequest(buildUrl('/api/key/me/preview/backdrop', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, badge_style: badgeStyle, label_style: labelStyle, badge_size: badgeSize, position, badge_direction: badgeDirection })),
-  previewEpisode: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, blur?: boolean): Promise<Response> =>
-    keyRequest(buildUrl('/api/key/me/preview/episode', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, badge_style: badgeStyle, label_style: labelStyle, badge_size: badgeSize, position, badge_direction: badgeDirection, blur: blur ? 'true' : undefined })),
+  previewPoster: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string, badgeSize?: string, badgeScale?: number): Promise<Response> =>
+    keyRequest(buildUrl('/api/key/me/preview/poster', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, position: posterPosition, badge_style: badgeStyle, label_style: labelStyle, badge_direction: badgeDirection, badge_size: badgeSize, badge_scale: badgeScale })),
+  previewLogo: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, badgeScale?: number): Promise<Response> =>
+    keyRequest(buildUrl('/api/key/me/preview/logo', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, badge_style: badgeStyle, label_style: labelStyle, badge_size: badgeSize, badge_scale: badgeScale })),
+  previewBackdrop: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, badgeScale?: number): Promise<Response> =>
+    keyRequest(buildUrl('/api/key/me/preview/backdrop', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, badge_style: badgeStyle, label_style: labelStyle, badge_size: badgeSize, position, badge_direction: badgeDirection, badge_scale: badgeScale })),
+  previewEpisode: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, blur?: boolean, badgeScale?: number): Promise<Response> =>
+    keyRequest(buildUrl('/api/key/me/preview/episode', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, badge_style: badgeStyle, label_style: labelStyle, badge_size: badgeSize, position, badge_direction: badgeDirection, blur: blur ? 'true' : undefined, badge_scale: badgeScale })),
 }
 
 export const keysApi = {
