@@ -500,11 +500,11 @@ pub fn default_badge_scale_override() -> f32 {
 }
 
 pub fn default_badge_gap() -> i32 {
-    0
+    -1
 }
 
 pub fn default_badge_margin() -> i32 {
-    0
+    -1
 }
 
 /// Validate a fractional badge scale override.
@@ -527,11 +527,11 @@ pub fn validate_badge_scale_override(scale: f32) -> Result<(), AppError> {
 
 /// Validate fixed badge gap override in pixels.
 ///
-/// `0` means "auto" (scale with badge size). Positive values use fixed pixels.
+/// `-1` means "auto" (scale with badge size). Values `0..=200` use fixed pixels.
 pub fn validate_badge_gap(gap: i32) -> Result<(), AppError> {
-    if !(0..=200).contains(&gap) {
+    if !(-1..=200).contains(&gap) {
         return Err(AppError::BadRequest(
-            "badge_gap must be between 0 and 200".into(),
+            "badge_gap must be between -1 and 200".into(),
         ));
     }
     Ok(())
@@ -539,11 +539,11 @@ pub fn validate_badge_gap(gap: i32) -> Result<(), AppError> {
 
 /// Validate fixed badge margin override in pixels.
 ///
-/// `0` means "auto" (scale with badge size). Positive values use fixed pixels.
+/// `-1` means "auto" (scale with badge size). Values `0..=200` use fixed pixels.
 pub fn validate_badge_margin(margin: i32) -> Result<(), AppError> {
-    if !(0..=200).contains(&margin) {
+    if !(-1..=200).contains(&margin) {
         return Err(AppError::BadRequest(
-            "badge_margin must be between 0 and 200".into(),
+            "badge_margin must be between -1 and 200".into(),
         ));
     }
     Ok(())
@@ -1301,6 +1301,7 @@ mod tests {
 
     #[test]
     fn validate_badge_gap_accepts_valid_values() {
+        assert!(validate_badge_gap(-1).is_ok());
         assert!(validate_badge_gap(0).is_ok());
         assert!(validate_badge_gap(12).is_ok());
         assert!(validate_badge_gap(200).is_ok());
@@ -1308,12 +1309,13 @@ mod tests {
 
     #[test]
     fn validate_badge_gap_rejects_out_of_range() {
-        assert!(validate_badge_gap(-1).is_err());
+        assert!(validate_badge_gap(-2).is_err());
         assert!(validate_badge_gap(201).is_err());
     }
 
     #[test]
     fn validate_badge_margin_accepts_valid_values() {
+        assert!(validate_badge_margin(-1).is_ok());
         assert!(validate_badge_margin(0).is_ok());
         assert!(validate_badge_margin(18).is_ok());
         assert!(validate_badge_margin(200).is_ok());
@@ -1321,7 +1323,7 @@ mod tests {
 
     #[test]
     fn validate_badge_margin_rejects_out_of_range() {
-        assert!(validate_badge_margin(-1).is_err());
+        assert!(validate_badge_margin(-2).is_err());
         assert!(validate_badge_margin(201).is_err());
     }
 

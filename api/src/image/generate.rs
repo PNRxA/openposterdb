@@ -26,7 +26,7 @@ const MAX_BADGES_PER_ROW: usize = 3;
 const MAX_VERT_BADGES_PER_ROW: usize = 5;
 
 fn scaled_or_override(base: u32, badge_scale: f32, override_px: i32) -> u32 {
-    if override_px > 0 {
+    if override_px >= 0 {
         override_px as u32
     } else {
         (base as f32 * badge_scale).round() as u32
@@ -56,9 +56,9 @@ pub struct ImageParams<'a> {
     pub tmdb_size: Arc<str>,
     /// Badge size — used to adjust max badges per row.
     pub badge_size: BadgeSize,
-    /// Fixed badge gap override in pixels (0 = auto scaled).
+    /// Fixed badge gap override in pixels (-1 = auto scaled).
     pub badge_gap_px: i32,
-    /// Fixed badge margin override in pixels (0 = auto scaled).
+    /// Fixed badge margin override in pixels (-1 = auto scaled).
     pub badge_margin_px: i32,
     /// When true, skip writing base poster images to disk (CDN handles caching).
     pub external_cache_only: bool,

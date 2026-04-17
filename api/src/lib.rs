@@ -197,16 +197,16 @@ pub const SCHEMA_SQL: &[&str] = &[
         logo_badge_scale_override REAL NOT NULL DEFAULT 1.0,
         backdrop_badge_scale_override REAL NOT NULL DEFAULT 1.0,
         episode_badge_scale_override REAL NOT NULL DEFAULT 1.0,
-        badge_gap              INTEGER NOT NULL DEFAULT 0,
-        badge_margin           INTEGER NOT NULL DEFAULT 0,
-        poster_badge_gap       INTEGER NOT NULL DEFAULT 0,
-        poster_badge_margin    INTEGER NOT NULL DEFAULT 0,
-        logo_badge_gap         INTEGER NOT NULL DEFAULT 0,
-        logo_badge_margin      INTEGER NOT NULL DEFAULT 0,
-        backdrop_badge_gap     INTEGER NOT NULL DEFAULT 0,
-        backdrop_badge_margin  INTEGER NOT NULL DEFAULT 0,
-        episode_badge_gap      INTEGER NOT NULL DEFAULT 0,
-        episode_badge_margin   INTEGER NOT NULL DEFAULT 0
+        badge_gap              INTEGER NOT NULL DEFAULT -1,
+        badge_margin           INTEGER NOT NULL DEFAULT -1,
+        poster_badge_gap       INTEGER NOT NULL DEFAULT -1,
+        poster_badge_margin    INTEGER NOT NULL DEFAULT -1,
+        logo_badge_gap         INTEGER NOT NULL DEFAULT -1,
+        logo_badge_margin      INTEGER NOT NULL DEFAULT -1,
+        backdrop_badge_gap     INTEGER NOT NULL DEFAULT -1,
+        backdrop_badge_margin  INTEGER NOT NULL DEFAULT -1,
+        episode_badge_gap      INTEGER NOT NULL DEFAULT -1,
+        episode_badge_margin   INTEGER NOT NULL DEFAULT -1
     )",
 ];
 
@@ -371,43 +371,107 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
         "duplicate column",
     ),
     (
-        "ALTER TABLE api_key_settings ADD COLUMN badge_gap INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE api_key_settings ADD COLUMN badge_gap INTEGER NOT NULL DEFAULT -1",
         "duplicate column",
     ),
     (
-        "ALTER TABLE api_key_settings ADD COLUMN badge_margin INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE api_key_settings ADD COLUMN badge_margin INTEGER NOT NULL DEFAULT -1",
         "duplicate column",
     ),
     (
-        "ALTER TABLE api_key_settings ADD COLUMN poster_badge_gap INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE api_key_settings ADD COLUMN poster_badge_gap INTEGER NOT NULL DEFAULT -1",
         "duplicate column",
     ),
     (
-        "ALTER TABLE api_key_settings ADD COLUMN poster_badge_margin INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE api_key_settings ADD COLUMN poster_badge_margin INTEGER NOT NULL DEFAULT -1",
         "duplicate column",
     ),
     (
-        "ALTER TABLE api_key_settings ADD COLUMN logo_badge_gap INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE api_key_settings ADD COLUMN logo_badge_gap INTEGER NOT NULL DEFAULT -1",
         "duplicate column",
     ),
     (
-        "ALTER TABLE api_key_settings ADD COLUMN logo_badge_margin INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE api_key_settings ADD COLUMN logo_badge_margin INTEGER NOT NULL DEFAULT -1",
         "duplicate column",
     ),
     (
-        "ALTER TABLE api_key_settings ADD COLUMN backdrop_badge_gap INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE api_key_settings ADD COLUMN backdrop_badge_gap INTEGER NOT NULL DEFAULT -1",
         "duplicate column",
     ),
     (
-        "ALTER TABLE api_key_settings ADD COLUMN backdrop_badge_margin INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE api_key_settings ADD COLUMN backdrop_badge_margin INTEGER NOT NULL DEFAULT -1",
         "duplicate column",
     ),
     (
-        "ALTER TABLE api_key_settings ADD COLUMN episode_badge_gap INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE api_key_settings ADD COLUMN episode_badge_gap INTEGER NOT NULL DEFAULT -1",
         "duplicate column",
     ),
     (
-        "ALTER TABLE api_key_settings ADD COLUMN episode_badge_margin INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE api_key_settings ADD COLUMN episode_badge_margin INTEGER NOT NULL DEFAULT -1",
         "duplicate column",
+    ),
+    (
+        "UPDATE api_key_settings SET poster_badge_gap = -1 WHERE poster_badge_gap = 0",
+        "no such column",
+    ),
+    (
+        "UPDATE api_key_settings SET poster_badge_margin = -1 WHERE poster_badge_margin = 0",
+        "no such column",
+    ),
+    (
+        "UPDATE api_key_settings SET logo_badge_gap = -1 WHERE logo_badge_gap = 0",
+        "no such column",
+    ),
+    (
+        "UPDATE api_key_settings SET logo_badge_margin = -1 WHERE logo_badge_margin = 0",
+        "no such column",
+    ),
+    (
+        "UPDATE api_key_settings SET backdrop_badge_gap = -1 WHERE backdrop_badge_gap = 0",
+        "no such column",
+    ),
+    (
+        "UPDATE api_key_settings SET backdrop_badge_margin = -1 WHERE backdrop_badge_margin = 0",
+        "no such column",
+    ),
+    (
+        "UPDATE api_key_settings SET episode_badge_gap = -1 WHERE episode_badge_gap = 0",
+        "no such column",
+    ),
+    (
+        "UPDATE api_key_settings SET episode_badge_margin = -1 WHERE episode_badge_margin = 0",
+        "no such column",
+    ),
+    (
+        "UPDATE global_settings SET value = '-1' WHERE key = 'poster_badge_gap' AND value = '0'",
+        "no such table",
+    ),
+    (
+        "UPDATE global_settings SET value = '-1' WHERE key = 'poster_badge_margin' AND value = '0'",
+        "no such table",
+    ),
+    (
+        "UPDATE global_settings SET value = '-1' WHERE key = 'logo_badge_gap' AND value = '0'",
+        "no such table",
+    ),
+    (
+        "UPDATE global_settings SET value = '-1' WHERE key = 'logo_badge_margin' AND value = '0'",
+        "no such table",
+    ),
+    (
+        "UPDATE global_settings SET value = '-1' WHERE key = 'backdrop_badge_gap' AND value = '0'",
+        "no such table",
+    ),
+    (
+        "UPDATE global_settings SET value = '-1' WHERE key = 'backdrop_badge_margin' AND value = '0'",
+        "no such table",
+    ),
+    (
+        "UPDATE global_settings SET value = '-1' WHERE key = 'episode_badge_gap' AND value = '0'",
+        "no such table",
+    ),
+    (
+        "UPDATE global_settings SET value = '-1' WHERE key = 'episode_badge_margin' AND value = '0'",
+        "no such table",
     ),
 ];

@@ -82,11 +82,11 @@ pub struct ImageQuery {
     #[serde(default)]
     #[param(value_type = Option<f32>, example = 1.15)]
     pub badge_scale: Option<f32>,
-    /// Fixed badge gap in pixels (0-200). `0` keeps auto-scaled spacing.
+    /// Fixed badge gap in pixels (`-1` for auto, `0-200` for fixed spacing).
     #[serde(default)]
     #[param(value_type = Option<i32>, example = 12)]
     pub badge_gap: Option<i32>,
-    /// Fixed badge margin in pixels (0-200). `0` keeps auto-scaled margins.
+    /// Fixed badge margin in pixels (`-1` for auto, `0-200` for fixed margins).
     #[serde(default)]
     #[param(value_type = Option<i32>, example = 18)]
     pub badge_margin: Option<i32>,
@@ -943,7 +943,7 @@ mod tests {
     fn apply_query_overrides_rejects_invalid_badge_gap_and_margin() {
         let settings = Arc::new(db::RenderSettings::default());
         let bad_gap = ImageQuery {
-            badge_gap: Some(-1),
+            badge_gap: Some(-2),
             ..empty_query()
         };
         assert!(apply_query_overrides(settings.clone(), &bad_gap, cache::ImageType::Poster).is_err());

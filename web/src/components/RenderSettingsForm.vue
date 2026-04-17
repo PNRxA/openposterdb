@@ -89,6 +89,21 @@ function clampLayoutOverride(value: unknown): number {
   return Math.round(Math.min(MAX_LAYOUT_OVERRIDE, Math.max(MIN_LAYOUT_OVERRIDE, parsed)))
 }
 
+function isAutoLayoutOverride(value: unknown): boolean {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed < 0
+}
+
+function fixedLayoutOverride(value: unknown): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 0) return 0
+  return clampLayoutOverride(parsed)
+}
+
+function effectiveLayoutOverride(auto: boolean, value: unknown): number {
+  return auto ? -1 : clampLayoutOverride(value)
+}
+
 const editFanart = ref(props.settings.image_source === 'f')
 const editLang = ref(props.settings.lang || 'en')
 const editTextless = ref(props.settings.textless)
@@ -129,6 +144,14 @@ const editBackdropBadgeGap = ref(clampLayoutOverride(props.settings.backdrop_bad
 const editBackdropBadgeMargin = ref(clampLayoutOverride(props.settings.backdrop_badge_margin ?? 0))
 const editEpisodeBadgeGap = ref(clampLayoutOverride(props.settings.episode_badge_gap ?? 0))
 const editEpisodeBadgeMargin = ref(clampLayoutOverride(props.settings.episode_badge_margin ?? 0))
+const editPosterBadgeGapAuto = ref(isAutoLayoutOverride(props.settings.poster_badge_gap))
+const editPosterBadgeMarginAuto = ref(isAutoLayoutOverride(props.settings.poster_badge_margin))
+const editLogoBadgeGapAuto = ref(isAutoLayoutOverride(props.settings.logo_badge_gap))
+const editLogoBadgeMarginAuto = ref(isAutoLayoutOverride(props.settings.logo_badge_margin))
+const editBackdropBadgeGapAuto = ref(isAutoLayoutOverride(props.settings.backdrop_badge_gap))
+const editBackdropBadgeMarginAuto = ref(isAutoLayoutOverride(props.settings.backdrop_badge_margin))
+const editEpisodeBadgeGapAuto = ref(isAutoLayoutOverride(props.settings.episode_badge_gap))
+const editEpisodeBadgeMarginAuto = ref(isAutoLayoutOverride(props.settings.episode_badge_margin))
 
 function applySettings(s: RenderSettings) {
   editFanart.value = s.image_source === 'f'
@@ -162,14 +185,22 @@ function applySettings(s: RenderSettings) {
   editEpisodePosition.value = s.episode_position || 'tr'
   editEpisodeBadgeDirection.value = s.episode_badge_direction || 'v'
   editEpisodeBlur.value = s.episode_blur ?? false
-  editPosterBadgeGap.value = clampLayoutOverride(s.poster_badge_gap ?? 0)
-  editPosterBadgeMargin.value = clampLayoutOverride(s.poster_badge_margin ?? 0)
-  editLogoBadgeGap.value = clampLayoutOverride(s.logo_badge_gap ?? 0)
-  editLogoBadgeMargin.value = clampLayoutOverride(s.logo_badge_margin ?? 0)
-  editBackdropBadgeGap.value = clampLayoutOverride(s.backdrop_badge_gap ?? 0)
-  editBackdropBadgeMargin.value = clampLayoutOverride(s.backdrop_badge_margin ?? 0)
-  editEpisodeBadgeGap.value = clampLayoutOverride(s.episode_badge_gap ?? 0)
-  editEpisodeBadgeMargin.value = clampLayoutOverride(s.episode_badge_margin ?? 0)
+  editPosterBadgeGapAuto.value = isAutoLayoutOverride(s.poster_badge_gap)
+  editPosterBadgeMarginAuto.value = isAutoLayoutOverride(s.poster_badge_margin)
+  editLogoBadgeGapAuto.value = isAutoLayoutOverride(s.logo_badge_gap)
+  editLogoBadgeMarginAuto.value = isAutoLayoutOverride(s.logo_badge_margin)
+  editBackdropBadgeGapAuto.value = isAutoLayoutOverride(s.backdrop_badge_gap)
+  editBackdropBadgeMarginAuto.value = isAutoLayoutOverride(s.backdrop_badge_margin)
+  editEpisodeBadgeGapAuto.value = isAutoLayoutOverride(s.episode_badge_gap)
+  editEpisodeBadgeMarginAuto.value = isAutoLayoutOverride(s.episode_badge_margin)
+  editPosterBadgeGap.value = fixedLayoutOverride(s.poster_badge_gap)
+  editPosterBadgeMargin.value = fixedLayoutOverride(s.poster_badge_margin)
+  editLogoBadgeGap.value = fixedLayoutOverride(s.logo_badge_gap)
+  editLogoBadgeMargin.value = fixedLayoutOverride(s.logo_badge_margin)
+  editBackdropBadgeGap.value = fixedLayoutOverride(s.backdrop_badge_gap)
+  editBackdropBadgeMargin.value = fixedLayoutOverride(s.backdrop_badge_margin)
+  editEpisodeBadgeGap.value = fixedLayoutOverride(s.episode_badge_gap)
+  editEpisodeBadgeMargin.value = fixedLayoutOverride(s.episode_badge_margin)
 }
 const currentSettings = ref<RenderSettings>(props.settings)
 const saving = ref(false)
@@ -237,14 +268,14 @@ async function autoSave() {
       episode_position: editEpisodePosition.value,
       episode_badge_direction: editEpisodeBadgeDirection.value,
       episode_blur: editEpisodeBlur.value,
-      poster_badge_gap: clampLayoutOverride(editPosterBadgeGap.value),
-      poster_badge_margin: clampLayoutOverride(editPosterBadgeMargin.value),
-      logo_badge_gap: clampLayoutOverride(editLogoBadgeGap.value),
-      logo_badge_margin: clampLayoutOverride(editLogoBadgeMargin.value),
-      backdrop_badge_gap: clampLayoutOverride(editBackdropBadgeGap.value),
-      backdrop_badge_margin: clampLayoutOverride(editBackdropBadgeMargin.value),
-      episode_badge_gap: clampLayoutOverride(editEpisodeBadgeGap.value),
-      episode_badge_margin: clampLayoutOverride(editEpisodeBadgeMargin.value),
+      poster_badge_gap: effectiveLayoutOverride(editPosterBadgeGapAuto.value, editPosterBadgeGap.value),
+      poster_badge_margin: effectiveLayoutOverride(editPosterBadgeMarginAuto.value, editPosterBadgeMargin.value),
+      logo_badge_gap: effectiveLayoutOverride(editLogoBadgeGapAuto.value, editLogoBadgeGap.value),
+      logo_badge_margin: effectiveLayoutOverride(editLogoBadgeMarginAuto.value, editLogoBadgeMargin.value),
+      backdrop_badge_gap: effectiveLayoutOverride(editBackdropBadgeGapAuto.value, editBackdropBadgeGap.value),
+      backdrop_badge_margin: effectiveLayoutOverride(editBackdropBadgeMarginAuto.value, editBackdropBadgeMargin.value),
+      episode_badge_gap: effectiveLayoutOverride(editEpisodeBadgeGapAuto.value, editEpisodeBadgeGap.value),
+      episode_badge_margin: effectiveLayoutOverride(editEpisodeBadgeMarginAuto.value, editEpisodeBadgeMargin.value),
     })
     if (err) {
       error.value = err
@@ -271,7 +302,7 @@ async function autoSave() {
 
 // Auto-save on any setting change
 watch(
-  [editSource, editLang, editTextless, editRatingsLimit, editRatingsOrder, editPosterPosition, editLogoRatingsLimit, editBackdropRatingsLimit, editPosterBadgeStyle, editLogoBadgeStyle, editBackdropBadgeStyle, editPosterLabelStyle, editLogoLabelStyle, editBackdropLabelStyle, editPosterBadgeDirection, editPosterBadgeSize, editPosterBadgeScaleOverride, editLogoBadgeSize, editLogoBadgeScaleOverride, editBackdropBadgeSize, editBackdropBadgeScaleOverride, editBackdropPosition, editBackdropBadgeDirection, editEpisodeRatingsLimit, editEpisodeBadgeStyle, editEpisodeLabelStyle, editEpisodeBadgeSize, editEpisodeBadgeScaleOverride, editEpisodePosition, editEpisodeBadgeDirection, editEpisodeBlur, editPosterBadgeGap, editPosterBadgeMargin, editLogoBadgeGap, editLogoBadgeMargin, editBackdropBadgeGap, editBackdropBadgeMargin, editEpisodeBadgeGap, editEpisodeBadgeMargin],
+  [editSource, editLang, editTextless, editRatingsLimit, editRatingsOrder, editPosterPosition, editLogoRatingsLimit, editBackdropRatingsLimit, editPosterBadgeStyle, editLogoBadgeStyle, editBackdropBadgeStyle, editPosterLabelStyle, editLogoLabelStyle, editBackdropLabelStyle, editPosterBadgeDirection, editPosterBadgeSize, editPosterBadgeScaleOverride, editLogoBadgeSize, editLogoBadgeScaleOverride, editBackdropBadgeSize, editBackdropBadgeScaleOverride, editBackdropPosition, editBackdropBadgeDirection, editEpisodeRatingsLimit, editEpisodeBadgeStyle, editEpisodeLabelStyle, editEpisodeBadgeSize, editEpisodeBadgeScaleOverride, editEpisodePosition, editEpisodeBadgeDirection, editEpisodeBlur, editPosterBadgeGap, editPosterBadgeMargin, editLogoBadgeGap, editLogoBadgeMargin, editBackdropBadgeGap, editBackdropBadgeMargin, editEpisodeBadgeGap, editEpisodeBadgeMargin, editPosterBadgeGapAuto, editPosterBadgeMarginAuto, editLogoBadgeGapAuto, editLogoBadgeMarginAuto, editBackdropBadgeGapAuto, editBackdropBadgeMarginAuto, editEpisodeBadgeGapAuto, editEpisodeBadgeMarginAuto],
   () => {
     if (syncing) return
     autoSave()
@@ -363,24 +394,24 @@ let backdropPreviewTimer: ReturnType<typeof setTimeout> | null = null
 let episodePreviewTimer: ReturnType<typeof setTimeout> | null = null
 
 function updatePosterPreview() {
-  fetchPreviewImage(posterPreview.value, props.fetchPreview, { posterPosition: editPosterPosition.value, badgeStyle: editPosterBadgeStyle.value, labelStyle: editPosterLabelStyle.value, badgeDirection: editPosterBadgeDirection.value, badgeSize: editPosterBadgeSize.value, badgeScale: clampBadgeScale(editPosterBadgeScaleOverride.value), badgeGap: clampLayoutOverride(editPosterBadgeGap.value), badgeMargin: clampLayoutOverride(editPosterBadgeMargin.value) })
+  fetchPreviewImage(posterPreview.value, props.fetchPreview, { posterPosition: editPosterPosition.value, badgeStyle: editPosterBadgeStyle.value, labelStyle: editPosterLabelStyle.value, badgeDirection: editPosterBadgeDirection.value, badgeSize: editPosterBadgeSize.value, badgeScale: clampBadgeScale(editPosterBadgeScaleOverride.value), badgeGap: effectiveLayoutOverride(editPosterBadgeGapAuto.value, editPosterBadgeGap.value), badgeMargin: effectiveLayoutOverride(editPosterBadgeMarginAuto.value, editPosterBadgeMargin.value) })
 }
 
 function updateLogoPreview() {
   if (props.fetchLogoPreview) {
-    fetchPreviewImage(logoPreview.value, (_limit, order) => props.fetchLogoPreview!(editLogoRatingsLimit.value, order, editLogoBadgeStyle.value, editLogoLabelStyle.value, editLogoBadgeSize.value, clampBadgeScale(editLogoBadgeScaleOverride.value), clampLayoutOverride(editLogoBadgeGap.value), clampLayoutOverride(editLogoBadgeMargin.value)))
+    fetchPreviewImage(logoPreview.value, (_limit, order) => props.fetchLogoPreview!(editLogoRatingsLimit.value, order, editLogoBadgeStyle.value, editLogoLabelStyle.value, editLogoBadgeSize.value, clampBadgeScale(editLogoBadgeScaleOverride.value), effectiveLayoutOverride(editLogoBadgeGapAuto.value, editLogoBadgeGap.value), effectiveLayoutOverride(editLogoBadgeMarginAuto.value, editLogoBadgeMargin.value)))
   }
 }
 
 function updateBackdropPreview() {
   if (props.fetchBackdropPreview) {
-    fetchPreviewImage(backdropPreview.value, (_limit, order) => props.fetchBackdropPreview!(editBackdropRatingsLimit.value, order, editBackdropBadgeStyle.value, editBackdropLabelStyle.value, editBackdropBadgeSize.value, editBackdropPosition.value, editBackdropBadgeDirection.value, clampBadgeScale(editBackdropBadgeScaleOverride.value), clampLayoutOverride(editBackdropBadgeGap.value), clampLayoutOverride(editBackdropBadgeMargin.value)))
+    fetchPreviewImage(backdropPreview.value, (_limit, order) => props.fetchBackdropPreview!(editBackdropRatingsLimit.value, order, editBackdropBadgeStyle.value, editBackdropLabelStyle.value, editBackdropBadgeSize.value, editBackdropPosition.value, editBackdropBadgeDirection.value, clampBadgeScale(editBackdropBadgeScaleOverride.value), effectiveLayoutOverride(editBackdropBadgeGapAuto.value, editBackdropBadgeGap.value), effectiveLayoutOverride(editBackdropBadgeMarginAuto.value, editBackdropBadgeMargin.value)))
   }
 }
 
 function updateEpisodePreview() {
   if (props.fetchEpisodePreview) {
-    fetchPreviewImage(episodePreview.value, (_limit, order) => props.fetchEpisodePreview!(editEpisodeRatingsLimit.value, order, editEpisodeBadgeStyle.value, editEpisodeLabelStyle.value, editEpisodeBadgeSize.value, editEpisodePosition.value, editEpisodeBadgeDirection.value, editEpisodeBlur.value, clampBadgeScale(editEpisodeBadgeScaleOverride.value), clampLayoutOverride(editEpisodeBadgeGap.value), clampLayoutOverride(editEpisodeBadgeMargin.value)))
+    fetchPreviewImage(episodePreview.value, (_limit, order) => props.fetchEpisodePreview!(editEpisodeRatingsLimit.value, order, editEpisodeBadgeStyle.value, editEpisodeLabelStyle.value, editEpisodeBadgeSize.value, editEpisodePosition.value, editEpisodeBadgeDirection.value, editEpisodeBlur.value, clampBadgeScale(editEpisodeBadgeScaleOverride.value), effectiveLayoutOverride(editEpisodeBadgeGapAuto.value, editEpisodeBadgeGap.value), effectiveLayoutOverride(editEpisodeBadgeMarginAuto.value, editEpisodeBadgeMargin.value)))
   }
 }
 
@@ -405,28 +436,28 @@ watch([editRatingsOrder], () => {
 }, { deep: true })
 
 // Poster-only settings
-watch([editRatingsLimit, editPosterPosition, editPosterBadgeStyle, editPosterLabelStyle, editPosterBadgeDirection, editPosterBadgeSize, editPosterBadgeScaleOverride, editPosterBadgeGap, editPosterBadgeMargin], () => {
+watch([editRatingsLimit, editPosterPosition, editPosterBadgeStyle, editPosterLabelStyle, editPosterBadgeDirection, editPosterBadgeSize, editPosterBadgeScaleOverride, editPosterBadgeGap, editPosterBadgeMargin, editPosterBadgeGapAuto, editPosterBadgeMarginAuto], () => {
   if (syncing) return
   if (posterPreviewTimer) clearTimeout(posterPreviewTimer)
   posterPreviewTimer = setTimeout(updatePosterPreview, 500)
 })
 
 // Logo-only settings
-watch([editLogoRatingsLimit, editLogoBadgeStyle, editLogoLabelStyle, editLogoBadgeSize, editLogoBadgeScaleOverride, editLogoBadgeGap, editLogoBadgeMargin], () => {
+watch([editLogoRatingsLimit, editLogoBadgeStyle, editLogoLabelStyle, editLogoBadgeSize, editLogoBadgeScaleOverride, editLogoBadgeGap, editLogoBadgeMargin, editLogoBadgeGapAuto, editLogoBadgeMarginAuto], () => {
   if (syncing) return
   if (logoPreviewTimer) clearTimeout(logoPreviewTimer)
   logoPreviewTimer = setTimeout(updateLogoPreview, 500)
 })
 
 // Backdrop-only settings
-watch([editBackdropRatingsLimit, editBackdropBadgeStyle, editBackdropLabelStyle, editBackdropBadgeSize, editBackdropBadgeScaleOverride, editBackdropPosition, editBackdropBadgeDirection, editBackdropBadgeGap, editBackdropBadgeMargin], () => {
+watch([editBackdropRatingsLimit, editBackdropBadgeStyle, editBackdropLabelStyle, editBackdropBadgeSize, editBackdropBadgeScaleOverride, editBackdropPosition, editBackdropBadgeDirection, editBackdropBadgeGap, editBackdropBadgeMargin, editBackdropBadgeGapAuto, editBackdropBadgeMarginAuto], () => {
   if (syncing) return
   if (backdropPreviewTimer) clearTimeout(backdropPreviewTimer)
   backdropPreviewTimer = setTimeout(updateBackdropPreview, 500)
 })
 
 // Episode-only settings
-watch([editEpisodeRatingsLimit, editEpisodeBadgeStyle, editEpisodeLabelStyle, editEpisodeBadgeSize, editEpisodeBadgeScaleOverride, editEpisodePosition, editEpisodeBadgeDirection, editEpisodeBlur, editEpisodeBadgeGap, editEpisodeBadgeMargin], () => {
+watch([editEpisodeRatingsLimit, editEpisodeBadgeStyle, editEpisodeLabelStyle, editEpisodeBadgeSize, editEpisodeBadgeScaleOverride, editEpisodePosition, editEpisodeBadgeDirection, editEpisodeBlur, editEpisodeBadgeGap, editEpisodeBadgeMargin, editEpisodeBadgeGapAuto, editEpisodeBadgeMarginAuto], () => {
   if (syncing) return
   if (episodePreviewTimer) clearTimeout(episodePreviewTimer)
   episodePreviewTimer = setTimeout(updateEpisodePreview, 500)
@@ -630,6 +661,15 @@ const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
           <div class="space-y-1">
             <div class="flex items-center gap-3">
               <Label :for="inputId('poster-badge-gap')">Badge gap</Label>
+              <div class="flex items-center gap-2">
+                <Checkbox
+                  :id="inputId('poster-badge-gap-auto')"
+                  :model-value="editPosterBadgeGapAuto"
+                  data-testid="poster-badge-gap-auto-checkbox"
+                  @update:model-value="(v) => editPosterBadgeGapAuto = !!v"
+                />
+                <Label :for="inputId('poster-badge-gap-auto')">Auto</Label>
+              </div>
               <Input
                 :id="inputId('poster-badge-gap')"
                 v-model.number="editPosterBadgeGap"
@@ -637,15 +677,25 @@ const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
                 :min="MIN_LAYOUT_OVERRIDE"
                 :max="MAX_LAYOUT_OVERRIDE"
                 :step="1"
+                :disabled="editPosterBadgeGapAuto"
                 class="w-[96px]"
                 data-testid="poster-badge-gap-input"
               />
             </div>
-            <p class="text-xs text-muted-foreground">0 = auto scale, otherwise fixed px</p>
+            <p class="text-xs text-muted-foreground">Auto uses scaled spacing. Disable Auto to set fixed px (0-200).</p>
           </div>
           <div class="space-y-1">
             <div class="flex items-center gap-3">
               <Label :for="inputId('poster-badge-margin')">Badge margin</Label>
+              <div class="flex items-center gap-2">
+                <Checkbox
+                  :id="inputId('poster-badge-margin-auto')"
+                  :model-value="editPosterBadgeMarginAuto"
+                  data-testid="poster-badge-margin-auto-checkbox"
+                  @update:model-value="(v) => editPosterBadgeMarginAuto = !!v"
+                />
+                <Label :for="inputId('poster-badge-margin-auto')">Auto</Label>
+              </div>
               <Input
                 :id="inputId('poster-badge-margin')"
                 v-model.number="editPosterBadgeMargin"
@@ -653,11 +703,12 @@ const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
                 :min="MIN_LAYOUT_OVERRIDE"
                 :max="MAX_LAYOUT_OVERRIDE"
                 :step="1"
+                :disabled="editPosterBadgeMarginAuto"
                 class="w-[96px]"
                 data-testid="poster-badge-margin-input"
               />
             </div>
-            <p class="text-xs text-muted-foreground">0 = auto scale, otherwise fixed px</p>
+            <p class="text-xs text-muted-foreground">Auto uses scaled margins. Disable Auto to set fixed px (0-200).</p>
           </div>
           <div class="space-y-1">
             <div class="flex items-center gap-3">
@@ -772,6 +823,15 @@ const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
           <div class="space-y-1">
             <div class="flex items-center gap-3">
               <Label :for="inputId('logo-badge-gap')">Badge gap</Label>
+              <div class="flex items-center gap-2">
+                <Checkbox
+                  :id="inputId('logo-badge-gap-auto')"
+                  :model-value="editLogoBadgeGapAuto"
+                  data-testid="logo-badge-gap-auto-checkbox"
+                  @update:model-value="(v) => editLogoBadgeGapAuto = !!v"
+                />
+                <Label :for="inputId('logo-badge-gap-auto')">Auto</Label>
+              </div>
               <Input
                 :id="inputId('logo-badge-gap')"
                 v-model.number="editLogoBadgeGap"
@@ -779,15 +839,25 @@ const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
                 :min="MIN_LAYOUT_OVERRIDE"
                 :max="MAX_LAYOUT_OVERRIDE"
                 :step="1"
+                :disabled="editLogoBadgeGapAuto"
                 class="w-[96px]"
                 data-testid="logo-badge-gap-input"
               />
             </div>
-            <p class="text-xs text-muted-foreground">0 = auto scale, otherwise fixed px</p>
+            <p class="text-xs text-muted-foreground">Auto uses scaled spacing. Disable Auto to set fixed px (0-200).</p>
           </div>
           <div class="space-y-1">
             <div class="flex items-center gap-3">
               <Label :for="inputId('logo-badge-margin')">Badge margin</Label>
+              <div class="flex items-center gap-2">
+                <Checkbox
+                  :id="inputId('logo-badge-margin-auto')"
+                  :model-value="editLogoBadgeMarginAuto"
+                  data-testid="logo-badge-margin-auto-checkbox"
+                  @update:model-value="(v) => editLogoBadgeMarginAuto = !!v"
+                />
+                <Label :for="inputId('logo-badge-margin-auto')">Auto</Label>
+              </div>
               <Input
                 :id="inputId('logo-badge-margin')"
                 v-model.number="editLogoBadgeMargin"
@@ -795,11 +865,12 @@ const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
                 :min="MIN_LAYOUT_OVERRIDE"
                 :max="MAX_LAYOUT_OVERRIDE"
                 :step="1"
+                :disabled="editLogoBadgeMarginAuto"
                 class="w-[96px]"
                 data-testid="logo-badge-margin-input"
               />
             </div>
-            <p class="text-xs text-muted-foreground">0 = auto scale, otherwise fixed px</p>
+            <p class="text-xs text-muted-foreground">Auto uses scaled margins. Disable Auto to set fixed px (0-200).</p>
           </div>
           <div class="space-y-1">
             <div class="flex items-center gap-3">
@@ -942,6 +1013,15 @@ const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
           <div class="space-y-1">
             <div class="flex items-center gap-3">
               <Label :for="inputId('backdrop-badge-gap')">Badge gap</Label>
+              <div class="flex items-center gap-2">
+                <Checkbox
+                  :id="inputId('backdrop-badge-gap-auto')"
+                  :model-value="editBackdropBadgeGapAuto"
+                  data-testid="backdrop-badge-gap-auto-checkbox"
+                  @update:model-value="(v) => editBackdropBadgeGapAuto = !!v"
+                />
+                <Label :for="inputId('backdrop-badge-gap-auto')">Auto</Label>
+              </div>
               <Input
                 :id="inputId('backdrop-badge-gap')"
                 v-model.number="editBackdropBadgeGap"
@@ -949,15 +1029,25 @@ const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
                 :min="MIN_LAYOUT_OVERRIDE"
                 :max="MAX_LAYOUT_OVERRIDE"
                 :step="1"
+                :disabled="editBackdropBadgeGapAuto"
                 class="w-[96px]"
                 data-testid="backdrop-badge-gap-input"
               />
             </div>
-            <p class="text-xs text-muted-foreground">0 = auto scale, otherwise fixed px</p>
+            <p class="text-xs text-muted-foreground">Auto uses scaled spacing. Disable Auto to set fixed px (0-200).</p>
           </div>
           <div class="space-y-1">
             <div class="flex items-center gap-3">
               <Label :for="inputId('backdrop-badge-margin')">Badge margin</Label>
+              <div class="flex items-center gap-2">
+                <Checkbox
+                  :id="inputId('backdrop-badge-margin-auto')"
+                  :model-value="editBackdropBadgeMarginAuto"
+                  data-testid="backdrop-badge-margin-auto-checkbox"
+                  @update:model-value="(v) => editBackdropBadgeMarginAuto = !!v"
+                />
+                <Label :for="inputId('backdrop-badge-margin-auto')">Auto</Label>
+              </div>
               <Input
                 :id="inputId('backdrop-badge-margin')"
                 v-model.number="editBackdropBadgeMargin"
@@ -965,11 +1055,12 @@ const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
                 :min="MIN_LAYOUT_OVERRIDE"
                 :max="MAX_LAYOUT_OVERRIDE"
                 :step="1"
+                :disabled="editBackdropBadgeMarginAuto"
                 class="w-[96px]"
                 data-testid="backdrop-badge-margin-input"
               />
             </div>
-            <p class="text-xs text-muted-foreground">0 = auto scale, otherwise fixed px</p>
+            <p class="text-xs text-muted-foreground">Auto uses scaled margins. Disable Auto to set fixed px (0-200).</p>
           </div>
           <div class="space-y-1">
             <div class="flex items-center gap-3">
@@ -1112,6 +1203,15 @@ const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
           <div class="space-y-1">
             <div class="flex items-center gap-3">
               <Label :for="inputId('episode-badge-gap')">Badge gap</Label>
+              <div class="flex items-center gap-2">
+                <Checkbox
+                  :id="inputId('episode-badge-gap-auto')"
+                  :model-value="editEpisodeBadgeGapAuto"
+                  data-testid="episode-badge-gap-auto-checkbox"
+                  @update:model-value="(v) => editEpisodeBadgeGapAuto = !!v"
+                />
+                <Label :for="inputId('episode-badge-gap-auto')">Auto</Label>
+              </div>
               <Input
                 :id="inputId('episode-badge-gap')"
                 v-model.number="editEpisodeBadgeGap"
@@ -1119,15 +1219,25 @@ const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
                 :min="MIN_LAYOUT_OVERRIDE"
                 :max="MAX_LAYOUT_OVERRIDE"
                 :step="1"
+                :disabled="editEpisodeBadgeGapAuto"
                 class="w-[96px]"
                 data-testid="episode-badge-gap-input"
               />
             </div>
-            <p class="text-xs text-muted-foreground">0 = auto scale, otherwise fixed px</p>
+            <p class="text-xs text-muted-foreground">Auto uses scaled spacing. Disable Auto to set fixed px (0-200).</p>
           </div>
           <div class="space-y-1">
             <div class="flex items-center gap-3">
               <Label :for="inputId('episode-badge-margin')">Badge margin</Label>
+              <div class="flex items-center gap-2">
+                <Checkbox
+                  :id="inputId('episode-badge-margin-auto')"
+                  :model-value="editEpisodeBadgeMarginAuto"
+                  data-testid="episode-badge-margin-auto-checkbox"
+                  @update:model-value="(v) => editEpisodeBadgeMarginAuto = !!v"
+                />
+                <Label :for="inputId('episode-badge-margin-auto')">Auto</Label>
+              </div>
               <Input
                 :id="inputId('episode-badge-margin')"
                 v-model.number="editEpisodeBadgeMargin"
@@ -1135,11 +1245,12 @@ const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
                 :min="MIN_LAYOUT_OVERRIDE"
                 :max="MAX_LAYOUT_OVERRIDE"
                 :step="1"
+                :disabled="editEpisodeBadgeMarginAuto"
                 class="w-[96px]"
                 data-testid="episode-badge-margin-input"
               />
             </div>
-            <p class="text-xs text-muted-foreground">0 = auto scale, otherwise fixed px</p>
+            <p class="text-xs text-muted-foreground">Auto uses scaled margins. Disable Auto to set fixed px (0-200).</p>
           </div>
           <div class="space-y-1">
             <div class="flex items-center gap-3">

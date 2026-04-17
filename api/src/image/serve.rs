@@ -114,10 +114,10 @@ pub fn badge_scale_override_cache_suffix(scale: f32) -> String {
 
 /// Returns a cache key suffix for fixed badge gap override.
 ///
-/// Omitted when `gap == 0` (auto-scaled default).
+/// `gap < 0` encodes autoscale mode.
 pub fn badge_gap_cache_suffix(gap: i32) -> String {
-    if gap == 0 {
-        String::new()
+    if gap < 0 {
+        ".gga".to_string()
     } else {
         format!(".gg{gap}")
     }
@@ -125,10 +125,10 @@ pub fn badge_gap_cache_suffix(gap: i32) -> String {
 
 /// Returns a cache key suffix for fixed badge margin override.
 ///
-/// Omitted when `margin == 0` (auto-scaled default).
+/// `margin < 0` encodes autoscale mode.
 pub fn badge_margin_cache_suffix(margin: i32) -> String {
-    if margin == 0 {
-        String::new()
+    if margin < 0 {
+        ".gma".to_string()
     } else {
         format!(".gm{margin}")
     }
