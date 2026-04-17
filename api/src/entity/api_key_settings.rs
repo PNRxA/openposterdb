@@ -36,6 +36,14 @@ pub struct Model {
     pub episode_position: String,
     pub episode_badge_direction: String,
     pub episode_blur: bool,
+    pub poster_badge_gap: i32,
+    pub poster_badge_margin: i32,
+    pub logo_badge_gap: i32,
+    pub logo_badge_margin: i32,
+    pub backdrop_badge_gap: i32,
+    pub backdrop_badge_margin: i32,
+    pub episode_badge_gap: i32,
+    pub episode_badge_margin: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -144,6 +144,14 @@ pub struct GlobalSettingsResponse {
     pub episode_position: BadgePosition,
     pub episode_badge_direction: BadgeDirection,
     pub episode_blur: bool,
+    pub poster_badge_gap: i32,
+    pub poster_badge_margin: i32,
+    pub logo_badge_gap: i32,
+    pub logo_badge_margin: i32,
+    pub backdrop_badge_gap: i32,
+    pub backdrop_badge_margin: i32,
+    pub episode_badge_gap: i32,
+    pub episode_badge_margin: i32,
 }
 
 pub async fn get_settings(
@@ -195,6 +203,14 @@ pub async fn get_settings(
         episode_position: settings.episode_position,
         episode_badge_direction: settings.episode_badge_direction,
         episode_blur: settings.episode_blur,
+        poster_badge_gap: settings.poster_badge_gap,
+        poster_badge_margin: settings.poster_badge_margin,
+        logo_badge_gap: settings.logo_badge_gap,
+        logo_badge_margin: settings.logo_badge_margin,
+        backdrop_badge_gap: settings.backdrop_badge_gap,
+        backdrop_badge_margin: settings.backdrop_badge_margin,
+        episode_badge_gap: settings.episode_badge_gap,
+        episode_badge_margin: settings.episode_badge_margin,
     }))
 }
 
@@ -263,6 +279,22 @@ pub struct UpdateGlobalSettingsRequest {
     pub episode_badge_direction: BadgeDirection,
     #[serde(default)]
     pub episode_blur: bool,
+    #[serde(default = "db::default_badge_gap")]
+    pub poster_badge_gap: i32,
+    #[serde(default = "db::default_badge_margin")]
+    pub poster_badge_margin: i32,
+    #[serde(default = "db::default_badge_gap")]
+    pub logo_badge_gap: i32,
+    #[serde(default = "db::default_badge_margin")]
+    pub logo_badge_margin: i32,
+    #[serde(default = "db::default_badge_gap")]
+    pub backdrop_badge_gap: i32,
+    #[serde(default = "db::default_badge_margin")]
+    pub backdrop_badge_margin: i32,
+    #[serde(default = "db::default_badge_gap")]
+    pub episode_badge_gap: i32,
+    #[serde(default = "db::default_badge_margin")]
+    pub episode_badge_margin: i32,
 }
 
 pub async fn update_settings(
@@ -280,6 +312,14 @@ pub async fn update_settings(
         req.logo_badge_scale_override,
         req.backdrop_badge_scale_override,
         req.episode_badge_scale_override,
+        req.poster_badge_gap,
+        req.poster_badge_margin,
+        req.logo_badge_gap,
+        req.logo_badge_margin,
+        req.backdrop_badge_gap,
+        req.backdrop_badge_margin,
+        req.episode_badge_gap,
+        req.episode_badge_margin,
     )?;
     let textless_str = if req.textless { "true" } else { "false" };
     let limit_str = req.ratings_limit.to_string();
@@ -290,6 +330,14 @@ pub async fn update_settings(
     let logo_scale_str = req.logo_badge_scale_override.to_string();
     let backdrop_scale_str = req.backdrop_badge_scale_override.to_string();
     let episode_scale_str = req.episode_badge_scale_override.to_string();
+    let poster_badge_gap_str = req.poster_badge_gap.to_string();
+    let poster_badge_margin_str = req.poster_badge_margin.to_string();
+    let logo_badge_gap_str = req.logo_badge_gap.to_string();
+    let logo_badge_margin_str = req.logo_badge_margin.to_string();
+    let backdrop_badge_gap_str = req.backdrop_badge_gap.to_string();
+    let backdrop_badge_margin_str = req.backdrop_badge_margin.to_string();
+    let episode_badge_gap_str = req.episode_badge_gap.to_string();
+    let episode_badge_margin_str = req.episode_badge_margin.to_string();
     let episode_blur_str = if req.episode_blur { "true" } else { "false" };
     let mut batch: Vec<(&str, &str)> = vec![
         ("image_source", req.image_source.as_str()),
@@ -323,6 +371,14 @@ pub async fn update_settings(
         ("episode_position", req.episode_position.as_str()),
         ("episode_badge_direction", req.episode_badge_direction.as_str()),
         ("episode_blur", episode_blur_str),
+        ("poster_badge_gap", &poster_badge_gap_str),
+        ("poster_badge_margin", &poster_badge_margin_str),
+        ("logo_badge_gap", &logo_badge_gap_str),
+        ("logo_badge_margin", &logo_badge_margin_str),
+        ("backdrop_badge_gap", &backdrop_badge_gap_str),
+        ("backdrop_badge_margin", &backdrop_badge_margin_str),
+        ("episode_badge_gap", &episode_badge_gap_str),
+        ("episode_badge_margin", &episode_badge_margin_str),
     ];
     let free_key_str;
     if state.config.free_key_enabled.is_none() {
