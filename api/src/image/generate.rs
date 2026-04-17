@@ -151,15 +151,22 @@ fn overlay_vertical_stack(canvas: &mut RgbaImage, badge_images: &[RgbaImage], po
     let total_badge_height: u32 = badge_images.iter().map(|b| b.height()).sum::<u32>()
         + vert_spacing * (badge_images.len() as u32).saturating_sub(1);
     let max_badge_width: u32 = badge_images.iter().map(|b| b.width()).max().unwrap_or(0);
+    let canvas_w = canvas.width() as i64;
+    let canvas_h = canvas.height() as i64;
+    let total_badge_height_i = total_badge_height as i64;
+    let max_badge_width_i = max_badge_width as i64;
+    let top_margin_i = top_margin as i64;
+    let bottom_margin_i = bottom_margin as i64;
+    let side_margin_i = side_margin as i64;
 
     // Vertical anchor
     let start_y = if position.is_top() {
-        top_margin
+        top_margin_i
     } else if position.is_bottom() {
-        canvas.height().saturating_sub(total_badge_height + bottom_margin)
+        canvas_h - total_badge_height_i - bottom_margin_i
     } else {
         // "l", "r" — vertically centered
-        (canvas.height().saturating_sub(total_badge_height)) / 2
+        (canvas_h - total_badge_height_i) / 2
     };
 
     // Horizontal anchor
@@ -167,25 +174,26 @@ fn overlay_vertical_stack(canvas: &mut RgbaImage, badge_images: &[RgbaImage], po
     let is_right = position.is_right();
 
     let base_x = if is_left {
-        side_margin
+        side_margin_i
     } else if is_right {
-        canvas.width().saturating_sub(max_badge_width + side_margin)
+        canvas_w - max_badge_width_i - side_margin_i
     } else {
         // center
-        (canvas.width().saturating_sub(max_badge_width)) / 2
+        (canvas_w - max_badge_width_i) / 2
     };
 
     let mut y = start_y;
     for badge_img in badge_images {
+        let badge_w = badge_img.width() as i64;
         let bx = if is_left {
             base_x
         } else if is_right {
-            base_x + max_badge_width.saturating_sub(badge_img.width())
+            base_x + (max_badge_width_i - badge_w)
         } else {
-            base_x + (max_badge_width.saturating_sub(badge_img.width())) / 2
+            base_x + (max_badge_width_i - badge_w) / 2
         };
-        imageops::overlay(canvas, badge_img, bx as i64, y as i64);
-        y += badge_img.height() + vert_spacing;
+        imageops::overlay(canvas, badge_img, bx, y);
+        y += badge_img.height() as i64 + vert_spacing as i64;
     }
 }
 
@@ -201,15 +209,22 @@ fn overlay_horizontal_rows(canvas: &mut RgbaImage, badge_images: &[RgbaImage], p
     let badge_height = badge_images.iter().map(|b| b.height()).max().unwrap_or(0);
     let total_height = badge_height * rows.len() as u32
         + row_spacing * (rows.len() as u32).saturating_sub(1);
+    let canvas_w = canvas.width() as i64;
+    let canvas_h = canvas.height() as i64;
+    let total_height_i = total_height as i64;
+    let badge_height_i = badge_height as i64;
+    let top_margin_i = top_margin as i64;
+    let bottom_margin_i = bottom_margin as i64;
+    let side_margin_i = side_margin as i64;
 
     // Vertical anchor
     let base_y = if position.is_top() {
-        top_margin
+        top_margin_i
     } else if position.is_bottom() {
-        canvas.height().saturating_sub(total_height + bottom_margin)
+        canvas_h - total_height_i - bottom_margin_i
     } else {
         // "l", "r" — vertically centered
-        (canvas.height().saturating_sub(total_height)) / 2
+        (canvas_h - total_height_i) / 2
     };
 
     // Horizontal alignment
@@ -219,21 +234,22 @@ fn overlay_horizontal_rows(canvas: &mut RgbaImage, badge_images: &[RgbaImage], p
     for (row_idx, row) in rows.iter().enumerate() {
         let row_width: u32 = row.iter().map(|b| b.width()).sum::<u32>()
             + spacing * (row.len() as u32).saturating_sub(1);
-        let y = base_y + row_idx as u32 * (badge_height + row_spacing);
+        let row_width_i = row_width as i64;
+        let y = base_y + row_idx as i64 * (badge_height_i + row_spacing as i64);
 
         let start_x = if is_left {
-            side_margin
+            side_margin_i
         } else if is_right {
-            canvas.width().saturating_sub(row_width + side_margin)
+            canvas_w - row_width_i - side_margin_i
         } else {
-            (canvas.width().saturating_sub(row_width)) / 2
+            (canvas_w - row_width_i) / 2
         };
 
         let mut x = start_x;
         for badge_img in *row {
-            let by = y + (badge_height.saturating_sub(badge_img.height())) / 2;
-            imageops::overlay(canvas, badge_img, x as i64, by as i64);
-            x += badge_img.width() + spacing;
+            let by = y + (badge_height_i - badge_img.height() as i64) / 2;
+            imageops::overlay(canvas, badge_img, x, by);
+            x += badge_img.width() as i64 + spacing as i64;
         }
     }
 }
@@ -1353,6 +1369,24 @@ mod tests {
         let (cx, cy) = badge_centroid(&result);
         assert!(cy > 0.67, "BottomCenter: badge y-centroid {cy:.2} should be in bottom third");
         assert!(cx > 0.3 && cx < 0.7, "BottomCenter: badge x-centroid {cx:.2} should be centered");
+    }
+
+    #[test]
+    fn badge_position_bottom_center_stays_centered_when_scaled_row_overflows() {
+        use crate::services::ratings::{RatingBadge, RatingSource};
+        let font = FontArc::try_from_slice(crate::FONT_BYTES).unwrap();
+        let badges = vec![
+            RatingBadge { source: RatingSource::Imdb, value: "8.5".to_string() },
+            RatingBadge { source: RatingSource::Rt, value: "92%".to_string() },
+            RatingBadge { source: RatingSource::Tmdb, value: "85%".to_string() },
+        ];
+
+        // At 4.0x this row can exceed canvas width; keep center anchoring instead of clamping to x=0.
+        let result = render_poster_sync(&test_png(500, 750), &badges, &font, 85,
+            BadgePosition::BottomCenter, BadgeStyle::Horizontal, LabelStyle::Text,
+            BadgeDirection::Horizontal, 500, 4.0, BadgeSize::Medium).unwrap();
+        let (cx, _cy) = badge_centroid(&result);
+        assert!(cx > 0.3 && cx < 0.7, "BottomCenter overflow: badge x-centroid {cx:.2} should remain centered");
     }
 
     #[test]
