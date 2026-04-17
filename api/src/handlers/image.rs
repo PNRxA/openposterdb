@@ -82,6 +82,14 @@ pub struct ImageQuery {
     #[serde(default)]
     #[param(value_type = Option<f32>, example = 1.15)]
     pub badge_scale: Option<f32>,
+    /// Fixed badge gap in pixels (0-200). `0` keeps auto-scaled spacing.
+    #[serde(default)]
+    #[param(value_type = Option<i32>, example = 12)]
+    pub badge_gap: Option<i32>,
+    /// Fixed badge margin in pixels (0-200). `0` keeps auto-scaled margins.
+    #[serde(default)]
+    #[param(value_type = Option<i32>, example = 18)]
+    pub badge_margin: Option<i32>,
     /// Badge stacking direction (poster only): `d` (default), `h` (horizontal), `v` (vertical).
     #[serde(default)]
     #[param(value_type = Option<String>)]
@@ -113,6 +121,8 @@ impl ImageQuery {
             || self.label_style.is_some()
             || self.badge_size.is_some()
             || self.badge_scale.is_some()
+            || self.badge_gap.is_some()
+            || self.badge_margin.is_some()
             || self.badge_direction.is_some()
             || self.position.is_some()
             || self.image_source.is_some()
@@ -289,6 +299,24 @@ fn apply_query_overrides(
             cache::ImageType::Logo => s.logo_badge_scale_override = scale,
             cache::ImageType::Backdrop => s.backdrop_badge_scale_override = scale,
             cache::ImageType::Episode => s.episode_badge_scale_override = scale,
+        }
+    }
+    if let Some(gap) = query.badge_gap {
+        db::validate_badge_gap(gap).map_err(|e| e.into_response())?;
+        match kind {
+            cache::ImageType::Poster => s.poster_badge_gap = gap,
+            cache::ImageType::Logo => s.logo_badge_gap = gap,
+            cache::ImageType::Backdrop => s.backdrop_badge_gap = gap,
+            cache::ImageType::Episode => s.episode_badge_gap = gap,
+        }
+    }
+    if let Some(margin) = query.badge_margin {
+        db::validate_badge_margin(margin).map_err(|e| e.into_response())?;
+        match kind {
+            cache::ImageType::Poster => s.poster_badge_margin = margin,
+            cache::ImageType::Logo => s.logo_badge_margin = margin,
+            cache::ImageType::Backdrop => s.backdrop_badge_margin = margin,
+            cache::ImageType::Episode => s.episode_badge_margin = margin,
         }
     }
 
@@ -724,6 +752,8 @@ mod tests {
             label_style: None,
             badge_size: None,
             badge_scale: None,
+            badge_gap: None,
+            badge_margin: None,
             badge_direction: None,
             position: None,
             image_source: None,
@@ -894,5 +924,34 @@ mod tests {
         };
         let result = apply_query_overrides(settings, &query, cache::ImageType::Poster);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn apply_query_overrides_applies_badge_gap_and_margin() {
+        let settings = Arc::new(db::RenderSettings::default());
+        let query = ImageQuery {
+            badge_gap: Some(12),
+            badge_margin: Some(18),
+            ..empty_query()
+        };
+        let result = apply_query_overrides(settings, &query, cache::ImageType::Poster).unwrap();
+        assert_eq!(result.poster_badge_gap, 12);
+        assert_eq!(result.poster_badge_margin, 18);
+    }
+
+    #[test]
+    fn apply_query_overrides_rejects_invalid_badge_gap_and_margin() {
+        let settings = Arc::new(db::RenderSettings::default());
+        let bad_gap = ImageQuery {
+            badge_gap: Some(-1),
+            ..empty_query()
+        };
+        assert!(apply_query_overrides(settings.clone(), &bad_gap, cache::ImageType::Poster).is_err());
+
+        let bad_margin = ImageQuery {
+            badge_margin: Some(300),
+            ..empty_query()
+        };
+        assert!(apply_query_overrides(settings, &bad_margin, cache::ImageType::Poster).is_err());
     }
 }

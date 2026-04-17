@@ -88,6 +88,14 @@ describe('selfApi', () => {
       episode_position: 'tr',
       episode_badge_direction: 'v',
       episode_blur: false,
+      poster_badge_gap: 0,
+      poster_badge_margin: 0,
+      logo_badge_gap: 0,
+      logo_badge_margin: 0,
+      backdrop_badge_gap: 0,
+      backdrop_badge_margin: 0,
+      episode_badge_gap: 0,
+      episode_badge_margin: 0,
     })
 
     const [url, options] = fetchMock.mock.calls[0]
@@ -126,6 +134,14 @@ describe('selfApi', () => {
       episode_position: 'tr',
       episode_badge_direction: 'v',
       episode_blur: false,
+      poster_badge_gap: 0,
+      poster_badge_margin: 0,
+      logo_badge_gap: 0,
+      logo_badge_margin: 0,
+      backdrop_badge_gap: 0,
+      backdrop_badge_margin: 0,
+      episode_badge_gap: 0,
+      episode_badge_margin: 0,
     })
   })
 
@@ -310,6 +326,14 @@ describe('selfApi', () => {
       episode_position: 'tr',
       episode_badge_direction: 'v',
       episode_blur: false,
+      poster_badge_gap: 0,
+      poster_badge_margin: 0,
+      logo_badge_gap: 0,
+      logo_badge_margin: 0,
+      backdrop_badge_gap: 0,
+      backdrop_badge_margin: 0,
+      episode_badge_gap: 0,
+      episode_badge_margin: 0,
     })
 
     const [, options] = fetchMock.mock.calls[0]

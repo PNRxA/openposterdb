@@ -499,6 +499,14 @@ pub fn default_badge_scale_override() -> f32 {
     1.0
 }
 
+pub fn default_badge_gap() -> i32 {
+    0
+}
+
+pub fn default_badge_margin() -> i32 {
+    0
+}
+
 /// Validate a fractional badge scale override.
 ///
 /// Allowed range is 0.25x to 4.0x to keep rendering stable and avoid extreme
@@ -512,6 +520,30 @@ pub fn validate_badge_scale_override(scale: f32) -> Result<(), AppError> {
     if !(0.25..=4.0).contains(&scale) {
         return Err(AppError::BadRequest(
             "badge_scale must be between 0.25 and 4.0".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// Validate fixed badge gap override in pixels.
+///
+/// `0` means "auto" (scale with badge size). Positive values use fixed pixels.
+pub fn validate_badge_gap(gap: i32) -> Result<(), AppError> {
+    if !(0..=200).contains(&gap) {
+        return Err(AppError::BadRequest(
+            "badge_gap must be between 0 and 200".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// Validate fixed badge margin override in pixels.
+///
+/// `0` means "auto" (scale with badge size). Positive values use fixed pixels.
+pub fn validate_badge_margin(margin: i32) -> Result<(), AppError> {
+    if !(0..=200).contains(&margin) {
+        return Err(AppError::BadRequest(
+            "badge_margin must be between 0 and 200".into(),
         ));
     }
     Ok(())
@@ -637,6 +669,14 @@ pub fn validate_render_settings(
     logo_badge_scale_override: f32,
     backdrop_badge_scale_override: f32,
     episode_badge_scale_override: f32,
+    poster_badge_gap: i32,
+    poster_badge_margin: i32,
+    logo_badge_gap: i32,
+    logo_badge_margin: i32,
+    backdrop_badge_gap: i32,
+    backdrop_badge_margin: i32,
+    episode_badge_gap: i32,
+    episode_badge_margin: i32,
 ) -> Result<(), AppError> {
     validate_lang(lang)?;
     validate_ratings_order(ratings_order)?;
@@ -650,6 +690,22 @@ pub fn validate_render_settings(
         episode_badge_scale_override,
     ] {
         validate_badge_scale_override(scale)?;
+    }
+    for gap in [
+        poster_badge_gap,
+        logo_badge_gap,
+        backdrop_badge_gap,
+        episode_badge_gap,
+    ] {
+        validate_badge_gap(gap)?;
+    }
+    for margin in [
+        poster_badge_margin,
+        logo_badge_margin,
+        backdrop_badge_margin,
+        episode_badge_margin,
+    ] {
+        validate_badge_margin(margin)?;
     }
     Ok(())
 }
@@ -1244,6 +1300,32 @@ mod tests {
     }
 
     #[test]
+    fn validate_badge_gap_accepts_valid_values() {
+        assert!(validate_badge_gap(0).is_ok());
+        assert!(validate_badge_gap(12).is_ok());
+        assert!(validate_badge_gap(200).is_ok());
+    }
+
+    #[test]
+    fn validate_badge_gap_rejects_out_of_range() {
+        assert!(validate_badge_gap(-1).is_err());
+        assert!(validate_badge_gap(201).is_err());
+    }
+
+    #[test]
+    fn validate_badge_margin_accepts_valid_values() {
+        assert!(validate_badge_margin(0).is_ok());
+        assert!(validate_badge_margin(18).is_ok());
+        assert!(validate_badge_margin(200).is_ok());
+    }
+
+    #[test]
+    fn validate_badge_margin_rejects_out_of_range() {
+        assert!(validate_badge_margin(-1).is_err());
+        assert!(validate_badge_margin(201).is_err());
+    }
+
+    #[test]
     fn parse_global_render_settings_with_all_enum_fields() {
         let mut globals = HashMap::new();
         globals.insert("image_source".into(), "f".into());
@@ -1696,6 +1778,14 @@ pub struct UpsertApiKeySettings<'a> {
     pub episode_position: &'a str,
     pub episode_badge_direction: &'a str,
     pub episode_blur: bool,
+    pub poster_badge_gap: i32,
+    pub poster_badge_margin: i32,
+    pub logo_badge_gap: i32,
+    pub logo_badge_margin: i32,
+    pub backdrop_badge_gap: i32,
+    pub backdrop_badge_margin: i32,
+    pub episode_badge_gap: i32,
+    pub episode_badge_margin: i32,
 }
 
 pub async fn upsert_api_key_settings(
@@ -1735,6 +1825,14 @@ pub async fn upsert_api_key_settings(
         episode_position: Set(params.episode_position.to_string()),
         episode_badge_direction: Set(params.episode_badge_direction.to_string()),
         episode_blur: Set(params.episode_blur),
+        poster_badge_gap: Set(params.poster_badge_gap),
+        poster_badge_margin: Set(params.poster_badge_margin),
+        logo_badge_gap: Set(params.logo_badge_gap),
+        logo_badge_margin: Set(params.logo_badge_margin),
+        backdrop_badge_gap: Set(params.backdrop_badge_gap),
+        backdrop_badge_margin: Set(params.backdrop_badge_margin),
+        episode_badge_gap: Set(params.episode_badge_gap),
+        episode_badge_margin: Set(params.episode_badge_margin),
     };
     api_key_settings::Entity::insert(model)
         .on_conflict(
@@ -1771,6 +1869,14 @@ pub async fn upsert_api_key_settings(
                     api_key_settings::Column::EpisodePosition,
                     api_key_settings::Column::EpisodeBadgeDirection,
                     api_key_settings::Column::EpisodeBlur,
+                    api_key_settings::Column::PosterBadgeGap,
+                    api_key_settings::Column::PosterBadgeMargin,
+                    api_key_settings::Column::LogoBadgeGap,
+                    api_key_settings::Column::LogoBadgeMargin,
+                    api_key_settings::Column::BackdropBadgeGap,
+                    api_key_settings::Column::BackdropBadgeMargin,
+                    api_key_settings::Column::EpisodeBadgeGap,
+                    api_key_settings::Column::EpisodeBadgeMargin,
                 ])
                 .to_owned(),
         )
@@ -1831,6 +1937,14 @@ pub struct RenderSettings {
     pub episode_position: BadgePosition,
     pub episode_badge_direction: BadgeDirection,
     pub episode_blur: bool,
+    pub poster_badge_gap: i32,
+    pub poster_badge_margin: i32,
+    pub logo_badge_gap: i32,
+    pub logo_badge_margin: i32,
+    pub backdrop_badge_gap: i32,
+    pub backdrop_badge_margin: i32,
+    pub episode_badge_gap: i32,
+    pub episode_badge_margin: i32,
 }
 
 impl Default for RenderSettings {
@@ -1868,6 +1982,14 @@ impl Default for RenderSettings {
             episode_position: default_episode_position(),
             episode_badge_direction: default_episode_badge_direction(),
             episode_blur: false,
+            poster_badge_gap: default_badge_gap(),
+            poster_badge_margin: default_badge_margin(),
+            logo_badge_gap: default_badge_gap(),
+            logo_badge_margin: default_badge_margin(),
+            backdrop_badge_gap: default_badge_gap(),
+            backdrop_badge_margin: default_badge_margin(),
+            episode_badge_gap: default_badge_gap(),
+            episode_badge_margin: default_badge_margin(),
         }
     }
 }
@@ -1896,6 +2018,27 @@ pub fn parse_global_render_settings(globals: &HashMap<String, String>) -> Render
                 Ok(scale) => parse_setting_or_default(v, key, |_| {
                     validate_badge_scale_override(scale)?;
                     Ok(scale)
+                }, default),
+                Err(_) => {
+                    tracing::warn!(key, value = %v, "invalid setting value in DB, using default");
+                    default
+                }
+            },
+            None => default,
+        }
+    }
+
+    fn parse_i32_with_validation_or_default(
+        globals: &HashMap<String, String>,
+        key: &str,
+        validate: fn(i32) -> Result<(), AppError>,
+        default: i32,
+    ) -> i32 {
+        match globals.get(key) {
+            Some(v) => match v.parse::<i32>() {
+                Ok(parsed) => parse_setting_or_default(v, key, |_| {
+                    validate(parsed)?;
+                    Ok(parsed)
                 }, default),
                 Err(_) => {
                     tracing::warn!(key, value = %v, "invalid setting value in DB, using default");
@@ -1957,6 +2100,14 @@ pub fn parse_global_render_settings(globals: &HashMap<String, String>) -> Render
             .get("episode_blur")
             .map(|v| v == "true")
             .unwrap_or(defaults.episode_blur),
+        poster_badge_gap: parse_i32_with_validation_or_default(globals, "poster_badge_gap", validate_badge_gap, defaults.poster_badge_gap),
+        poster_badge_margin: parse_i32_with_validation_or_default(globals, "poster_badge_margin", validate_badge_margin, defaults.poster_badge_margin),
+        logo_badge_gap: parse_i32_with_validation_or_default(globals, "logo_badge_gap", validate_badge_gap, defaults.logo_badge_gap),
+        logo_badge_margin: parse_i32_with_validation_or_default(globals, "logo_badge_margin", validate_badge_margin, defaults.logo_badge_margin),
+        backdrop_badge_gap: parse_i32_with_validation_or_default(globals, "backdrop_badge_gap", validate_badge_gap, defaults.backdrop_badge_gap),
+        backdrop_badge_margin: parse_i32_with_validation_or_default(globals, "backdrop_badge_margin", validate_badge_margin, defaults.backdrop_badge_margin),
+        episode_badge_gap: parse_i32_with_validation_or_default(globals, "episode_badge_gap", validate_badge_gap, defaults.episode_badge_gap),
+        episode_badge_margin: parse_i32_with_validation_or_default(globals, "episode_badge_margin", validate_badge_margin, defaults.episode_badge_margin),
     }
 }
 
@@ -2001,6 +2152,14 @@ pub async fn get_effective_render_settings(
                 episode_position: parse_setting_or_default(&s.episode_position, "episode_position", BadgePosition::parse, default_episode_position()),
                 episode_badge_direction: parse_setting_or_default(&s.episode_badge_direction, "episode_badge_direction", BadgeDirection::parse, default_episode_badge_direction()),
                 episode_blur: s.episode_blur,
+                poster_badge_gap: s.poster_badge_gap,
+                poster_badge_margin: s.poster_badge_margin,
+                logo_badge_gap: s.logo_badge_gap,
+                logo_badge_margin: s.logo_badge_margin,
+                backdrop_badge_gap: s.backdrop_badge_gap,
+                backdrop_badge_margin: s.backdrop_badge_margin,
+                episode_badge_gap: s.episode_badge_gap,
+                episode_badge_margin: s.episode_badge_margin,
             };
         }
         Ok(None) => {} // no per-key override, fall through

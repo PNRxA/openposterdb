@@ -40,6 +40,14 @@ const defaultSettings: RenderSettings = {
   episode_position: 'tr',
   episode_badge_direction: 'v',
   episode_blur: false,
+  poster_badge_gap: 0,
+  poster_badge_margin: 0,
+  logo_badge_gap: 0,
+  logo_badge_margin: 0,
+  backdrop_badge_gap: 0,
+  backdrop_badge_margin: 0,
+  episode_badge_gap: 0,
+  episode_badge_margin: 0,
 }
 
 function makeFetchPreview() {
@@ -86,7 +94,7 @@ describe('RenderSettingsForm', () => {
     mountForm({}, fetchPreview)
     await flushPromises()
 
-    expect(fetchPreview).toHaveBeenCalledWith(3, 'mal,imdb,lb,rt,rta,mc,tmdb,trakt', 'bc', 'h', 'i', 'd', 'm', 1)
+    expect(fetchPreview).toHaveBeenCalledWith(3, 'mal,imdb,lb,rt,rta,mc,tmdb,trakt', 'bc', 'h', 'i', 'd', 'm', 1, 0, 0)
   })
 
   it('calls fetchPreview with correct params for custom settings', async () => {
@@ -94,7 +102,7 @@ describe('RenderSettingsForm', () => {
     mountForm({ ratings_limit: 5, ratings_order: 'imdb,rt,tmdb' }, fetchPreview)
     await flushPromises()
 
-    expect(fetchPreview).toHaveBeenCalledWith(5, expect.stringContaining('imdb'), expect.any(String), expect.any(String), expect.any(String), expect.any(String), expect.any(String), 1)
+    expect(fetchPreview).toHaveBeenCalledWith(5, expect.stringContaining('imdb'), expect.any(String), expect.any(String), expect.any(String), expect.any(String), expect.any(String), 1, 0, 0)
   })
 
   it('sets preview src from blob after fetch', async () => {
@@ -114,14 +122,14 @@ describe('RenderSettingsForm', () => {
     fetchPreview.mockClear()
 
     // Change the limit
-    const limitInput = wrapper.find('input[type="number"]')
+    const limitInput = wrapper.get('#ratings-limit')
     await limitInput.setValue(5)
 
     // Advance past preview debounce timer
     vi.advanceTimersByTime(500)
     await flushPromises()
 
-    expect(fetchPreview).toHaveBeenCalledWith(5, expect.any(String), expect.any(String), expect.any(String), expect.any(String), expect.any(String), expect.any(String), 1)
+    expect(fetchPreview).toHaveBeenCalledWith(5, expect.any(String), expect.any(String), expect.any(String), expect.any(String), expect.any(String), expect.any(String), 1, 0, 0)
   })
 
   it('shows loading state while preview loads', async () => {
@@ -178,7 +186,7 @@ describe('RenderSettingsForm', () => {
     mountForm({ poster_position: 'l' }, fetchPreview)
     await flushPromises()
 
-    expect(fetchPreview).toHaveBeenCalledWith(3, expect.any(String), 'l', 'h', 'i', 'd', 'm', 1)
+    expect(fetchPreview).toHaveBeenCalledWith(3, expect.any(String), 'l', 'h', 'i', 'd', 'm', 1, 0, 0)
   })
 
   it('hides fanart checkbox when fanart_available is false', () => {
@@ -239,7 +247,7 @@ describe('RenderSettingsForm', () => {
     mountForm({ poster_badge_direction: 'v' }, fetchPreview)
     await flushPromises()
 
-    expect(fetchPreview).toHaveBeenCalledWith(3, expect.any(String), 'bc', 'h', 'i', 'v', 'm', 1)
+    expect(fetchPreview).toHaveBeenCalledWith(3, expect.any(String), 'bc', 'h', 'i', 'v', 'm', 1, 0, 0)
   })
 
   // --- Episode preview ---
@@ -297,6 +305,8 @@ describe('RenderSettingsForm', () => {
       'v', // episode_badge_direction
       false, // episode_blur
       1, // episode_badge_scale_override
+      0, // episode_badge_gap
+      0, // episode_badge_margin
     )
   })
 

@@ -126,6 +126,14 @@ pub struct RenderSettingsResponse {
     pub episode_position: BadgePosition,
     pub episode_badge_direction: BadgeDirection,
     pub episode_blur: bool,
+    pub poster_badge_gap: i32,
+    pub poster_badge_margin: i32,
+    pub logo_badge_gap: i32,
+    pub logo_badge_margin: i32,
+    pub backdrop_badge_gap: i32,
+    pub backdrop_badge_margin: i32,
+    pub episode_badge_gap: i32,
+    pub episode_badge_margin: i32,
 }
 
 pub async fn get_settings(
@@ -174,6 +182,14 @@ fn settings_to_response(settings: &db::RenderSettings, fanart_available: bool) -
         episode_position: settings.episode_position,
         episode_badge_direction: settings.episode_badge_direction,
         episode_blur: settings.episode_blur,
+        poster_badge_gap: settings.poster_badge_gap,
+        poster_badge_margin: settings.poster_badge_margin,
+        logo_badge_gap: settings.logo_badge_gap,
+        logo_badge_margin: settings.logo_badge_margin,
+        backdrop_badge_gap: settings.backdrop_badge_gap,
+        backdrop_badge_margin: settings.backdrop_badge_margin,
+        episode_badge_gap: settings.episode_badge_gap,
+        episode_badge_margin: settings.episode_badge_margin,
     }
 }
 
@@ -241,6 +257,22 @@ pub struct UpdateSettingsRequest {
     pub episode_badge_direction: BadgeDirection,
     #[serde(default)]
     pub episode_blur: bool,
+    #[serde(default = "db::default_badge_gap")]
+    pub poster_badge_gap: i32,
+    #[serde(default = "db::default_badge_margin")]
+    pub poster_badge_margin: i32,
+    #[serde(default = "db::default_badge_gap")]
+    pub logo_badge_gap: i32,
+    #[serde(default = "db::default_badge_margin")]
+    pub logo_badge_margin: i32,
+    #[serde(default = "db::default_badge_gap")]
+    pub backdrop_badge_gap: i32,
+    #[serde(default = "db::default_badge_margin")]
+    pub backdrop_badge_margin: i32,
+    #[serde(default = "db::default_badge_gap")]
+    pub episode_badge_gap: i32,
+    #[serde(default = "db::default_badge_margin")]
+    pub episode_badge_margin: i32,
 }
 
 fn build_upsert(id: i32, req: &UpdateSettingsRequest) -> db::UpsertApiKeySettings<'_> {
@@ -277,6 +309,14 @@ fn build_upsert(id: i32, req: &UpdateSettingsRequest) -> db::UpsertApiKeySetting
         episode_position: req.episode_position.as_str(),
         episode_badge_direction: req.episode_badge_direction.as_str(),
         episode_blur: req.episode_blur,
+        poster_badge_gap: req.poster_badge_gap,
+        poster_badge_margin: req.poster_badge_margin,
+        logo_badge_gap: req.logo_badge_gap,
+        logo_badge_margin: req.logo_badge_margin,
+        backdrop_badge_gap: req.backdrop_badge_gap,
+        backdrop_badge_margin: req.backdrop_badge_margin,
+        episode_badge_gap: req.episode_badge_gap,
+        episode_badge_margin: req.episode_badge_margin,
     }
 }
 
@@ -299,6 +339,14 @@ pub async fn update_settings(
         req.logo_badge_scale_override,
         req.backdrop_badge_scale_override,
         req.episode_badge_scale_override,
+        req.poster_badge_gap,
+        req.poster_badge_margin,
+        req.logo_badge_gap,
+        req.logo_badge_margin,
+        req.backdrop_badge_gap,
+        req.backdrop_badge_margin,
+        req.episode_badge_gap,
+        req.episode_badge_margin,
     )?;
     db::upsert_api_key_settings(&state.db, build_upsert(id, &req)).await?;
     state.settings_cache.invalidate(&id).await;
@@ -358,6 +406,14 @@ pub async fn update_own_settings(
         req.logo_badge_scale_override,
         req.backdrop_badge_scale_override,
         req.episode_badge_scale_override,
+        req.poster_badge_gap,
+        req.poster_badge_margin,
+        req.logo_badge_gap,
+        req.logo_badge_margin,
+        req.backdrop_badge_gap,
+        req.backdrop_badge_margin,
+        req.episode_badge_gap,
+        req.episode_badge_margin,
     )?;
     db::upsert_api_key_settings(&state.db, build_upsert(id, &req)).await?;
     state.settings_cache.invalidate(&id).await;

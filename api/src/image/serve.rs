@@ -112,6 +112,28 @@ pub fn badge_scale_override_cache_suffix(scale: f32) -> String {
     }
 }
 
+/// Returns a cache key suffix for fixed badge gap override.
+///
+/// Omitted when `gap == 0` (auto-scaled default).
+pub fn badge_gap_cache_suffix(gap: i32) -> String {
+    if gap == 0 {
+        String::new()
+    } else {
+        format!(".gg{gap}")
+    }
+}
+
+/// Returns a cache key suffix for fixed badge margin override.
+///
+/// Omitted when `margin == 0` (auto-scaled default).
+pub fn badge_margin_cache_suffix(margin: i32) -> String {
+    if margin == 0 {
+        String::new()
+    } else {
+        format!(".gm{margin}")
+    }
+}
+
 /// Resolve an optional image size, defaulting to Medium.
 pub fn resolve_image_size(size: Option<ImageSize>) -> ImageSize {
     size.unwrap_or(ImageSize::Medium)
@@ -189,6 +211,14 @@ pub fn settings_cache_suffix_with_ratings(
         episode_position: _,
         episode_badge_direction: _,
         episode_blur: _,
+        poster_badge_gap: _,
+        poster_badge_margin: _,
+        logo_badge_gap: _,
+        logo_badge_margin: _,
+        backdrop_badge_gap: _,
+        backdrop_badge_margin: _,
+        episode_badge_gap: _,
+        episode_badge_margin: _,
     } = settings;
 
     let resolved_size = resolve_image_size(image_size);
@@ -203,14 +233,18 @@ pub fn settings_cache_suffix_with_ratings(
             let bd = badge_direction_cache_suffix(settings.poster_badge_direction.as_str());
             let bsz = settings.poster_badge_size.cache_suffix();
             let bso = badge_scale_override_cache_suffix(settings.poster_badge_scale_override);
-            format!("{rs}{ps}{bs}{ls}{bd}{bsz}{bso}{is_suffix}")
+            let bg = badge_gap_cache_suffix(settings.poster_badge_gap);
+            let bm = badge_margin_cache_suffix(settings.poster_badge_margin);
+            format!("{rs}{ps}{bs}{ls}{bd}{bsz}{bso}{bg}{bm}{is_suffix}")
         }
         cache::ImageType::Logo => {
             let bs = badge_style_cache_suffix(settings.logo_badge_style.as_str());
             let ls = label_style_cache_suffix(settings.logo_label_style.as_str());
             let bsz = settings.logo_badge_size.cache_suffix();
             let bso = badge_scale_override_cache_suffix(settings.logo_badge_scale_override);
-            format!("{rs}{bs}{ls}{bsz}{bso}{is_suffix}")
+            let bg = badge_gap_cache_suffix(settings.logo_badge_gap);
+            let bm = badge_margin_cache_suffix(settings.logo_badge_margin);
+            format!("{rs}{bs}{ls}{bsz}{bso}{bg}{bm}{is_suffix}")
         }
         cache::ImageType::Backdrop => {
             let ps = position_cache_suffix(settings.backdrop_position.as_str());
@@ -219,7 +253,9 @@ pub fn settings_cache_suffix_with_ratings(
             let bd = badge_direction_cache_suffix(settings.backdrop_badge_direction.as_str());
             let bsz = settings.backdrop_badge_size.cache_suffix();
             let bso = badge_scale_override_cache_suffix(settings.backdrop_badge_scale_override);
-            format!("{rs}{ps}{bs}{ls}{bd}{bsz}{bso}{is_suffix}")
+            let bg = badge_gap_cache_suffix(settings.backdrop_badge_gap);
+            let bm = badge_margin_cache_suffix(settings.backdrop_badge_margin);
+            format!("{rs}{ps}{bs}{ls}{bd}{bsz}{bso}{bg}{bm}{is_suffix}")
         }
         cache::ImageType::Episode => {
             let ps = position_cache_suffix(settings.episode_position.as_str());
@@ -228,8 +264,10 @@ pub fn settings_cache_suffix_with_ratings(
             let bd = badge_direction_cache_suffix(settings.episode_badge_direction.as_str());
             let bsz = settings.episode_badge_size.cache_suffix();
             let bso = badge_scale_override_cache_suffix(settings.episode_badge_scale_override);
+            let bg = badge_gap_cache_suffix(settings.episode_badge_gap);
+            let bm = badge_margin_cache_suffix(settings.episode_badge_margin);
             let blur = if settings.episode_blur { ".blur" } else { "" };
-            format!("{rs}{ps}{bs}{ls}{bd}{bsz}{bso}{blur}{is_suffix}")
+            format!("{rs}{ps}{bs}{ls}{bd}{bsz}{bso}{bg}{bm}{blur}{is_suffix}")
         }
     }
 }
@@ -1112,8 +1150,34 @@ fn trigger_logo_backdrop_refresh(
             ),
         };
         let bytes = match lb_kind {
-            LogoBackdropKind::Logo => generate::generate_logo(image_bytes, badges, state2.font.clone(), params.badge_style, params.label_style, state2.render_semaphore.clone(), target_width, badge_scale).await?,
-            LogoBackdropKind::Backdrop => generate::generate_backdrop(image_bytes, badges, state2.font.clone(), state2.config.image_quality, params.position, params.badge_style, params.label_style, params.badge_direction, state2.render_semaphore.clone(), target_width, badge_scale, params.badge_size).await?,
+            LogoBackdropKind::Logo => generate::generate_logo_with_layout(
+                image_bytes,
+                badges,
+                state2.font.clone(),
+                params.badge_style,
+                params.label_style,
+                state2.render_semaphore.clone(),
+                target_width,
+                badge_scale,
+                settings.logo_badge_gap,
+                settings.logo_badge_margin,
+            ).await?,
+            LogoBackdropKind::Backdrop => generate::generate_backdrop_with_layout(
+                image_bytes,
+                badges,
+                state2.font.clone(),
+                state2.config.image_quality,
+                params.position,
+                params.badge_style,
+                params.label_style,
+                params.badge_direction,
+                state2.render_semaphore.clone(),
+                target_width,
+                badge_scale,
+                params.badge_size,
+                settings.backdrop_badge_gap,
+                settings.backdrop_badge_margin,
+            ).await?,
         };
 
         Ok((bytes, cross_ids.release_date.clone(), image_type, cross_ids))
@@ -1171,12 +1235,29 @@ async fn generate_episode(
     let badge_direction = settings.episode_badge_direction;
     let episode_badge_size = settings.episode_badge_size;
     let blur = settings.episode_blur;
+    let badge_gap = settings.episode_badge_gap;
+    let badge_margin = settings.episode_badge_margin;
     let render_semaphore = state.render_semaphore.clone();
 
     let _permit = render_semaphore.acquire().await
         .map_err(|_| AppError::Other("render queue closed".into()))?;
     let rendered = tokio::task::spawn_blocking(move || {
-        generate::render_episode_sync(&image_bytes, &badges, &font, quality, position, badge_style, label_style, badge_direction, target_width, badge_scale, episode_badge_size, blur)
+        generate::render_episode_sync_with_layout(
+            &image_bytes,
+            &badges,
+            &font,
+            quality,
+            position,
+            badge_style,
+            label_style,
+            badge_direction,
+            target_width,
+            badge_scale,
+            episode_badge_size,
+            blur,
+            badge_gap,
+            badge_margin,
+        )
     })
     .await
     .map_err(|e| AppError::Other(e.to_string()))??;
@@ -1317,6 +1398,8 @@ async fn generate_poster_with_source(
         target_width,
         badge_scale,
         badge_size: settings.poster_badge_size,
+        badge_gap_px: settings.poster_badge_gap,
+        badge_margin_px: settings.poster_badge_margin,
         tmdb_size,
         external_cache_only: state.config.external_cache_only,
     })
@@ -1944,8 +2027,34 @@ pub async fn handle_logo_backdrop_inner(
                 ),
             };
             let bytes = match lb_kind {
-                LogoBackdropKind::Logo => generate::generate_logo(image_bytes, ctx.badges, ctx.state.font.clone(), ctx.type_badge_style, ctx.type_label_style, ctx.state.render_semaphore.clone(), target_width, badge_scale).await?,
-                LogoBackdropKind::Backdrop => generate::generate_backdrop(image_bytes, ctx.badges, ctx.state.font.clone(), ctx.state.config.image_quality, ctx.type_position, ctx.type_badge_style, ctx.type_label_style, ctx.type_badge_direction, ctx.state.render_semaphore.clone(), target_width, badge_scale, ctx.type_badge_size).await?,
+                LogoBackdropKind::Logo => generate::generate_logo_with_layout(
+                    image_bytes,
+                    ctx.badges,
+                    ctx.state.font.clone(),
+                    ctx.type_badge_style,
+                    ctx.type_label_style,
+                    ctx.state.render_semaphore.clone(),
+                    target_width,
+                    badge_scale,
+                    settings.logo_badge_gap,
+                    settings.logo_badge_margin,
+                ).await?,
+                LogoBackdropKind::Backdrop => generate::generate_backdrop_with_layout(
+                    image_bytes,
+                    ctx.badges,
+                    ctx.state.font.clone(),
+                    ctx.state.config.image_quality,
+                    ctx.type_position,
+                    ctx.type_badge_style,
+                    ctx.type_label_style,
+                    ctx.type_badge_direction,
+                    ctx.state.render_semaphore.clone(),
+                    target_width,
+                    badge_scale,
+                    ctx.type_badge_size,
+                    settings.backdrop_badge_gap,
+                    settings.backdrop_badge_margin,
+                ).await?,
             };
 
             let release_date = ctx.cross_ids.release_date.clone();

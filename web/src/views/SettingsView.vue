@@ -79,6 +79,14 @@ async function toggleFreeApiKey() {
     episode_position: s.episode_position,
     episode_badge_direction: s.episode_badge_direction,
     episode_blur: s.episode_blur,
+    poster_badge_gap: s.poster_badge_gap,
+    poster_badge_margin: s.poster_badge_margin,
+    logo_badge_gap: s.logo_badge_gap,
+    logo_badge_margin: s.logo_badge_margin,
+    backdrop_badge_gap: s.backdrop_badge_gap,
+    backdrop_badge_margin: s.backdrop_badge_margin,
+    episode_badge_gap: s.episode_badge_gap,
+    episode_badge_margin: s.episode_badge_margin,
     free_api_key_enabled: newVal,
   })
   if (res.ok) {

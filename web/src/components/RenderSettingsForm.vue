@@ -50,6 +50,14 @@ export interface RenderSettings {
   episode_position: string
   episode_badge_direction: string
   episode_blur: boolean
+  poster_badge_gap: number
+  poster_badge_margin: number
+  logo_badge_gap: number
+  logo_badge_margin: number
+  backdrop_badge_gap: number
+  backdrop_badge_margin: number
+  episode_badge_gap: number
+  episode_badge_margin: number
 }
 
 const props = defineProps<{
@@ -58,19 +66,27 @@ const props = defineProps<{
   loadSettings: () => Promise<RenderSettings | null>
   saveSettings: (s: SaveSettingsPayload) => Promise<string | null>
   resetSettings?: () => Promise<boolean>
-  fetchPreview: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string, badgeSize?: string, badgeScale?: number) => Promise<Response>
-  fetchLogoPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, badgeScale?: number) => Promise<Response>
-  fetchBackdropPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, badgeScale?: number) => Promise<Response>
-  fetchEpisodePreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, blur?: boolean, badgeScale?: number) => Promise<Response>
+  fetchPreview: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string, badgeSize?: string, badgeScale?: number, badgeGap?: number, badgeMargin?: number) => Promise<Response>
+  fetchLogoPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, badgeScale?: number, badgeGap?: number, badgeMargin?: number) => Promise<Response>
+  fetchBackdropPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, badgeScale?: number, badgeGap?: number, badgeMargin?: number) => Promise<Response>
+  fetchEpisodePreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, blur?: boolean, badgeScale?: number, badgeGap?: number, badgeMargin?: number) => Promise<Response>
 }>()
 
 const MIN_BADGE_SCALE = 0.25
 const MAX_BADGE_SCALE = 4
+const MIN_LAYOUT_OVERRIDE = 0
+const MAX_LAYOUT_OVERRIDE = 200
 
 function clampBadgeScale(value: unknown): number {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return 1
   return Math.min(MAX_BADGE_SCALE, Math.max(MIN_BADGE_SCALE, parsed))
+}
+
+function clampLayoutOverride(value: unknown): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return 0
+  return Math.round(Math.min(MAX_LAYOUT_OVERRIDE, Math.max(MIN_LAYOUT_OVERRIDE, parsed)))
 }
 
 const editFanart = ref(props.settings.image_source === 'f')
@@ -105,6 +121,14 @@ const editEpisodeBadgeScaleOverride = ref(clampBadgeScale(props.settings.episode
 const editEpisodePosition = ref(props.settings.episode_position || 'tr')
 const editEpisodeBadgeDirection = ref(props.settings.episode_badge_direction || 'v')
 const editEpisodeBlur = ref(props.settings.episode_blur ?? false)
+const editPosterBadgeGap = ref(clampLayoutOverride(props.settings.poster_badge_gap ?? 0))
+const editPosterBadgeMargin = ref(clampLayoutOverride(props.settings.poster_badge_margin ?? 0))
+const editLogoBadgeGap = ref(clampLayoutOverride(props.settings.logo_badge_gap ?? 0))
+const editLogoBadgeMargin = ref(clampLayoutOverride(props.settings.logo_badge_margin ?? 0))
+const editBackdropBadgeGap = ref(clampLayoutOverride(props.settings.backdrop_badge_gap ?? 0))
+const editBackdropBadgeMargin = ref(clampLayoutOverride(props.settings.backdrop_badge_margin ?? 0))
+const editEpisodeBadgeGap = ref(clampLayoutOverride(props.settings.episode_badge_gap ?? 0))
+const editEpisodeBadgeMargin = ref(clampLayoutOverride(props.settings.episode_badge_margin ?? 0))
 
 function applySettings(s: RenderSettings) {
   editFanart.value = s.image_source === 'f'
@@ -138,6 +162,14 @@ function applySettings(s: RenderSettings) {
   editEpisodePosition.value = s.episode_position || 'tr'
   editEpisodeBadgeDirection.value = s.episode_badge_direction || 'v'
   editEpisodeBlur.value = s.episode_blur ?? false
+  editPosterBadgeGap.value = clampLayoutOverride(s.poster_badge_gap ?? 0)
+  editPosterBadgeMargin.value = clampLayoutOverride(s.poster_badge_margin ?? 0)
+  editLogoBadgeGap.value = clampLayoutOverride(s.logo_badge_gap ?? 0)
+  editLogoBadgeMargin.value = clampLayoutOverride(s.logo_badge_margin ?? 0)
+  editBackdropBadgeGap.value = clampLayoutOverride(s.backdrop_badge_gap ?? 0)
+  editBackdropBadgeMargin.value = clampLayoutOverride(s.backdrop_badge_margin ?? 0)
+  editEpisodeBadgeGap.value = clampLayoutOverride(s.episode_badge_gap ?? 0)
+  editEpisodeBadgeMargin.value = clampLayoutOverride(s.episode_badge_margin ?? 0)
 }
 const currentSettings = ref<RenderSettings>(props.settings)
 const saving = ref(false)
@@ -205,6 +237,14 @@ async function autoSave() {
       episode_position: editEpisodePosition.value,
       episode_badge_direction: editEpisodeBadgeDirection.value,
       episode_blur: editEpisodeBlur.value,
+      poster_badge_gap: clampLayoutOverride(editPosterBadgeGap.value),
+      poster_badge_margin: clampLayoutOverride(editPosterBadgeMargin.value),
+      logo_badge_gap: clampLayoutOverride(editLogoBadgeGap.value),
+      logo_badge_margin: clampLayoutOverride(editLogoBadgeMargin.value),
+      backdrop_badge_gap: clampLayoutOverride(editBackdropBadgeGap.value),
+      backdrop_badge_margin: clampLayoutOverride(editBackdropBadgeMargin.value),
+      episode_badge_gap: clampLayoutOverride(editEpisodeBadgeGap.value),
+      episode_badge_margin: clampLayoutOverride(editEpisodeBadgeMargin.value),
     })
     if (err) {
       error.value = err
@@ -231,7 +271,7 @@ async function autoSave() {
 
 // Auto-save on any setting change
 watch(
-  [editSource, editLang, editTextless, editRatingsLimit, editRatingsOrder, editPosterPosition, editLogoRatingsLimit, editBackdropRatingsLimit, editPosterBadgeStyle, editLogoBadgeStyle, editBackdropBadgeStyle, editPosterLabelStyle, editLogoLabelStyle, editBackdropLabelStyle, editPosterBadgeDirection, editPosterBadgeSize, editPosterBadgeScaleOverride, editLogoBadgeSize, editLogoBadgeScaleOverride, editBackdropBadgeSize, editBackdropBadgeScaleOverride, editBackdropPosition, editBackdropBadgeDirection, editEpisodeRatingsLimit, editEpisodeBadgeStyle, editEpisodeLabelStyle, editEpisodeBadgeSize, editEpisodeBadgeScaleOverride, editEpisodePosition, editEpisodeBadgeDirection, editEpisodeBlur],
+  [editSource, editLang, editTextless, editRatingsLimit, editRatingsOrder, editPosterPosition, editLogoRatingsLimit, editBackdropRatingsLimit, editPosterBadgeStyle, editLogoBadgeStyle, editBackdropBadgeStyle, editPosterLabelStyle, editLogoLabelStyle, editBackdropLabelStyle, editPosterBadgeDirection, editPosterBadgeSize, editPosterBadgeScaleOverride, editLogoBadgeSize, editLogoBadgeScaleOverride, editBackdropBadgeSize, editBackdropBadgeScaleOverride, editBackdropPosition, editBackdropBadgeDirection, editEpisodeRatingsLimit, editEpisodeBadgeStyle, editEpisodeLabelStyle, editEpisodeBadgeSize, editEpisodeBadgeScaleOverride, editEpisodePosition, editEpisodeBadgeDirection, editEpisodeBlur, editPosterBadgeGap, editPosterBadgeMargin, editLogoBadgeGap, editLogoBadgeMargin, editBackdropBadgeGap, editBackdropBadgeMargin, editEpisodeBadgeGap, editEpisodeBadgeMargin],
   () => {
     if (syncing) return
     autoSave()
@@ -290,15 +330,15 @@ function onPreviewLoad(state: PreviewState, e: Event) {
 
 async function fetchPreviewImage(
   state: PreviewState,
-  fetcher: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string, badgeSize?: string, badgeScale?: number) => Promise<Response>,
-  extraArgs?: { posterPosition?: string; badgeStyle?: string; labelStyle?: string; badgeDirection?: string; badgeSize?: string; badgeScale?: number },
+  fetcher: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string, badgeSize?: string, badgeScale?: number, badgeGap?: number, badgeMargin?: number) => Promise<Response>,
+  extraArgs?: { posterPosition?: string; badgeStyle?: string; labelStyle?: string; badgeDirection?: string; badgeSize?: string; badgeScale?: number; badgeGap?: number; badgeMargin?: number },
 ) {
   state.loading = true
   state.error = false
   const generation = ++state.generation
 
   try {
-    const res = await fetcher(editRatingsLimit.value, editRatingsOrder.value.join(','), extraArgs?.posterPosition, extraArgs?.badgeStyle, extraArgs?.labelStyle, extraArgs?.badgeDirection, extraArgs?.badgeSize, extraArgs?.badgeScale)
+    const res = await fetcher(editRatingsLimit.value, editRatingsOrder.value.join(','), extraArgs?.posterPosition, extraArgs?.badgeStyle, extraArgs?.labelStyle, extraArgs?.badgeDirection, extraArgs?.badgeSize, extraArgs?.badgeScale, extraArgs?.badgeGap, extraArgs?.badgeMargin)
     if (generation !== state.generation) return
     if (!res.ok) {
       state.error = true
@@ -323,24 +363,24 @@ let backdropPreviewTimer: ReturnType<typeof setTimeout> | null = null
 let episodePreviewTimer: ReturnType<typeof setTimeout> | null = null
 
 function updatePosterPreview() {
-  fetchPreviewImage(posterPreview.value, props.fetchPreview, { posterPosition: editPosterPosition.value, badgeStyle: editPosterBadgeStyle.value, labelStyle: editPosterLabelStyle.value, badgeDirection: editPosterBadgeDirection.value, badgeSize: editPosterBadgeSize.value, badgeScale: clampBadgeScale(editPosterBadgeScaleOverride.value) })
+  fetchPreviewImage(posterPreview.value, props.fetchPreview, { posterPosition: editPosterPosition.value, badgeStyle: editPosterBadgeStyle.value, labelStyle: editPosterLabelStyle.value, badgeDirection: editPosterBadgeDirection.value, badgeSize: editPosterBadgeSize.value, badgeScale: clampBadgeScale(editPosterBadgeScaleOverride.value), badgeGap: clampLayoutOverride(editPosterBadgeGap.value), badgeMargin: clampLayoutOverride(editPosterBadgeMargin.value) })
 }
 
 function updateLogoPreview() {
   if (props.fetchLogoPreview) {
-    fetchPreviewImage(logoPreview.value, (_limit, order) => props.fetchLogoPreview!(editLogoRatingsLimit.value, order, editLogoBadgeStyle.value, editLogoLabelStyle.value, editLogoBadgeSize.value, clampBadgeScale(editLogoBadgeScaleOverride.value)))
+    fetchPreviewImage(logoPreview.value, (_limit, order) => props.fetchLogoPreview!(editLogoRatingsLimit.value, order, editLogoBadgeStyle.value, editLogoLabelStyle.value, editLogoBadgeSize.value, clampBadgeScale(editLogoBadgeScaleOverride.value), clampLayoutOverride(editLogoBadgeGap.value), clampLayoutOverride(editLogoBadgeMargin.value)))
   }
 }
 
 function updateBackdropPreview() {
   if (props.fetchBackdropPreview) {
-    fetchPreviewImage(backdropPreview.value, (_limit, order) => props.fetchBackdropPreview!(editBackdropRatingsLimit.value, order, editBackdropBadgeStyle.value, editBackdropLabelStyle.value, editBackdropBadgeSize.value, editBackdropPosition.value, editBackdropBadgeDirection.value, clampBadgeScale(editBackdropBadgeScaleOverride.value)))
+    fetchPreviewImage(backdropPreview.value, (_limit, order) => props.fetchBackdropPreview!(editBackdropRatingsLimit.value, order, editBackdropBadgeStyle.value, editBackdropLabelStyle.value, editBackdropBadgeSize.value, editBackdropPosition.value, editBackdropBadgeDirection.value, clampBadgeScale(editBackdropBadgeScaleOverride.value), clampLayoutOverride(editBackdropBadgeGap.value), clampLayoutOverride(editBackdropBadgeMargin.value)))
   }
 }
 
 function updateEpisodePreview() {
   if (props.fetchEpisodePreview) {
-    fetchPreviewImage(episodePreview.value, (_limit, order) => props.fetchEpisodePreview!(editEpisodeRatingsLimit.value, order, editEpisodeBadgeStyle.value, editEpisodeLabelStyle.value, editEpisodeBadgeSize.value, editEpisodePosition.value, editEpisodeBadgeDirection.value, editEpisodeBlur.value, clampBadgeScale(editEpisodeBadgeScaleOverride.value)))
+    fetchPreviewImage(episodePreview.value, (_limit, order) => props.fetchEpisodePreview!(editEpisodeRatingsLimit.value, order, editEpisodeBadgeStyle.value, editEpisodeLabelStyle.value, editEpisodeBadgeSize.value, editEpisodePosition.value, editEpisodeBadgeDirection.value, editEpisodeBlur.value, clampBadgeScale(editEpisodeBadgeScaleOverride.value), clampLayoutOverride(editEpisodeBadgeGap.value), clampLayoutOverride(editEpisodeBadgeMargin.value)))
   }
 }
 
@@ -365,28 +405,28 @@ watch([editRatingsOrder], () => {
 }, { deep: true })
 
 // Poster-only settings
-watch([editRatingsLimit, editPosterPosition, editPosterBadgeStyle, editPosterLabelStyle, editPosterBadgeDirection, editPosterBadgeSize, editPosterBadgeScaleOverride], () => {
+watch([editRatingsLimit, editPosterPosition, editPosterBadgeStyle, editPosterLabelStyle, editPosterBadgeDirection, editPosterBadgeSize, editPosterBadgeScaleOverride, editPosterBadgeGap, editPosterBadgeMargin], () => {
   if (syncing) return
   if (posterPreviewTimer) clearTimeout(posterPreviewTimer)
   posterPreviewTimer = setTimeout(updatePosterPreview, 500)
 })
 
 // Logo-only settings
-watch([editLogoRatingsLimit, editLogoBadgeStyle, editLogoLabelStyle, editLogoBadgeSize, editLogoBadgeScaleOverride], () => {
+watch([editLogoRatingsLimit, editLogoBadgeStyle, editLogoLabelStyle, editLogoBadgeSize, editLogoBadgeScaleOverride, editLogoBadgeGap, editLogoBadgeMargin], () => {
   if (syncing) return
   if (logoPreviewTimer) clearTimeout(logoPreviewTimer)
   logoPreviewTimer = setTimeout(updateLogoPreview, 500)
 })
 
 // Backdrop-only settings
-watch([editBackdropRatingsLimit, editBackdropBadgeStyle, editBackdropLabelStyle, editBackdropBadgeSize, editBackdropBadgeScaleOverride, editBackdropPosition, editBackdropBadgeDirection], () => {
+watch([editBackdropRatingsLimit, editBackdropBadgeStyle, editBackdropLabelStyle, editBackdropBadgeSize, editBackdropBadgeScaleOverride, editBackdropPosition, editBackdropBadgeDirection, editBackdropBadgeGap, editBackdropBadgeMargin], () => {
   if (syncing) return
   if (backdropPreviewTimer) clearTimeout(backdropPreviewTimer)
   backdropPreviewTimer = setTimeout(updateBackdropPreview, 500)
 })
 
 // Episode-only settings
-watch([editEpisodeRatingsLimit, editEpisodeBadgeStyle, editEpisodeLabelStyle, editEpisodeBadgeSize, editEpisodeBadgeScaleOverride, editEpisodePosition, editEpisodeBadgeDirection, editEpisodeBlur], () => {
+watch([editEpisodeRatingsLimit, editEpisodeBadgeStyle, editEpisodeLabelStyle, editEpisodeBadgeSize, editEpisodeBadgeScaleOverride, editEpisodePosition, editEpisodeBadgeDirection, editEpisodeBlur, editEpisodeBadgeGap, editEpisodeBadgeMargin], () => {
   if (syncing) return
   if (episodePreviewTimer) clearTimeout(episodePreviewTimer)
   episodePreviewTimer = setTimeout(updateEpisodePreview, 500)
@@ -463,6 +503,7 @@ const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
         <p class="text-xs text-muted-foreground">Use the arrows to reorder. Higher items have priority.</p>
         <RatingsOrderList v-model="editRatingsOrder" />
       </div>
+
     </div>
 
     <!-- Section 2: Poster -->
@@ -588,6 +629,38 @@ const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
           </div>
           <div class="space-y-1">
             <div class="flex items-center gap-3">
+              <Label :for="inputId('poster-badge-gap')">Badge gap</Label>
+              <Input
+                :id="inputId('poster-badge-gap')"
+                v-model.number="editPosterBadgeGap"
+                type="number"
+                :min="MIN_LAYOUT_OVERRIDE"
+                :max="MAX_LAYOUT_OVERRIDE"
+                :step="1"
+                class="w-[96px]"
+                data-testid="poster-badge-gap-input"
+              />
+            </div>
+            <p class="text-xs text-muted-foreground">0 = auto scale, otherwise fixed px</p>
+          </div>
+          <div class="space-y-1">
+            <div class="flex items-center gap-3">
+              <Label :for="inputId('poster-badge-margin')">Badge margin</Label>
+              <Input
+                :id="inputId('poster-badge-margin')"
+                v-model.number="editPosterBadgeMargin"
+                type="number"
+                :min="MIN_LAYOUT_OVERRIDE"
+                :max="MAX_LAYOUT_OVERRIDE"
+                :step="1"
+                class="w-[96px]"
+                data-testid="poster-badge-margin-input"
+              />
+            </div>
+            <p class="text-xs text-muted-foreground">0 = auto scale, otherwise fixed px</p>
+          </div>
+          <div class="space-y-1">
+            <div class="flex items-center gap-3">
               <Label :for="inputId('ratings-limit')">Max ratings</Label>
               <Input
                 :id="inputId('ratings-limit')"
@@ -695,6 +768,38 @@ const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
               />
             </div>
             <p class="text-xs text-muted-foreground">Range: {{ MIN_BADGE_SCALE }} to {{ MAX_BADGE_SCALE }}</p>
+          </div>
+          <div class="space-y-1">
+            <div class="flex items-center gap-3">
+              <Label :for="inputId('logo-badge-gap')">Badge gap</Label>
+              <Input
+                :id="inputId('logo-badge-gap')"
+                v-model.number="editLogoBadgeGap"
+                type="number"
+                :min="MIN_LAYOUT_OVERRIDE"
+                :max="MAX_LAYOUT_OVERRIDE"
+                :step="1"
+                class="w-[96px]"
+                data-testid="logo-badge-gap-input"
+              />
+            </div>
+            <p class="text-xs text-muted-foreground">0 = auto scale, otherwise fixed px</p>
+          </div>
+          <div class="space-y-1">
+            <div class="flex items-center gap-3">
+              <Label :for="inputId('logo-badge-margin')">Badge margin</Label>
+              <Input
+                :id="inputId('logo-badge-margin')"
+                v-model.number="editLogoBadgeMargin"
+                type="number"
+                :min="MIN_LAYOUT_OVERRIDE"
+                :max="MAX_LAYOUT_OVERRIDE"
+                :step="1"
+                class="w-[96px]"
+                data-testid="logo-badge-margin-input"
+              />
+            </div>
+            <p class="text-xs text-muted-foreground">0 = auto scale, otherwise fixed px</p>
           </div>
           <div class="space-y-1">
             <div class="flex items-center gap-3">
@@ -836,6 +941,38 @@ const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
           </div>
           <div class="space-y-1">
             <div class="flex items-center gap-3">
+              <Label :for="inputId('backdrop-badge-gap')">Badge gap</Label>
+              <Input
+                :id="inputId('backdrop-badge-gap')"
+                v-model.number="editBackdropBadgeGap"
+                type="number"
+                :min="MIN_LAYOUT_OVERRIDE"
+                :max="MAX_LAYOUT_OVERRIDE"
+                :step="1"
+                class="w-[96px]"
+                data-testid="backdrop-badge-gap-input"
+              />
+            </div>
+            <p class="text-xs text-muted-foreground">0 = auto scale, otherwise fixed px</p>
+          </div>
+          <div class="space-y-1">
+            <div class="flex items-center gap-3">
+              <Label :for="inputId('backdrop-badge-margin')">Badge margin</Label>
+              <Input
+                :id="inputId('backdrop-badge-margin')"
+                v-model.number="editBackdropBadgeMargin"
+                type="number"
+                :min="MIN_LAYOUT_OVERRIDE"
+                :max="MAX_LAYOUT_OVERRIDE"
+                :step="1"
+                class="w-[96px]"
+                data-testid="backdrop-badge-margin-input"
+              />
+            </div>
+            <p class="text-xs text-muted-foreground">0 = auto scale, otherwise fixed px</p>
+          </div>
+          <div class="space-y-1">
+            <div class="flex items-center gap-3">
               <Label :for="inputId('backdrop-ratings-limit')">Max ratings</Label>
               <Input
                 :id="inputId('backdrop-ratings-limit')"
@@ -971,6 +1108,38 @@ const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
               />
             </div>
             <p class="text-xs text-muted-foreground">Range: {{ MIN_BADGE_SCALE }} to {{ MAX_BADGE_SCALE }}</p>
+          </div>
+          <div class="space-y-1">
+            <div class="flex items-center gap-3">
+              <Label :for="inputId('episode-badge-gap')">Badge gap</Label>
+              <Input
+                :id="inputId('episode-badge-gap')"
+                v-model.number="editEpisodeBadgeGap"
+                type="number"
+                :min="MIN_LAYOUT_OVERRIDE"
+                :max="MAX_LAYOUT_OVERRIDE"
+                :step="1"
+                class="w-[96px]"
+                data-testid="episode-badge-gap-input"
+              />
+            </div>
+            <p class="text-xs text-muted-foreground">0 = auto scale, otherwise fixed px</p>
+          </div>
+          <div class="space-y-1">
+            <div class="flex items-center gap-3">
+              <Label :for="inputId('episode-badge-margin')">Badge margin</Label>
+              <Input
+                :id="inputId('episode-badge-margin')"
+                v-model.number="editEpisodeBadgeMargin"
+                type="number"
+                :min="MIN_LAYOUT_OVERRIDE"
+                :max="MAX_LAYOUT_OVERRIDE"
+                :step="1"
+                class="w-[96px]"
+                data-testid="episode-badge-margin-input"
+              />
+            </div>
+            <p class="text-xs text-muted-foreground">0 = auto scale, otherwise fixed px</p>
           </div>
           <div class="space-y-1">
             <div class="flex items-center gap-3">

@@ -196,7 +196,17 @@ pub const SCHEMA_SQL: &[&str] = &[
         poster_badge_scale_override REAL NOT NULL DEFAULT 1.0,
         logo_badge_scale_override REAL NOT NULL DEFAULT 1.0,
         backdrop_badge_scale_override REAL NOT NULL DEFAULT 1.0,
-        episode_badge_scale_override REAL NOT NULL DEFAULT 1.0
+        episode_badge_scale_override REAL NOT NULL DEFAULT 1.0,
+        badge_gap              INTEGER NOT NULL DEFAULT 0,
+        badge_margin           INTEGER NOT NULL DEFAULT 0,
+        poster_badge_gap       INTEGER NOT NULL DEFAULT 0,
+        poster_badge_margin    INTEGER NOT NULL DEFAULT 0,
+        logo_badge_gap         INTEGER NOT NULL DEFAULT 0,
+        logo_badge_margin      INTEGER NOT NULL DEFAULT 0,
+        backdrop_badge_gap     INTEGER NOT NULL DEFAULT 0,
+        backdrop_badge_margin  INTEGER NOT NULL DEFAULT 0,
+        episode_badge_gap      INTEGER NOT NULL DEFAULT 0,
+        episode_badge_margin   INTEGER NOT NULL DEFAULT 0
     )",
 ];
 
@@ -358,6 +368,46 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
     ),
     (
         "ALTER TABLE api_key_settings ADD COLUMN episode_badge_scale_override REAL NOT NULL DEFAULT 1.0",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN badge_gap INTEGER NOT NULL DEFAULT 0",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN badge_margin INTEGER NOT NULL DEFAULT 0",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN poster_badge_gap INTEGER NOT NULL DEFAULT 0",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN poster_badge_margin INTEGER NOT NULL DEFAULT 0",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN logo_badge_gap INTEGER NOT NULL DEFAULT 0",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN logo_badge_margin INTEGER NOT NULL DEFAULT 0",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN backdrop_badge_gap INTEGER NOT NULL DEFAULT 0",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN backdrop_badge_margin INTEGER NOT NULL DEFAULT 0",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN episode_badge_gap INTEGER NOT NULL DEFAULT 0",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN episode_badge_margin INTEGER NOT NULL DEFAULT 0",
         "duplicate column",
     ),
 ];

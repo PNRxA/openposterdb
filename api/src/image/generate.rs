@@ -25,6 +25,14 @@ const BACKDROP_SIDE_MARGIN: u32 = 20;
 const MAX_BADGES_PER_ROW: usize = 3;
 const MAX_VERT_BADGES_PER_ROW: usize = 5;
 
+fn scaled_or_override(base: u32, badge_scale: f32, override_px: i32) -> u32 {
+    if override_px > 0 {
+        override_px as u32
+    } else {
+        (base as f32 * badge_scale).round() as u32
+    }
+}
+
 pub struct ImageParams<'a> {
     pub poster_path: &'a str,
     pub badges: &'a [RatingBadge],
@@ -48,6 +56,10 @@ pub struct ImageParams<'a> {
     pub tmdb_size: Arc<str>,
     /// Badge size — used to adjust max badges per row.
     pub badge_size: BadgeSize,
+    /// Fixed badge gap override in pixels (0 = auto scaled).
+    pub badge_gap_px: i32,
+    /// Fixed badge margin override in pixels (0 = auto scaled).
+    pub badge_margin_px: i32,
     /// When true, skip writing base poster images to disk (CDN handles caching).
     pub external_cache_only: bool,
 }
@@ -70,6 +82,8 @@ pub async fn generate_poster(params: ImageParams<'_>) -> Result<Vec<u8>, AppErro
         target_width,
         badge_scale,
         badge_size,
+        badge_gap_px,
+        badge_margin_px,
         tmdb_size,
         external_cache_only,
     } = params;
@@ -124,7 +138,21 @@ pub async fn generate_poster(params: ImageParams<'_>) -> Result<Vec<u8>, AppErro
     let badges = badges.to_vec();
     let font = font.clone();
     let buf = tokio::task::spawn_blocking(move || {
-        render_poster_sync(&poster_bytes, &badges, &font, quality, poster_position, badge_style, label_style, badge_direction, target_width, badge_scale, badge_size)
+        render_poster_sync_with_layout(
+            &poster_bytes,
+            &badges,
+            &font,
+            quality,
+            poster_position,
+            badge_style,
+            label_style,
+            badge_direction,
+            target_width,
+            badge_scale,
+            badge_size,
+            badge_gap_px,
+            badge_margin_px,
+        )
     })
     .await
     .map_err(|e| AppError::Other(e.to_string()))??;
@@ -142,11 +170,19 @@ pub async fn generate_poster(params: ImageParams<'_>) -> Result<Vec<u8>, AppErro
 }
 
 /// Overlay badges in a vertical column, positioned according to `position`.
-fn overlay_vertical_stack(canvas: &mut RgbaImage, badge_images: &[RgbaImage], position: BadgePosition, badge_scale: f32, side_margin_base: u32) {
-    let vert_spacing = (BADGE_VERT_SPACING as f32 * badge_scale).round() as u32;
-    let top_margin = (BADGE_TOP_MARGIN as f32 * badge_scale).round() as u32;
-    let bottom_margin = (BADGE_BOTTOM_MARGIN as f32 * badge_scale).round() as u32;
-    let side_margin = (side_margin_base as f32 * badge_scale).round() as u32;
+fn overlay_vertical_stack(
+    canvas: &mut RgbaImage,
+    badge_images: &[RgbaImage],
+    position: BadgePosition,
+    badge_scale: f32,
+    side_margin_base: u32,
+    badge_gap_px: i32,
+    badge_margin_px: i32,
+) {
+    let vert_spacing = scaled_or_override(BADGE_VERT_SPACING, badge_scale, badge_gap_px);
+    let top_margin = scaled_or_override(BADGE_TOP_MARGIN, badge_scale, badge_margin_px);
+    let bottom_margin = scaled_or_override(BADGE_BOTTOM_MARGIN, badge_scale, badge_margin_px);
+    let side_margin = scaled_or_override(side_margin_base, badge_scale, badge_margin_px);
 
     let total_badge_height: u32 = badge_images.iter().map(|b| b.height()).sum::<u32>()
         + vert_spacing * (badge_images.len() as u32).saturating_sub(1);
@@ -198,12 +234,21 @@ fn overlay_vertical_stack(canvas: &mut RgbaImage, badge_images: &[RgbaImage], po
 }
 
 /// Overlay badges in horizontal rows, positioned according to `position`.
-fn overlay_horizontal_rows(canvas: &mut RgbaImage, badge_images: &[RgbaImage], position: BadgePosition, max_per_row: usize, badge_scale: f32, side_margin_base: u32) {
-    let spacing = (BADGE_SPACING as f32 * badge_scale).round() as u32;
-    let row_spacing = (BADGE_ROW_SPACING as f32 * badge_scale).round() as u32;
-    let top_margin = (BADGE_TOP_MARGIN as f32 * badge_scale).round() as u32;
-    let bottom_margin = (BADGE_BOTTOM_MARGIN as f32 * badge_scale).round() as u32;
-    let side_margin = (side_margin_base as f32 * badge_scale).round() as u32;
+fn overlay_horizontal_rows(
+    canvas: &mut RgbaImage,
+    badge_images: &[RgbaImage],
+    position: BadgePosition,
+    max_per_row: usize,
+    badge_scale: f32,
+    side_margin_base: u32,
+    badge_gap_px: i32,
+    badge_margin_px: i32,
+) {
+    let spacing = scaled_or_override(BADGE_SPACING, badge_scale, badge_gap_px);
+    let row_spacing = scaled_or_override(BADGE_ROW_SPACING, badge_scale, badge_gap_px);
+    let top_margin = scaled_or_override(BADGE_TOP_MARGIN, badge_scale, badge_margin_px);
+    let bottom_margin = scaled_or_override(BADGE_BOTTOM_MARGIN, badge_scale, badge_margin_px);
+    let side_margin = scaled_or_override(side_margin_base, badge_scale, badge_margin_px);
 
     let rows: Vec<&[RgbaImage]> = badge_images.chunks(max_per_row).collect();
     let badge_height = badge_images.iter().map(|b| b.height()).max().unwrap_or(0);
@@ -287,6 +332,38 @@ pub fn render_poster_sync(
     badge_scale: f32,
     badge_size: BadgeSize,
 ) -> Result<Vec<u8>, AppError> {
+    render_poster_sync_with_layout(
+        poster_bytes,
+        badges,
+        font,
+        quality,
+        poster_position,
+        badge_style,
+        label_style,
+        badge_direction,
+        target_width,
+        badge_scale,
+        badge_size,
+        0,
+        0,
+    )
+}
+
+pub fn render_poster_sync_with_layout(
+    poster_bytes: &[u8],
+    badges: &[RatingBadge],
+    font: &FontArc,
+    quality: u8,
+    poster_position: BadgePosition,
+    badge_style: BadgeStyle,
+    label_style: LabelStyle,
+    badge_direction: BadgeDirection,
+    target_width: u32,
+    badge_scale: f32,
+    badge_size: BadgeSize,
+    badge_gap_px: i32,
+    badge_margin_px: i32,
+) -> Result<Vec<u8>, AppError> {
     let base = load_image_with_limits(poster_bytes)?;
 
     let base = if base.width() != target_width {
@@ -307,7 +384,15 @@ pub fn render_poster_sync(
         };
 
         if badge_direction.is_vertical() {
-            overlay_vertical_stack(&mut canvas, &badge_images, poster_position, badge_scale, BADGE_SIDE_MARGIN);
+            overlay_vertical_stack(
+                &mut canvas,
+                &badge_images,
+                poster_position,
+                badge_scale,
+                BADGE_SIDE_MARGIN,
+                badge_gap_px,
+                badge_margin_px,
+            );
         } else {
             let max_per_row = match badge_size {
                 BadgeSize::Large | BadgeSize::ExtraLarge => {
@@ -317,7 +402,16 @@ pub fn render_poster_sync(
                     if badge_style.is_vertical() { MAX_VERT_BADGES_PER_ROW } else { MAX_BADGES_PER_ROW }
                 }
             };
-            overlay_horizontal_rows(&mut canvas, &badge_images, poster_position, max_per_row, badge_scale, BADGE_SIDE_MARGIN);
+            overlay_horizontal_rows(
+                &mut canvas,
+                &badge_images,
+                poster_position,
+                max_per_row,
+                badge_scale,
+                BADGE_SIDE_MARGIN,
+                badge_gap_px,
+                badge_margin_px,
+            );
         }
     }
 
@@ -345,6 +439,30 @@ pub fn render_logo_sync(
     target_width: u32,
     badge_scale: f32,
 ) -> Result<Vec<u8>, AppError> {
+    render_logo_sync_with_layout(
+        logo_bytes,
+        badges,
+        font,
+        badge_style,
+        label_style,
+        target_width,
+        badge_scale,
+        0,
+        0,
+    )
+}
+
+pub fn render_logo_sync_with_layout(
+    logo_bytes: &[u8],
+    badges: &[RatingBadge],
+    font: &FontArc,
+    badge_style: BadgeStyle,
+    label_style: LabelStyle,
+    target_width: u32,
+    badge_scale: f32,
+    badge_gap_px: i32,
+    badge_margin_px: i32,
+) -> Result<Vec<u8>, AppError> {
     let base = load_image_with_limits(logo_bytes)?;
 
     let base = if base.width() != target_width {
@@ -371,9 +489,9 @@ pub fn render_logo_sync(
         return Ok(buf);
     }
 
-    let logo_badge_spacing = (LOGO_BADGE_SPACING as f32 * badge_scale).round() as u32;
-    let logo_badge_row_spacing = (LOGO_BADGE_ROW_SPACING as f32 * badge_scale).round() as u32;
-    let logo_spacing_below = (LOGO_SPACING_BELOW as f32 * badge_scale).round() as u32;
+    let logo_badge_spacing = scaled_or_override(LOGO_BADGE_SPACING, badge_scale, badge_gap_px);
+    let logo_badge_row_spacing = scaled_or_override(LOGO_BADGE_ROW_SPACING, badge_scale, badge_gap_px);
+    let logo_spacing_below = scaled_or_override(LOGO_SPACING_BELOW, badge_scale, badge_margin_px);
 
     if badge_style.is_vertical() {
         // Vertical badge shapes arranged in rows below the logo
@@ -497,6 +615,32 @@ pub async fn generate_logo(
     target_width: u32,
     badge_scale: f32,
 ) -> Result<Vec<u8>, AppError> {
+    generate_logo_with_layout(
+        logo_bytes,
+        badges,
+        font,
+        badge_style,
+        label_style,
+        render_semaphore,
+        target_width,
+        badge_scale,
+        0,
+        0,
+    ).await
+}
+
+pub async fn generate_logo_with_layout(
+    logo_bytes: Vec<u8>,
+    badges: Vec<RatingBadge>,
+    font: FontArc,
+    badge_style: BadgeStyle,
+    label_style: LabelStyle,
+    render_semaphore: Arc<Semaphore>,
+    target_width: u32,
+    badge_scale: f32,
+    badge_gap_px: i32,
+    badge_margin_px: i32,
+) -> Result<Vec<u8>, AppError> {
     if render_semaphore.available_permits() == 0 {
         tracing::debug!("render queue full, waiting for permit");
     }
@@ -505,7 +649,19 @@ pub async fn generate_logo(
     tracing::debug!("logo render started");
     let start = std::time::Instant::now();
 
-    let buf = tokio::task::spawn_blocking(move || render_logo_sync(&logo_bytes, &badges, &font, badge_style, label_style, target_width, badge_scale))
+    let buf = tokio::task::spawn_blocking(move || {
+        render_logo_sync_with_layout(
+            &logo_bytes,
+            &badges,
+            &font,
+            badge_style,
+            label_style,
+            target_width,
+            badge_scale,
+            badge_gap_px,
+            badge_margin_px,
+        )
+    })
         .await
         .map_err(|e| AppError::Other(e.to_string()))??;
 
@@ -525,6 +681,38 @@ pub fn render_backdrop_sync(
     target_width: u32,
     badge_scale: f32,
     _badge_size: BadgeSize,
+) -> Result<Vec<u8>, AppError> {
+    render_backdrop_sync_with_layout(
+        backdrop_bytes,
+        badges,
+        font,
+        quality,
+        position,
+        badge_style,
+        label_style,
+        badge_direction,
+        target_width,
+        badge_scale,
+        _badge_size,
+        0,
+        0,
+    )
+}
+
+pub fn render_backdrop_sync_with_layout(
+    backdrop_bytes: &[u8],
+    badges: &[RatingBadge],
+    font: &FontArc,
+    quality: u8,
+    position: BadgePosition,
+    badge_style: BadgeStyle,
+    label_style: LabelStyle,
+    badge_direction: BadgeDirection,
+    target_width: u32,
+    badge_scale: f32,
+    _badge_size: BadgeSize,
+    badge_gap_px: i32,
+    badge_margin_px: i32,
 ) -> Result<Vec<u8>, AppError> {
     let base = load_image_with_limits(backdrop_bytes)?;
 
@@ -546,10 +734,27 @@ pub fn render_backdrop_sync(
         };
 
         if badge_direction.is_vertical() {
-            overlay_vertical_stack(&mut canvas, &badge_images, position, badge_scale, BACKDROP_SIDE_MARGIN);
+            overlay_vertical_stack(
+                &mut canvas,
+                &badge_images,
+                position,
+                badge_scale,
+                BACKDROP_SIDE_MARGIN,
+                badge_gap_px,
+                badge_margin_px,
+            );
         } else {
             // Backdrops are wide (16:9) so all badges fit in a single row
-            overlay_horizontal_rows(&mut canvas, &badge_images, position, badge_images.len(), badge_scale, BACKDROP_SIDE_MARGIN);
+            overlay_horizontal_rows(
+                &mut canvas,
+                &badge_images,
+                position,
+                badge_images.len(),
+                badge_scale,
+                BACKDROP_SIDE_MARGIN,
+                badge_gap_px,
+                badge_margin_px,
+            );
         }
     }
 
@@ -576,6 +781,40 @@ pub async fn generate_backdrop(
     badge_scale: f32,
     badge_size: BadgeSize,
 ) -> Result<Vec<u8>, AppError> {
+    generate_backdrop_with_layout(
+        backdrop_bytes,
+        badges,
+        font,
+        quality,
+        position,
+        badge_style,
+        label_style,
+        badge_direction,
+        render_semaphore,
+        target_width,
+        badge_scale,
+        badge_size,
+        0,
+        0,
+    ).await
+}
+
+pub async fn generate_backdrop_with_layout(
+    backdrop_bytes: Vec<u8>,
+    badges: Vec<RatingBadge>,
+    font: FontArc,
+    quality: u8,
+    position: BadgePosition,
+    badge_style: BadgeStyle,
+    label_style: LabelStyle,
+    badge_direction: BadgeDirection,
+    render_semaphore: Arc<Semaphore>,
+    target_width: u32,
+    badge_scale: f32,
+    badge_size: BadgeSize,
+    badge_gap_px: i32,
+    badge_margin_px: i32,
+) -> Result<Vec<u8>, AppError> {
     if render_semaphore.available_permits() == 0 {
         tracing::debug!("render queue full, waiting for permit");
     }
@@ -584,7 +823,23 @@ pub async fn generate_backdrop(
     tracing::debug!("backdrop render started");
     let start = std::time::Instant::now();
 
-    let buf = tokio::task::spawn_blocking(move || render_backdrop_sync(&backdrop_bytes, &badges, &font, quality, position, badge_style, label_style, badge_direction, target_width, badge_scale, badge_size))
+    let buf = tokio::task::spawn_blocking(move || {
+        render_backdrop_sync_with_layout(
+            &backdrop_bytes,
+            &badges,
+            &font,
+            quality,
+            position,
+            badge_style,
+            label_style,
+            badge_direction,
+            target_width,
+            badge_scale,
+            badge_size,
+            badge_gap_px,
+            badge_margin_px,
+        )
+    })
         .await
         .map_err(|e| AppError::Other(e.to_string()))??;
 
@@ -607,6 +862,40 @@ pub fn render_episode_sync(
     badge_scale: f32,
     badge_size: BadgeSize,
     blur: bool,
+) -> Result<Vec<u8>, AppError> {
+    render_episode_sync_with_layout(
+        image_bytes,
+        badges,
+        font,
+        quality,
+        position,
+        badge_style,
+        label_style,
+        badge_direction,
+        target_width,
+        badge_scale,
+        badge_size,
+        blur,
+        0,
+        0,
+    )
+}
+
+pub fn render_episode_sync_with_layout(
+    image_bytes: &[u8],
+    badges: &[RatingBadge],
+    font: &FontArc,
+    quality: u8,
+    position: BadgePosition,
+    badge_style: BadgeStyle,
+    label_style: LabelStyle,
+    badge_direction: BadgeDirection,
+    target_width: u32,
+    badge_scale: f32,
+    badge_size: BadgeSize,
+    blur: bool,
+    badge_gap_px: i32,
+    badge_margin_px: i32,
 ) -> Result<Vec<u8>, AppError> {
     let base = image::load_from_memory(image_bytes)
         .map_err(AppError::Image)?;
@@ -639,7 +928,15 @@ pub fn render_episode_sync(
         };
 
         if badge_direction.is_vertical() {
-            overlay_vertical_stack(&mut canvas, &badge_images, position, badge_scale, BADGE_SIDE_MARGIN);
+            overlay_vertical_stack(
+                &mut canvas,
+                &badge_images,
+                position,
+                badge_scale,
+                BADGE_SIDE_MARGIN,
+                badge_gap_px,
+                badge_margin_px,
+            );
         } else {
             let max_per_row = match badge_size {
                 BadgeSize::Large | BadgeSize::ExtraLarge => {
@@ -649,7 +946,16 @@ pub fn render_episode_sync(
                     if badge_style.is_vertical() { MAX_VERT_BADGES_PER_ROW } else { MAX_BADGES_PER_ROW }
                 }
             };
-            overlay_horizontal_rows(&mut canvas, &badge_images, position, max_per_row, badge_scale, BADGE_SIDE_MARGIN);
+            overlay_horizontal_rows(
+                &mut canvas,
+                &badge_images,
+                position,
+                max_per_row,
+                badge_scale,
+                BADGE_SIDE_MARGIN,
+                badge_gap_px,
+                badge_margin_px,
+            );
         }
     }
 
@@ -1152,6 +1458,8 @@ mod tests {
             badge_scale: 1.0,
             tmdb_size: Arc::from("w500"),
             badge_size: BadgeSize::Medium,
+            badge_gap_px: 0,
+            badge_margin_px: 0,
             external_cache_only: false,
         })
         .await;
@@ -1187,6 +1495,8 @@ mod tests {
             badge_scale: 1.0,
             tmdb_size: Arc::from("w500"),
             badge_size: BadgeSize::Medium,
+            badge_gap_px: 0,
+            badge_margin_px: 0,
             external_cache_only: false,
         })
         .await;
