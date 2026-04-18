@@ -29,6 +29,7 @@ const defaultSettings = {
   logo_ratings_limit: 3,
   backdrop_ratings_limit: 3,
   poster_badge_style: 'h',
+  poster_badge_background_style: 'i',
   logo_badge_style: 'h',
   backdrop_badge_style: 'v',
   poster_label_style: 't',

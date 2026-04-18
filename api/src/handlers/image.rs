@@ -12,7 +12,7 @@ use crate::image::serve;
 use crate::services::db;
 use crate::services::db::{
     BadgeDirection, BadgeSize, BadgeStyle, LabelStyle, BadgePosition, ImageSource,
-    RenderSettings,
+    PosterBadgeBackgroundStyle, RenderSettings,
 };
 use crate::AppState;
 
@@ -94,6 +94,10 @@ pub struct ImageQuery {
     #[serde(default)]
     #[param(value_type = Option<String>)]
     pub badge_direction: Option<BadgeDirection>,
+    /// Poster badge background style: `i` (individual boxes) or `g` (grouped strip).
+    #[serde(default)]
+    #[param(value_type = Option<String>)]
+    pub badge_background_style: Option<PosterBadgeBackgroundStyle>,
     /// Badge anchor position: `bc`, `tc`, `l`, `r`, `tl`, `tr`, `bl`, `br`.
     #[serde(default)]
     #[param(value_type = Option<String>)]
@@ -124,6 +128,7 @@ impl ImageQuery {
             || self.badge_gap.is_some()
             || self.badge_margin.is_some()
             || self.badge_direction.is_some()
+            || self.badge_background_style.is_some()
             || self.position.is_some()
             || self.image_source.is_some()
             || self.textless.is_some()
@@ -324,6 +329,9 @@ fn apply_query_overrides(
     if kind == cache::ImageType::Poster {
         if let Some(dir) = query.badge_direction {
             s.poster_badge_direction = dir;
+        }
+        if let Some(bg_style) = query.badge_background_style {
+            s.poster_badge_background_style = bg_style;
         }
         if let Some(pos) = query.position {
             s.poster_position = pos;
@@ -755,6 +763,7 @@ mod tests {
             badge_gap: None,
             badge_margin: None,
             badge_direction: None,
+            badge_background_style: None,
             position: None,
             image_source: None,
             textless: None,
@@ -780,6 +789,7 @@ mod tests {
             label_style: Some(LabelStyle::Icon),
             badge_size: Some(BadgeSize::Large),
             badge_direction: Some(BadgeDirection::Horizontal),
+            badge_background_style: Some(PosterBadgeBackgroundStyle::Grouped),
             position: Some(BadgePosition::TopLeft),
             image_source: Some(ImageSource::Fanart),
             textless: Some(true),
@@ -794,6 +804,7 @@ mod tests {
         assert_eq!(result.poster_badge_size, BadgeSize::Large);
         assert_eq!(result.poster_badge_scale_override, 1.0);
         assert_eq!(result.poster_badge_direction, BadgeDirection::Horizontal);
+        assert_eq!(result.poster_badge_background_style, PosterBadgeBackgroundStyle::Grouped);
         assert_eq!(result.poster_position, BadgePosition::TopLeft);
         assert_eq!(result.image_source, ImageSource::Fanart);
         assert!(result.textless);

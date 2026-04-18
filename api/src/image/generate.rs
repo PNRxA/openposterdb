@@ -3,12 +3,14 @@ use std::sync::Arc;
 use ab_glyph::FontArc;
 use image::codecs::jpeg::JpegEncoder;
 use image::{imageops, DynamicImage, ImageDecoder, ImageReader, Limits, RgbaImage};
+use imageproc::drawing::draw_filled_rect_mut;
+use imageproc::rect::Rect;
 use tokio::sync::Semaphore;
 
 use crate::cache;
 use crate::error::AppError;
 use crate::image::badge;
-use crate::services::db::{BadgeDirection, BadgeSize, BadgeStyle, LabelStyle, BadgePosition};
+use crate::services::db::{BadgeDirection, BadgeSize, BadgeStyle, LabelStyle, BadgePosition, PosterBadgeBackgroundStyle};
 use crate::services::ratings::RatingBadge;
 use crate::services::tmdb::TmdbClient;
 
@@ -24,6 +26,7 @@ const BADGE_VERT_SPACING: u32 = 7;
 const BACKDROP_SIDE_MARGIN: u32 = 20;
 const MAX_BADGES_PER_ROW: usize = 3;
 const MAX_VERT_BADGES_PER_ROW: usize = 5;
+const GROUP_BG_ALPHA: u8 = 200;
 
 fn scaled_or_override(base: u32, badge_scale: f32, override_px: i32) -> u32 {
     if override_px >= 0 {
@@ -47,6 +50,7 @@ pub struct ImageParams<'a> {
     pub badge_style: BadgeStyle,
     pub label_style: LabelStyle,
     pub badge_direction: BadgeDirection,
+    pub badge_background_style: PosterBadgeBackgroundStyle,
     pub render_semaphore: Arc<Semaphore>,
     /// Target width for the output image. Defaults to 500 for posters.
     pub target_width: u32,
@@ -78,6 +82,7 @@ pub async fn generate_poster(params: ImageParams<'_>) -> Result<Vec<u8>, AppErro
         badge_style,
         label_style,
         badge_direction,
+        badge_background_style,
         render_semaphore,
         target_width,
         badge_scale,
@@ -147,6 +152,7 @@ pub async fn generate_poster(params: ImageParams<'_>) -> Result<Vec<u8>, AppErro
             badge_style,
             label_style,
             badge_direction,
+            badge_background_style,
             target_width,
             badge_scale,
             badge_size,
@@ -299,6 +305,186 @@ fn overlay_horizontal_rows(
     }
 }
 
+fn draw_group_background(canvas: &mut RgbaImage, x: i64, y: i64, width: u32, height: u32, badge_scale: f32) {
+    if width == 0 || height == 0 {
+        return;
+    }
+
+    let pad = (6.0 * badge_scale).round().max(2.0) as i64;
+    let x0 = (x - pad).max(0);
+    let y0 = (y - pad).max(0);
+    let x1 = (x + width as i64 + pad).min(canvas.width() as i64);
+    let y1 = (y + height as i64 + pad).min(canvas.height() as i64);
+
+    if x1 <= x0 || y1 <= y0 {
+        return;
+    }
+
+    draw_filled_rect_mut(
+        canvas,
+        Rect::at(x0 as i32, y0 as i32).of_size((x1 - x0) as u32, (y1 - y0) as u32),
+        image::Rgba([0, 0, 0, GROUP_BG_ALPHA]),
+    );
+}
+
+fn overlay_vertical_stack_grouped(
+    canvas: &mut RgbaImage,
+    badge_images: &[RgbaImage],
+    position: BadgePosition,
+    badge_scale: f32,
+    side_margin_base: u32,
+    badge_gap_px: i32,
+    badge_margin_px: i32,
+) {
+    if badge_images.is_empty() {
+        return;
+    }
+
+    let vert_spacing = scaled_or_override(BADGE_VERT_SPACING, badge_scale, badge_gap_px);
+    let top_margin = scaled_or_override(BADGE_TOP_MARGIN, badge_scale, badge_margin_px);
+    let bottom_margin = scaled_or_override(BADGE_BOTTOM_MARGIN, badge_scale, badge_margin_px);
+    let side_margin = scaled_or_override(side_margin_base, badge_scale, badge_margin_px);
+
+    let total_badge_height: u32 = badge_images.iter().map(|b| b.height()).sum::<u32>()
+        + vert_spacing * (badge_images.len() as u32).saturating_sub(1);
+    let max_badge_width: u32 = badge_images.iter().map(|b| b.width()).max().unwrap_or(0);
+    let canvas_w = canvas.width() as i64;
+    let canvas_h = canvas.height() as i64;
+    let total_badge_height_i = total_badge_height as i64;
+    let max_badge_width_i = max_badge_width as i64;
+    let top_margin_i = top_margin as i64;
+    let bottom_margin_i = bottom_margin as i64;
+    let side_margin_i = side_margin as i64;
+
+    let start_y = if position.is_top() {
+        top_margin_i
+    } else if position.is_bottom() {
+        canvas_h - total_badge_height_i - bottom_margin_i
+    } else {
+        (canvas_h - total_badge_height_i) / 2
+    };
+
+    let is_left = position.is_left();
+    let is_right = position.is_right();
+
+    let base_x = if is_left {
+        side_margin_i
+    } else if is_right {
+        canvas_w - max_badge_width_i - side_margin_i
+    } else {
+        (canvas_w - max_badge_width_i) / 2
+    };
+
+    draw_group_background(
+        canvas,
+        0,
+        start_y,
+        canvas.width(),
+        total_badge_height,
+        badge_scale,
+    );
+
+    let mut y = start_y;
+    for badge_img in badge_images {
+        let badge_w = badge_img.width() as i64;
+        let bx = if is_left {
+            base_x
+        } else if is_right {
+            base_x + (max_badge_width_i - badge_w)
+        } else {
+            base_x + (max_badge_width_i - badge_w) / 2
+        };
+        imageops::overlay(canvas, badge_img, bx, y);
+        y += badge_img.height() as i64 + vert_spacing as i64;
+    }
+}
+
+fn overlay_horizontal_rows_grouped(
+    canvas: &mut RgbaImage,
+    badge_images: &[RgbaImage],
+    position: BadgePosition,
+    max_per_row: usize,
+    badge_scale: f32,
+    side_margin_base: u32,
+    badge_gap_px: i32,
+    badge_margin_px: i32,
+) {
+    if badge_images.is_empty() {
+        return;
+    }
+
+    let spacing = scaled_or_override(BADGE_SPACING, badge_scale, badge_gap_px);
+    let row_spacing = scaled_or_override(BADGE_ROW_SPACING, badge_scale, badge_gap_px);
+    let top_margin = scaled_or_override(BADGE_TOP_MARGIN, badge_scale, badge_margin_px);
+    let bottom_margin = scaled_or_override(BADGE_BOTTOM_MARGIN, badge_scale, badge_margin_px);
+    let side_margin = scaled_or_override(side_margin_base, badge_scale, badge_margin_px);
+
+    let rows: Vec<&[RgbaImage]> = badge_images.chunks(max_per_row).collect();
+    let badge_height = badge_images.iter().map(|b| b.height()).max().unwrap_or(0);
+    let total_height = badge_height * rows.len() as u32
+        + row_spacing * (rows.len() as u32).saturating_sub(1);
+    let canvas_w = canvas.width() as i64;
+    let canvas_h = canvas.height() as i64;
+    let total_height_i = total_height as i64;
+    let badge_height_i = badge_height as i64;
+    let top_margin_i = top_margin as i64;
+    let bottom_margin_i = bottom_margin as i64;
+    let side_margin_i = side_margin as i64;
+
+    let start_y = if position.is_top() {
+        top_margin_i
+    } else if position.is_bottom() {
+        canvas_h - total_height_i - bottom_margin_i
+    } else {
+        (canvas_h - total_height_i) / 2
+    };
+
+    let mut placements: Vec<(i64, i64, u32, u32)> = Vec::new();
+
+    for (row_idx, row) in rows.iter().enumerate() {
+        let row_w: u32 = row.iter().map(|b| b.width()).sum::<u32>()
+            + spacing * (row.len() as u32).saturating_sub(1);
+        let is_left = position.is_left();
+        let is_right = position.is_right();
+
+        let mut x = if is_left {
+            side_margin_i
+        } else if is_right {
+            canvas_w - row_w as i64 - side_margin_i
+        } else {
+            (canvas_w - row_w as i64) / 2
+        };
+
+        let y = start_y + row_idx as i64 * (badge_height_i + row_spacing as i64);
+
+        for badge_img in *row {
+            placements.push((x, y, badge_img.width(), badge_img.height()));
+            x += badge_img.width() as i64 + spacing as i64;
+        }
+    }
+
+    if let Some((_, first_y, _, first_h)) = placements.first().copied() {
+        let mut min_y = first_y;
+        let mut max_y = first_y + first_h as i64;
+        for (_, y, _, h) in placements.iter().copied().skip(1) {
+            min_y = min_y.min(y);
+            max_y = max_y.max(y + h as i64);
+        }
+        draw_group_background(
+            canvas,
+            0,
+            min_y,
+            canvas.width(),
+            (max_y - min_y) as u32,
+            badge_scale,
+        );
+    }
+
+    for ((x, y, _, _), badge_img) in placements.into_iter().zip(badge_images.iter()) {
+        imageops::overlay(canvas, badge_img, x, y);
+    }
+}
+
 /// Maximum total pixels allowed for a decoded source image (width * height).
 /// 8192x8192 = 67M pixels (~256 MB as RGBA) is generous for poster/backdrop art
 /// while preventing OOM from crafted images with extreme dimensions.
@@ -341,6 +527,7 @@ pub fn render_poster_sync(
         badge_style,
         label_style,
         badge_direction,
+        PosterBadgeBackgroundStyle::Individual,
         target_width,
         badge_scale,
         badge_size,
@@ -358,6 +545,7 @@ pub fn render_poster_sync_with_layout(
     badge_style: BadgeStyle,
     label_style: LabelStyle,
     badge_direction: BadgeDirection,
+    badge_background_style: PosterBadgeBackgroundStyle,
     target_width: u32,
     badge_scale: f32,
     badge_size: BadgeSize,
@@ -384,15 +572,27 @@ pub fn render_poster_sync_with_layout(
         };
 
         if badge_direction.is_vertical() {
-            overlay_vertical_stack(
-                &mut canvas,
-                &badge_images,
-                poster_position,
-                badge_scale,
-                BADGE_SIDE_MARGIN,
-                badge_gap_px,
-                badge_margin_px,
-            );
+            if badge_background_style.is_grouped() {
+                overlay_vertical_stack_grouped(
+                    &mut canvas,
+                    &badge_images,
+                    poster_position,
+                    badge_scale,
+                    BADGE_SIDE_MARGIN,
+                    badge_gap_px,
+                    badge_margin_px,
+                );
+            } else {
+                overlay_vertical_stack(
+                    &mut canvas,
+                    &badge_images,
+                    poster_position,
+                    badge_scale,
+                    BADGE_SIDE_MARGIN,
+                    badge_gap_px,
+                    badge_margin_px,
+                );
+            }
         } else {
             let max_per_row = match badge_size {
                 BadgeSize::Large | BadgeSize::ExtraLarge => {
@@ -402,16 +602,29 @@ pub fn render_poster_sync_with_layout(
                     if badge_style.is_vertical() { MAX_VERT_BADGES_PER_ROW } else { MAX_BADGES_PER_ROW }
                 }
             };
-            overlay_horizontal_rows(
-                &mut canvas,
-                &badge_images,
-                poster_position,
-                max_per_row,
-                badge_scale,
-                BADGE_SIDE_MARGIN,
-                badge_gap_px,
-                badge_margin_px,
-            );
+            if badge_background_style.is_grouped() {
+                overlay_horizontal_rows_grouped(
+                    &mut canvas,
+                    &badge_images,
+                    poster_position,
+                    max_per_row,
+                    badge_scale,
+                    BADGE_SIDE_MARGIN,
+                    badge_gap_px,
+                    badge_margin_px,
+                );
+            } else {
+                overlay_horizontal_rows(
+                    &mut canvas,
+                    &badge_images,
+                    poster_position,
+                    max_per_row,
+                    badge_scale,
+                    BADGE_SIDE_MARGIN,
+                    badge_gap_px,
+                    badge_margin_px,
+                );
+            }
         }
     }
 
@@ -1453,6 +1666,7 @@ mod tests {
             badge_style: BadgeStyle::Horizontal,
             label_style: LabelStyle::Text,
             badge_direction: BadgeDirection::Horizontal,
+            badge_background_style: PosterBadgeBackgroundStyle::Individual,
             render_semaphore: sem.clone(),
             target_width: 500,
             badge_scale: 1.0,
@@ -1490,6 +1704,7 @@ mod tests {
             badge_style: BadgeStyle::Horizontal,
             label_style: LabelStyle::Text,
             badge_direction: BadgeDirection::Horizontal,
+            badge_background_style: PosterBadgeBackgroundStyle::Individual,
             render_semaphore: sem,
             target_width: 500,
             badge_scale: 1.0,

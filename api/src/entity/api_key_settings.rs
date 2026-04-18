@@ -14,6 +14,7 @@ pub struct Model {
     pub logo_ratings_limit: i32,
     pub backdrop_ratings_limit: i32,
     pub poster_badge_style: String,
+    pub poster_badge_background_style: String,
     pub logo_badge_style: String,
     pub backdrop_badge_style: String,
     pub poster_label_style: String,

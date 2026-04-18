@@ -160,6 +160,39 @@ const STYLE_DEFAULT: &str = "d";
 const LABEL_ICON: &str = "i";
 const LABEL_TEXT: &str = "t";
 const LABEL_OFFICIAL: &str = "o";
+const BADGE_BG_INDIVIDUAL: &str = "i";
+const BADGE_BG_GROUPED: &str = "g";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PosterBadgeBackgroundStyle {
+    Individual,
+    Grouped,
+}
+
+impl PosterBadgeBackgroundStyle {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Individual => BADGE_BG_INDIVIDUAL,
+            Self::Grouped => BADGE_BG_GROUPED,
+        }
+    }
+
+    pub fn parse(s: &str) -> Result<Self, AppError> {
+        match s {
+            BADGE_BG_INDIVIDUAL => Ok(Self::Individual),
+            BADGE_BG_GROUPED => Ok(Self::Grouped),
+            _ => Err(AppError::BadRequest(
+                format!("poster_badge_background_style must be '{BADGE_BG_INDIVIDUAL}' or '{BADGE_BG_GROUPED}'"),
+            )),
+        }
+    }
+
+    pub fn is_grouped(self) -> bool {
+        self == Self::Grouped
+    }
+}
+
+impl_str_enum!(PosterBadgeBackgroundStyle);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LabelStyle {
@@ -443,6 +476,10 @@ pub fn default_poster_position() -> BadgePosition {
 
 pub fn default_poster_badge_style() -> BadgeStyle {
     BadgeStyle::Default
+}
+
+pub fn default_poster_badge_background_style() -> PosterBadgeBackgroundStyle {
+    PosterBadgeBackgroundStyle::Individual
 }
 
 pub fn default_logo_badge_style() -> BadgeStyle {
@@ -1758,6 +1795,7 @@ pub struct UpsertApiKeySettings<'a> {
     pub logo_ratings_limit: i32,
     pub backdrop_ratings_limit: i32,
     pub poster_badge_style: &'a str,
+    pub poster_badge_background_style: &'a str,
     pub logo_badge_style: &'a str,
     pub backdrop_badge_style: &'a str,
     pub poster_label_style: &'a str,
@@ -1805,6 +1843,7 @@ pub async fn upsert_api_key_settings(
         logo_ratings_limit: Set(params.logo_ratings_limit),
         backdrop_ratings_limit: Set(params.backdrop_ratings_limit),
         poster_badge_style: Set(params.poster_badge_style.to_string()),
+        poster_badge_background_style: Set(params.poster_badge_background_style.to_string()),
         logo_badge_style: Set(params.logo_badge_style.to_string()),
         backdrop_badge_style: Set(params.backdrop_badge_style.to_string()),
         poster_label_style: Set(params.poster_label_style.to_string()),
@@ -1849,6 +1888,7 @@ pub async fn upsert_api_key_settings(
                     api_key_settings::Column::LogoRatingsLimit,
                     api_key_settings::Column::BackdropRatingsLimit,
                     api_key_settings::Column::PosterBadgeStyle,
+                    api_key_settings::Column::PosterBadgeBackgroundStyle,
                     api_key_settings::Column::LogoBadgeStyle,
                     api_key_settings::Column::BackdropBadgeStyle,
                     api_key_settings::Column::PosterLabelStyle,
@@ -1913,6 +1953,7 @@ pub struct RenderSettings {
     pub logo_ratings_limit: i32,
     pub backdrop_ratings_limit: i32,
     pub poster_badge_style: BadgeStyle,
+    pub poster_badge_background_style: PosterBadgeBackgroundStyle,
     pub logo_badge_style: BadgeStyle,
     pub backdrop_badge_style: BadgeStyle,
     pub poster_label_style: LabelStyle,
@@ -1962,6 +2003,7 @@ impl Default for RenderSettings {
             logo_ratings_limit: default_logo_backdrop_ratings_limit(),
             backdrop_ratings_limit: default_logo_backdrop_ratings_limit(),
             poster_badge_style: BadgeStyle::Default,
+            poster_badge_background_style: default_poster_badge_background_style(),
             logo_badge_style: BadgeStyle::Vertical,
             backdrop_badge_style: BadgeStyle::Vertical,
             poster_label_style: LabelStyle::Official,
@@ -2074,6 +2116,7 @@ pub fn parse_global_render_settings(globals: &HashMap<String, String>) -> Render
             .and_then(|v| v.parse().ok())
             .unwrap_or(defaults.backdrop_ratings_limit),
         poster_badge_style: global_or(globals, "poster_badge_style", BadgeStyle::parse, defaults.poster_badge_style),
+        poster_badge_background_style: global_or(globals, "poster_badge_background_style", PosterBadgeBackgroundStyle::parse, defaults.poster_badge_background_style),
         logo_badge_style: global_or(globals, "logo_badge_style", BadgeStyle::parse, defaults.logo_badge_style),
         backdrop_badge_style: global_or(globals, "backdrop_badge_style", BadgeStyle::parse, defaults.backdrop_badge_style),
         poster_label_style: global_or(globals, "poster_label_style", LabelStyle::parse, defaults.poster_label_style),
@@ -2132,6 +2175,7 @@ pub async fn get_effective_render_settings(
                 logo_ratings_limit: s.logo_ratings_limit,
                 backdrop_ratings_limit: s.backdrop_ratings_limit,
                 poster_badge_style: parse_setting_or_default(&s.poster_badge_style, "poster_badge_style", BadgeStyle::parse, BadgeStyle::Default),
+                poster_badge_background_style: parse_setting_or_default(&s.poster_badge_background_style, "poster_badge_background_style", PosterBadgeBackgroundStyle::parse, default_poster_badge_background_style()),
                 logo_badge_style: parse_setting_or_default(&s.logo_badge_style, "logo_badge_style", BadgeStyle::parse, BadgeStyle::Vertical),
                 backdrop_badge_style: parse_setting_or_default(&s.backdrop_badge_style, "backdrop_badge_style", BadgeStyle::parse, BadgeStyle::Vertical),
                 poster_label_style: parse_setting_or_default(&s.poster_label_style, "poster_label_style", LabelStyle::parse, LabelStyle::Official),

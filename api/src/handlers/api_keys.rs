@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 use super::auth::AuthUser;
 use super::middleware::ApiKeyUser;
 use crate::error::AppError;
-use crate::services::db::{self, default_ratings_limit, default_logo_backdrop_ratings_limit, default_ratings_order, BadgeDirection, BadgeSize, BadgeStyle, LabelStyle, BadgePosition, ImageSource};
+use crate::services::db::{self, default_ratings_limit, default_logo_backdrop_ratings_limit, default_ratings_order, BadgeDirection, BadgeSize, BadgeStyle, LabelStyle, BadgePosition, ImageSource, PosterBadgeBackgroundStyle};
 use crate::services::validation;
 use crate::AppState;
 
@@ -104,6 +104,7 @@ pub struct RenderSettingsResponse {
     pub logo_ratings_limit: i32,
     pub backdrop_ratings_limit: i32,
     pub poster_badge_style: BadgeStyle,
+    pub poster_badge_background_style: PosterBadgeBackgroundStyle,
     pub logo_badge_style: BadgeStyle,
     pub backdrop_badge_style: BadgeStyle,
     pub poster_label_style: LabelStyle,
@@ -160,6 +161,7 @@ fn settings_to_response(settings: &db::RenderSettings, fanart_available: bool) -
         logo_ratings_limit: settings.logo_ratings_limit,
         backdrop_ratings_limit: settings.backdrop_ratings_limit,
         poster_badge_style: settings.poster_badge_style,
+        poster_badge_background_style: settings.poster_badge_background_style,
         logo_badge_style: settings.logo_badge_style,
         backdrop_badge_style: settings.backdrop_badge_style,
         poster_label_style: settings.poster_label_style,
@@ -213,6 +215,8 @@ pub struct UpdateSettingsRequest {
     pub backdrop_ratings_limit: i32,
     #[serde(default = "db::default_poster_badge_style")]
     pub poster_badge_style: BadgeStyle,
+    #[serde(default = "db::default_poster_badge_background_style")]
+    pub poster_badge_background_style: PosterBadgeBackgroundStyle,
     #[serde(default = "db::default_logo_badge_style")]
     pub logo_badge_style: BadgeStyle,
     #[serde(default = "db::default_backdrop_badge_style")]
@@ -287,6 +291,7 @@ fn build_upsert(id: i32, req: &UpdateSettingsRequest) -> db::UpsertApiKeySetting
         logo_ratings_limit: req.logo_ratings_limit,
         backdrop_ratings_limit: req.backdrop_ratings_limit,
         poster_badge_style: req.poster_badge_style.as_str(),
+        poster_badge_background_style: req.poster_badge_background_style.as_str(),
         logo_badge_style: req.logo_badge_style.as_str(),
         backdrop_badge_style: req.backdrop_badge_style.as_str(),
         poster_label_style: req.poster_label_style.as_str(),

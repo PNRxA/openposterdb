@@ -187,6 +187,7 @@ pub const SCHEMA_SQL: &[&str] = &[
         logo_ratings_limit     INTEGER NOT NULL DEFAULT 5,
         backdrop_ratings_limit INTEGER NOT NULL DEFAULT 5,
         poster_badge_style     TEXT NOT NULL DEFAULT 'h',
+        poster_badge_background_style TEXT NOT NULL DEFAULT 'i',
         logo_badge_style       TEXT NOT NULL DEFAULT 'v',
         backdrop_badge_style   TEXT NOT NULL DEFAULT 'v',
         poster_label_style     TEXT NOT NULL DEFAULT 'i',
@@ -240,6 +241,10 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
     ),
     (
         "ALTER TABLE api_key_settings ADD COLUMN poster_badge_style TEXT NOT NULL DEFAULT 'h'",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN poster_badge_background_style TEXT NOT NULL DEFAULT 'i'",
         "duplicate column",
     ),
     (

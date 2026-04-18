@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::cache;
 use crate::error::AppError;
 use crate::image::serve::{self, LogoBackdropKind};
-use crate::services::db::{self, default_ratings_limit, default_logo_backdrop_ratings_limit, default_ratings_order, BadgeDirection, BadgeSize, BadgeStyle, LabelStyle, BadgePosition, ImageSource};
+use crate::services::db::{self, default_ratings_limit, default_logo_backdrop_ratings_limit, default_ratings_order, BadgeDirection, BadgeSize, BadgeStyle, LabelStyle, BadgePosition, ImageSource, PosterBadgeBackgroundStyle};
 use crate::AppState;
 
 #[derive(Serialize)]
@@ -122,6 +122,7 @@ pub struct GlobalSettingsResponse {
     pub logo_ratings_limit: i32,
     pub backdrop_ratings_limit: i32,
     pub poster_badge_style: BadgeStyle,
+    pub poster_badge_background_style: PosterBadgeBackgroundStyle,
     pub logo_badge_style: BadgeStyle,
     pub backdrop_badge_style: BadgeStyle,
     pub poster_label_style: LabelStyle,
@@ -181,6 +182,7 @@ pub async fn get_settings(
         logo_ratings_limit: settings.logo_ratings_limit,
         backdrop_ratings_limit: settings.backdrop_ratings_limit,
         poster_badge_style: settings.poster_badge_style,
+        poster_badge_background_style: settings.poster_badge_background_style,
         logo_badge_style: settings.logo_badge_style,
         backdrop_badge_style: settings.backdrop_badge_style,
         poster_label_style: settings.poster_label_style,
@@ -235,6 +237,8 @@ pub struct UpdateGlobalSettingsRequest {
     pub backdrop_ratings_limit: i32,
     #[serde(default = "db::default_poster_badge_style")]
     pub poster_badge_style: BadgeStyle,
+    #[serde(default = "db::default_poster_badge_background_style")]
+    pub poster_badge_background_style: PosterBadgeBackgroundStyle,
     #[serde(default = "db::default_logo_badge_style")]
     pub logo_badge_style: BadgeStyle,
     #[serde(default = "db::default_backdrop_badge_style")]
@@ -349,6 +353,7 @@ pub async fn update_settings(
         ("logo_ratings_limit", &logo_limit_str),
         ("backdrop_ratings_limit", &backdrop_limit_str),
         ("poster_badge_style", req.poster_badge_style.as_str()),
+        ("poster_badge_background_style", req.poster_badge_background_style.as_str()),
         ("logo_badge_style", req.logo_badge_style.as_str()),
         ("backdrop_badge_style", req.backdrop_badge_style.as_str()),
         ("poster_label_style", req.poster_label_style.as_str()),

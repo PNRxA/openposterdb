@@ -99,6 +99,11 @@ pub fn badge_direction_cache_suffix(dir: &str) -> String {
     format!(".d{dir}")
 }
 
+/// Returns a cache key suffix for poster badge background style.
+pub fn badge_background_style_cache_suffix(style: &str) -> String {
+    format!(".bg{style}")
+}
+
 /// Returns a cache key suffix for fractional badge scaling overrides.
 ///
 /// The suffix is omitted when `scale == 1.0` (no override). Values are encoded
@@ -189,6 +194,7 @@ pub fn settings_cache_suffix_with_ratings(
         logo_ratings_limit: _,
         backdrop_ratings_limit: _,
         poster_badge_style: _,
+        poster_badge_background_style: _,
         logo_badge_style: _,
         backdrop_badge_style: _,
         poster_label_style: _,
@@ -231,11 +237,12 @@ pub fn settings_cache_suffix_with_ratings(
             let bs = badge_style_cache_suffix(settings.poster_badge_style.as_str());
             let ls = label_style_cache_suffix(settings.poster_label_style.as_str());
             let bd = badge_direction_cache_suffix(settings.poster_badge_direction.as_str());
+            let bbg = badge_background_style_cache_suffix(settings.poster_badge_background_style.as_str());
             let bsz = settings.poster_badge_size.cache_suffix();
             let bso = badge_scale_override_cache_suffix(settings.poster_badge_scale_override);
             let bg = badge_gap_cache_suffix(settings.poster_badge_gap);
             let bm = badge_margin_cache_suffix(settings.poster_badge_margin);
-            format!("{rs}{ps}{bs}{ls}{bd}{bsz}{bso}{bg}{bm}{is_suffix}")
+            format!("{rs}{ps}{bs}{ls}{bd}{bbg}{bsz}{bso}{bg}{bm}{is_suffix}")
         }
         cache::ImageType::Logo => {
             let bs = badge_style_cache_suffix(settings.logo_badge_style.as_str());
@@ -1394,6 +1401,7 @@ async fn generate_poster_with_source(
         badge_style: settings.poster_badge_style,
         label_style: settings.poster_label_style,
         badge_direction: settings.poster_badge_direction,
+        badge_background_style: settings.poster_badge_background_style,
         render_semaphore: state.render_semaphore.clone(),
         target_width,
         badge_scale,

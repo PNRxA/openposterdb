@@ -28,6 +28,7 @@ export interface RenderSettings {
   logo_ratings_limit: number
   backdrop_ratings_limit: number
   poster_badge_style: string
+  poster_badge_background_style: string
   logo_badge_style: string
   backdrop_badge_style: string
   poster_label_style: string
@@ -66,7 +67,7 @@ const props = defineProps<{
   loadSettings: () => Promise<RenderSettings | null>
   saveSettings: (s: SaveSettingsPayload) => Promise<string | null>
   resetSettings?: () => Promise<boolean>
-  fetchPreview: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string, badgeSize?: string, badgeScale?: number, badgeGap?: number, badgeMargin?: number) => Promise<Response>
+  fetchPreview: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, badgeBackgroundStyle?: string, labelStyle?: string, badgeDirection?: string, badgeSize?: string, badgeScale?: number, badgeGap?: number, badgeMargin?: number) => Promise<Response>
   fetchLogoPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, badgeScale?: number, badgeGap?: number, badgeMargin?: number) => Promise<Response>
   fetchBackdropPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, badgeScale?: number, badgeGap?: number, badgeMargin?: number) => Promise<Response>
   fetchEpisodePreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, blur?: boolean, badgeScale?: number, badgeGap?: number, badgeMargin?: number) => Promise<Response>
@@ -114,6 +115,7 @@ const editPosterPosition = ref(props.settings.poster_position || 'bc')
 const editLogoRatingsLimit = ref(props.settings.logo_ratings_limit ?? 3)
 const editBackdropRatingsLimit = ref(props.settings.backdrop_ratings_limit ?? 3)
 const editPosterBadgeStyle = ref(props.settings.poster_badge_style || 'd')
+const editPosterBadgeBackgroundStyle = ref(props.settings.poster_badge_background_style || 'i')
 const editLogoBadgeStyle = ref(props.settings.logo_badge_style || 'v')
 const editBackdropBadgeStyle = ref(props.settings.backdrop_badge_style || 'v')
 const editPosterLabelStyle = ref(props.settings.poster_label_style || 'o')
@@ -163,6 +165,7 @@ function applySettings(s: RenderSettings) {
   editLogoRatingsLimit.value = s.logo_ratings_limit ?? 3
   editBackdropRatingsLimit.value = s.backdrop_ratings_limit ?? 3
   editPosterBadgeStyle.value = s.poster_badge_style || 'd'
+  editPosterBadgeBackgroundStyle.value = s.poster_badge_background_style || 'i'
   editLogoBadgeStyle.value = s.logo_badge_style || 'v'
   editBackdropBadgeStyle.value = s.backdrop_badge_style || 'v'
   editPosterLabelStyle.value = s.poster_label_style || 'o'
@@ -246,6 +249,7 @@ async function autoSave() {
       logo_ratings_limit: editLogoRatingsLimit.value,
       backdrop_ratings_limit: editBackdropRatingsLimit.value,
       poster_badge_style: editPosterBadgeStyle.value,
+      poster_badge_background_style: editPosterBadgeBackgroundStyle.value,
       logo_badge_style: editLogoBadgeStyle.value,
       backdrop_badge_style: editBackdropBadgeStyle.value,
       poster_label_style: editPosterLabelStyle.value,
@@ -302,7 +306,7 @@ async function autoSave() {
 
 // Auto-save on any setting change
 watch(
-  [editSource, editLang, editTextless, editRatingsLimit, editRatingsOrder, editPosterPosition, editLogoRatingsLimit, editBackdropRatingsLimit, editPosterBadgeStyle, editLogoBadgeStyle, editBackdropBadgeStyle, editPosterLabelStyle, editLogoLabelStyle, editBackdropLabelStyle, editPosterBadgeDirection, editPosterBadgeSize, editPosterBadgeScaleOverride, editLogoBadgeSize, editLogoBadgeScaleOverride, editBackdropBadgeSize, editBackdropBadgeScaleOverride, editBackdropPosition, editBackdropBadgeDirection, editEpisodeRatingsLimit, editEpisodeBadgeStyle, editEpisodeLabelStyle, editEpisodeBadgeSize, editEpisodeBadgeScaleOverride, editEpisodePosition, editEpisodeBadgeDirection, editEpisodeBlur, editPosterBadgeGap, editPosterBadgeMargin, editLogoBadgeGap, editLogoBadgeMargin, editBackdropBadgeGap, editBackdropBadgeMargin, editEpisodeBadgeGap, editEpisodeBadgeMargin, editPosterBadgeGapAuto, editPosterBadgeMarginAuto, editLogoBadgeGapAuto, editLogoBadgeMarginAuto, editBackdropBadgeGapAuto, editBackdropBadgeMarginAuto, editEpisodeBadgeGapAuto, editEpisodeBadgeMarginAuto],
+  [editSource, editLang, editTextless, editRatingsLimit, editRatingsOrder, editPosterPosition, editLogoRatingsLimit, editBackdropRatingsLimit, editPosterBadgeStyle, editPosterBadgeBackgroundStyle, editLogoBadgeStyle, editBackdropBadgeStyle, editPosterLabelStyle, editLogoLabelStyle, editBackdropLabelStyle, editPosterBadgeDirection, editPosterBadgeSize, editPosterBadgeScaleOverride, editLogoBadgeSize, editLogoBadgeScaleOverride, editBackdropBadgeSize, editBackdropBadgeScaleOverride, editBackdropPosition, editBackdropBadgeDirection, editEpisodeRatingsLimit, editEpisodeBadgeStyle, editEpisodeLabelStyle, editEpisodeBadgeSize, editEpisodeBadgeScaleOverride, editEpisodePosition, editEpisodeBadgeDirection, editEpisodeBlur, editPosterBadgeGap, editPosterBadgeMargin, editLogoBadgeGap, editLogoBadgeMargin, editBackdropBadgeGap, editBackdropBadgeMargin, editEpisodeBadgeGap, editEpisodeBadgeMargin, editPosterBadgeGapAuto, editPosterBadgeMarginAuto, editLogoBadgeGapAuto, editLogoBadgeMarginAuto, editBackdropBadgeGapAuto, editBackdropBadgeMarginAuto, editEpisodeBadgeGapAuto, editEpisodeBadgeMarginAuto],
   () => {
     if (syncing) return
     autoSave()
@@ -361,15 +365,15 @@ function onPreviewLoad(state: PreviewState, e: Event) {
 
 async function fetchPreviewImage(
   state: PreviewState,
-  fetcher: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string, badgeSize?: string, badgeScale?: number, badgeGap?: number, badgeMargin?: number) => Promise<Response>,
-  extraArgs?: { posterPosition?: string; badgeStyle?: string; labelStyle?: string; badgeDirection?: string; badgeSize?: string; badgeScale?: number; badgeGap?: number; badgeMargin?: number },
+  fetcher: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, badgeBackgroundStyle?: string, labelStyle?: string, badgeDirection?: string, badgeSize?: string, badgeScale?: number, badgeGap?: number, badgeMargin?: number) => Promise<Response>,
+  extraArgs?: { posterPosition?: string; badgeStyle?: string; badgeBackgroundStyle?: string; labelStyle?: string; badgeDirection?: string; badgeSize?: string; badgeScale?: number; badgeGap?: number; badgeMargin?: number },
 ) {
   state.loading = true
   state.error = false
   const generation = ++state.generation
 
   try {
-    const res = await fetcher(editRatingsLimit.value, editRatingsOrder.value.join(','), extraArgs?.posterPosition, extraArgs?.badgeStyle, extraArgs?.labelStyle, extraArgs?.badgeDirection, extraArgs?.badgeSize, extraArgs?.badgeScale, extraArgs?.badgeGap, extraArgs?.badgeMargin)
+    const res = await fetcher(editRatingsLimit.value, editRatingsOrder.value.join(','), extraArgs?.posterPosition, extraArgs?.badgeStyle, extraArgs?.badgeBackgroundStyle, extraArgs?.labelStyle, extraArgs?.badgeDirection, extraArgs?.badgeSize, extraArgs?.badgeScale, extraArgs?.badgeGap, extraArgs?.badgeMargin)
     if (generation !== state.generation) return
     if (!res.ok) {
       state.error = true
@@ -394,7 +398,7 @@ let backdropPreviewTimer: ReturnType<typeof setTimeout> | null = null
 let episodePreviewTimer: ReturnType<typeof setTimeout> | null = null
 
 function updatePosterPreview() {
-  fetchPreviewImage(posterPreview.value, props.fetchPreview, { posterPosition: editPosterPosition.value, badgeStyle: editPosterBadgeStyle.value, labelStyle: editPosterLabelStyle.value, badgeDirection: editPosterBadgeDirection.value, badgeSize: editPosterBadgeSize.value, badgeScale: clampBadgeScale(editPosterBadgeScaleOverride.value), badgeGap: effectiveLayoutOverride(editPosterBadgeGapAuto.value, editPosterBadgeGap.value), badgeMargin: effectiveLayoutOverride(editPosterBadgeMarginAuto.value, editPosterBadgeMargin.value) })
+  fetchPreviewImage(posterPreview.value, props.fetchPreview, { posterPosition: editPosterPosition.value, badgeStyle: editPosterBadgeStyle.value, badgeBackgroundStyle: editPosterBadgeBackgroundStyle.value, labelStyle: editPosterLabelStyle.value, badgeDirection: editPosterBadgeDirection.value, badgeSize: editPosterBadgeSize.value, badgeScale: clampBadgeScale(editPosterBadgeScaleOverride.value), badgeGap: effectiveLayoutOverride(editPosterBadgeGapAuto.value, editPosterBadgeGap.value), badgeMargin: effectiveLayoutOverride(editPosterBadgeMarginAuto.value, editPosterBadgeMargin.value) })
 }
 
 function updateLogoPreview() {
@@ -436,7 +440,7 @@ watch([editRatingsOrder], () => {
 }, { deep: true })
 
 // Poster-only settings
-watch([editRatingsLimit, editPosterPosition, editPosterBadgeStyle, editPosterLabelStyle, editPosterBadgeDirection, editPosterBadgeSize, editPosterBadgeScaleOverride, editPosterBadgeGap, editPosterBadgeMargin, editPosterBadgeGapAuto, editPosterBadgeMarginAuto], () => {
+watch([editRatingsLimit, editPosterPosition, editPosterBadgeStyle, editPosterBadgeBackgroundStyle, editPosterLabelStyle, editPosterBadgeDirection, editPosterBadgeSize, editPosterBadgeScaleOverride, editPosterBadgeGap, editPosterBadgeMargin, editPosterBadgeGapAuto, editPosterBadgeMarginAuto], () => {
   if (syncing) return
   if (posterPreviewTimer) clearTimeout(posterPreviewTimer)
   posterPreviewTimer = setTimeout(updatePosterPreview, 500)
@@ -605,6 +609,21 @@ const inputId = (name: string) => props.uid ? `${name}-${props.uid}` : name
                 <SelectItem value="d">Default</SelectItem>
                 <SelectItem value="h">Horizontal</SelectItem>
                 <SelectItem value="v">Vertical</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="space-y-2">
+            <Label :for="inputId('poster-badge-background-style')">Badge background style</Label>
+            <Select
+              :model-value="editPosterBadgeBackgroundStyle"
+              @update:model-value="editPosterBadgeBackgroundStyle = $event as string"
+            >
+              <SelectTrigger :id="inputId('poster-badge-background-style')" class="max-w-xs" data-testid="poster-badge-background-style-select">
+                <SelectValue placeholder="Select background style" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="i">Individual boxes</SelectItem>
+                <SelectItem value="g">Grouped strip</SelectItem>
               </SelectContent>
             </Select>
           </div>

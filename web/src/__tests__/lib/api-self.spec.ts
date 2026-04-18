@@ -66,6 +66,7 @@ describe('selfApi', () => {
       logo_ratings_limit: 3,
       backdrop_ratings_limit: 3,
       poster_badge_style: 'h',
+      poster_badge_background_style: 'i',
       logo_badge_style: 'h',
       backdrop_badge_style: 'v',
       poster_label_style: 't',
@@ -112,6 +113,7 @@ describe('selfApi', () => {
       logo_ratings_limit: 3,
       backdrop_ratings_limit: 3,
       poster_badge_style: 'h',
+      poster_badge_background_style: 'i',
       logo_badge_style: 'h',
       backdrop_badge_style: 'v',
       poster_label_style: 't',
@@ -192,7 +194,7 @@ describe('selfApi', () => {
     const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
     vi.stubGlobal('fetch', fetchMock)
 
-    await selfApi.previewPoster(3, 'imdb,rt', 'bc', 'h', 'i')
+    await selfApi.previewPoster(3, 'imdb,rt', 'bc', 'h', undefined, 'i')
 
     const [url] = fetchMock.mock.calls[0]
     expect(url).toContain('label_style=i')
@@ -202,7 +204,7 @@ describe('selfApi', () => {
     const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
     vi.stubGlobal('fetch', fetchMock)
 
-    await selfApi.previewPoster(3, 'imdb,rt', 'bc', 'h', 'i', 'v')
+    await selfApi.previewPoster(3, 'imdb,rt', 'bc', 'h', undefined, 'i', 'v')
 
     const [url] = fetchMock.mock.calls[0]
     expect(url).toContain('badge_direction=v')
@@ -304,6 +306,7 @@ describe('selfApi', () => {
       logo_ratings_limit: 3,
       backdrop_ratings_limit: 3,
       poster_badge_style: 'h',
+      poster_badge_background_style: 'i',
       logo_badge_style: 'h',
       backdrop_badge_style: 'v',
       poster_label_style: 't',
