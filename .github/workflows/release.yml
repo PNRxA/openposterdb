@@ -47,6 +47,11 @@ jobs:
           context: .
           file: Containerfile
           platforms: ${{ matrix.platform }}
+          # Disable BuildKit's automatic attestation manifests. These embed an
+          # extra image-index entry per platform that registries (e.g. GHCR)
+          # surface as bogus `unknown/unknown` architectures.
+          provenance: false
+          sbom: false
           outputs: type=image,"name=ghcr.io/${{ steps.meta.outputs.image_name }},${{ secrets.DOCKERHUB_USERNAME }}/openposterdb",push-by-digest=true,name-canonical=true,push=true
           cache-from: type=registry,ref=ghcr.io/${{ steps.meta.outputs.image_name }}-buildcache:${{ steps.meta.outputs.platform_pair }}
           cache-to: type=registry,ref=ghcr.io/${{ steps.meta.outputs.image_name }}-buildcache:${{ steps.meta.outputs.platform_pair }},compression=zstd,mode=max
