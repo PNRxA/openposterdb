@@ -190,7 +190,7 @@ async fn fetch_ratings_inner(
     };
     let trakt_fut = async {
         let start = std::time::Instant::now();
-        let result = fetch_trakt_rating(resolved, trakt).await;
+        let result = fetch_trakt_rating(resolved, tmdb, trakt).await;
         (result, start.elapsed())
     };
 
@@ -336,6 +336,7 @@ async fn fetch_omdb_ratings(imdb_id: Option<&str>, omdb: Option<&OmdbClient>) ->
 
 async fn fetch_trakt_rating(
     resolved: &ResolvedId,
+    tmdb: &TmdbClient,
     trakt: Option<&TraktClient>,
 ) -> Option<RatingBadge> {
     let client = trakt?;
@@ -351,19 +352,20 @@ async fn fetch_trakt_rating(
         }
         MediaType::Episode => {
             let ep = resolved.episode.as_ref()?;
-            let show_imdb_id = ep.show_imdb_id.as_deref()?;
+            // Trakt's episode ratings endpoint is keyed by the show's IMDb ID.
+            // Resolve it lazily here (only when Trakt is configured) so that
+            // non-Trakt deployments never pay for the extra TMDB lookup.
+            let show_imdb_id = fetch_show_imdb_id(tmdb, ep.show_tmdb_id).await?;
             client
-                .get_episode_rating(
-                    show_imdb_id,
-                    ep.season_number,
-                    ep.episode_number,
-                )
+                .get_episode_rating(&show_imdb_id, ep.season_number, ep.episode_number)
                 .await
         }
     };
 
     let resp = match resp {
-        Ok(r) => r,
+        Ok(Some(r)) => r,
+        // 404 — the title/episode isn't on Trakt. Expected; no rating to show.
+        Ok(None) => return None,
         Err(e) => {
             tracing::warn!(
                 tmdb_id = resolved.tmdb_id,
@@ -383,6 +385,28 @@ async fn fetch_trakt_rating(
         source: RatingSource::Trakt,
         value: format!("{:.0}%", resp.rating * 10.0),
     })
+}
+
+/// Look up a show's IMDb ID from its TMDB ID via TMDB's `external_ids` endpoint.
+/// Used only on the episode Trakt path, which keys ratings by show IMDb ID.
+async fn fetch_show_imdb_id(tmdb: &TmdbClient, show_tmdb_id: u64) -> Option<String> {
+    #[derive(Deserialize)]
+    struct ShowExternalIds {
+        imdb_id: Option<String>,
+    }
+
+    let ids: ShowExternalIds = match tmdb
+        .get(&format!("/tv/{show_tmdb_id}/external_ids"), &[])
+        .await
+    {
+        Ok(ids) => ids,
+        Err(e) => {
+            tracing::warn!(show_tmdb_id, "trakt: show external_ids fetch failed: {e}");
+            return None;
+        }
+    };
+
+    ids.imdb_id
 }
 
 /// Build a cache key suffix from actual rendered badges (post-filtering).

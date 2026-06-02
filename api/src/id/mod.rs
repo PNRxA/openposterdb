@@ -19,7 +19,6 @@ pub enum MediaType {
 #[derive(Debug, Clone)]
 pub struct EpisodeInfo {
     pub show_tmdb_id: u64,
-    pub show_imdb_id: Option<String>,
     pub season_number: u32,
     pub episode_number: u32,
     pub still_path: Option<String>,
@@ -285,21 +284,12 @@ async fn resolve_episode_details(
         tvdb_id: Option<u64>,
     }
 
-    #[derive(Deserialize)]
-    struct ShowExternalIds {
-        imdb_id: Option<String>,
-    }
-
-    // Fetch episode details and show-level IMDb ID in parallel.
-    // The show IMDb ID is needed for Trakt episode rating lookups.
-    let ep_path = format!("/tv/{show_tmdb_id}/season/{season}/episode/{episode}");
-    let show_ids_path = format!("/tv/{show_tmdb_id}/external_ids");
-    let (details, show_imdb_id) = tokio::join!(
-        tmdb.get::<EpDetails>(&ep_path, &[("append_to_response", "external_ids")]),
-        tmdb.get::<ShowExternalIds>(&show_ids_path, &[]),
-    );
-    let details = details?;
-    let show_imdb_id = show_imdb_id.ok().and_then(|ids| ids.imdb_id);
+    let details: EpDetails = tmdb
+        .get(
+            &format!("/tv/{show_tmdb_id}/season/{season}/episode/{episode}"),
+            &[("append_to_response", "external_ids")],
+        )
+        .await?;
 
     let imdb_id = hint_imdb_id
         .or_else(|| details.external_ids.as_ref().and_then(|e| e.imdb_id.clone()));
@@ -327,7 +317,6 @@ async fn resolve_episode_details(
         release_date: details.air_date,
         episode: Some(EpisodeInfo {
             show_tmdb_id,
-            show_imdb_id,
             season_number: season,
             episode_number: episode,
             still_path,
@@ -481,7 +470,6 @@ mod tests {
     fn format_tmdb_id_value_episode() {
         let ep = EpisodeInfo {
             show_tmdb_id: 1396,
-            show_imdb_id: None,
             season_number: 1,
             episode_number: 1,
             still_path: None,
@@ -496,7 +484,6 @@ mod tests {
     fn format_tmdb_id_value_episode_large_numbers() {
         let ep = EpisodeInfo {
             show_tmdb_id: 456,
-            show_imdb_id: None,
             season_number: 12,
             episode_number: 24,
             still_path: Some("/still.jpg".into()),

@@ -37,20 +37,32 @@ impl TraktClient {
             .header("trakt-api-key", self.client_id.as_str())
     }
 
-    pub async fn get_movie_rating(&self, imdb_id: &str) -> Result<TraktRatingsResponse, AppError> {
-        let url = format!("https://api.trakt.tv/movies/{imdb_id}/ratings");
-        let resp = retry::send_with_retry(&TRAKT_RETRY, || self.request(&url).send())
-            .await?
-            .error_for_status()?;
-        Ok(resp.json().await?)
+    /// Fetch a ratings endpoint. Returns `Ok(None)` when Trakt responds 404
+    /// (the title/episode simply isn't catalogued), which is an expected,
+    /// non-error outcome — only genuine failures surface as `Err`.
+    async fn get_rating(&self, url: &str) -> Result<Option<TraktRatingsResponse>, AppError> {
+        let resp = retry::send_with_retry(&TRAKT_RETRY, || self.request(url).send()).await?;
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        let resp = resp.error_for_status()?;
+        Ok(Some(resp.json().await?))
     }
 
-    pub async fn get_show_rating(&self, imdb_id: &str) -> Result<TraktRatingsResponse, AppError> {
-        let url = format!("https://api.trakt.tv/shows/{imdb_id}/ratings");
-        let resp = retry::send_with_retry(&TRAKT_RETRY, || self.request(&url).send())
-            .await?
-            .error_for_status()?;
-        Ok(resp.json().await?)
+    pub async fn get_movie_rating(
+        &self,
+        imdb_id: &str,
+    ) -> Result<Option<TraktRatingsResponse>, AppError> {
+        self.get_rating(&format!("https://api.trakt.tv/movies/{imdb_id}/ratings"))
+            .await
+    }
+
+    pub async fn get_show_rating(
+        &self,
+        imdb_id: &str,
+    ) -> Result<Option<TraktRatingsResponse>, AppError> {
+        self.get_rating(&format!("https://api.trakt.tv/shows/{imdb_id}/ratings"))
+            .await
     }
 
     pub async fn get_episode_rating(
@@ -58,13 +70,10 @@ impl TraktClient {
         show_id: &str,
         season: u32,
         episode: u32,
-    ) -> Result<TraktRatingsResponse, AppError> {
-        let url = format!(
+    ) -> Result<Option<TraktRatingsResponse>, AppError> {
+        self.get_rating(&format!(
             "https://api.trakt.tv/shows/{show_id}/seasons/{season}/episodes/{episode}/ratings"
-        );
-        let resp = retry::send_with_retry(&TRAKT_RETRY, || self.request(&url).send())
-            .await?
-            .error_for_status()?;
-        Ok(resp.json().await?)
+        ))
+        .await
     }
 }
