@@ -16,6 +16,7 @@ pub struct Config {
     pub static_dir: Option<String>,
     pub cors_origin: Option<String>,
     pub fanart_api_key: Option<String>,
+    pub trakt_client_id: Option<String>,
     pub enable_cdn_redirects: bool,
     pub external_cache_only: bool,
     pub free_key_enabled: Option<bool>,
@@ -39,6 +40,7 @@ impl std::fmt::Debug for Config {
             .field("static_dir", &self.static_dir)
             .field("cors_origin", &self.cors_origin)
             .field("fanart_api_key", &self.fanart_api_key.as_ref().map(|_| "[REDACTED]"))
+            .field("trakt_client_id", &self.trakt_client_id.as_ref().map(|_| "[REDACTED]"))
             .field("enable_cdn_redirects", &self.enable_cdn_redirects)
             .field("external_cache_only", &self.external_cache_only)
             .field("free_key_enabled", &self.free_key_enabled)
@@ -79,6 +81,7 @@ impl Config {
             static_dir: env::var("STATIC_DIR").ok(),
             cors_origin: env::var("CORS_ORIGIN").ok(),
             fanart_api_key: env::var("FANART_API_KEY").ok(),
+            trakt_client_id: env::var("TRAKT_CLIENT_ID").ok(),
             enable_cdn_redirects: env::var("ENABLE_CDN_REDIRECTS")
                 .map(|v| v == "true" || v == "1")
                 .unwrap_or(false),
@@ -93,8 +96,13 @@ impl Config {
                 .unwrap_or(false),
         };
 
-        if config.omdb_api_key.is_none() && config.mdblist_api_key.is_none() {
-            panic!("at least one of OMDB_API_KEY or MDBLIST_API_KEY must be set");
+        if config.omdb_api_key.is_none()
+            && config.mdblist_api_key.is_none()
+            && config.trakt_client_id.is_none()
+        {
+            panic!(
+                "at least one of OMDB_API_KEY, MDBLIST_API_KEY, or TRAKT_CLIENT_ID must be set"
+            );
         }
 
         config
@@ -127,6 +135,7 @@ mod tests {
             "STATIC_DIR",
             "CORS_ORIGIN",
             "FANART_API_KEY",
+            "TRAKT_CLIENT_ID",
             "ENABLE_CDN_REDIRECTS",
             "EXTERNAL_CACHE_ONLY",
             "FREE_KEY_ENABLED",
@@ -216,7 +225,9 @@ mod tests {
 
     #[test]
     #[serial]
-    #[should_panic(expected = "at least one of OMDB_API_KEY or MDBLIST_API_KEY must be set")]
+    #[should_panic(
+        expected = "at least one of OMDB_API_KEY, MDBLIST_API_KEY, or TRAKT_CLIENT_ID must be set"
+    )]
     fn test_panics_without_ratings_provider() {
         unsafe { clear_config_env() };
         unsafe { env::set_var("TMDB_API_KEY", "tmdb_test") };

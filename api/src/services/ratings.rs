@@ -3,6 +3,7 @@ use crate::id::{MediaType, ResolvedId};
 use crate::services::mdblist::MdblistClient;
 use crate::services::omdb::OmdbClient;
 use crate::services::tmdb::TmdbClient;
+use crate::services::trakt::TraktClient;
 use image::Rgba;
 use serde::Deserialize;
 
@@ -128,6 +129,7 @@ pub async fn fetch_ratings(
     tmdb: &TmdbClient,
     omdb: Option<&OmdbClient>,
     mdblist: Option<&MdblistClient>,
+    trakt: Option<&TraktClient>,
     cache: &moka::future::Cache<String, RatingsResult>,
 ) -> Result<RatingsResult, AppError> {
     let key = match resolved.media_type {
@@ -148,11 +150,12 @@ pub async fn fetch_ratings(
     let tmdb = tmdb.clone();
     let omdb = omdb.cloned();
     let mdblist = mdblist.cloned();
+    let trakt = trakt.cloned();
 
     let coalesced = cache
         .try_get_with(key, async move {
             let result =
-                fetch_ratings_inner(&resolved, &tmdb, omdb.as_ref(), mdblist.as_ref()).await;
+                fetch_ratings_inner(&resolved, &tmdb, omdb.as_ref(), mdblist.as_ref(), trakt.as_ref()).await;
             Ok::<_, std::convert::Infallible>(result)
         })
         .await
@@ -166,6 +169,7 @@ async fn fetch_ratings_inner(
     tmdb: &TmdbClient,
     omdb: Option<&OmdbClient>,
     mdblist: Option<&MdblistClient>,
+    trakt: Option<&TraktClient>,
 ) -> RatingsResult {
     let ratings_start = std::time::Instant::now();
 
@@ -184,9 +188,18 @@ async fn fetch_ratings_inner(
         let result = fetch_mdblist_ratings(resolved, mdblist).await;
         (result, start.elapsed())
     };
+    let trakt_fut = async {
+        let start = std::time::Instant::now();
+        let result = fetch_trakt_rating(resolved, tmdb, trakt).await;
+        (result, start.elapsed())
+    };
 
-    let ((tmdb_badges, tmdb_dur), (omdb_badges, omdb_dur), (mdblist_raw, mdblist_dur)) =
-        tokio::join!(tmdb_fut, omdb_fut, mdblist_fut);
+    let (
+        (tmdb_badges, tmdb_dur),
+        (omdb_badges, omdb_dur),
+        (mdblist_raw, mdblist_dur),
+        (trakt_badge, trakt_dur),
+    ) = tokio::join!(tmdb_fut, omdb_fut, mdblist_fut, trakt_fut);
 
     let ratings_elapsed = ratings_start.elapsed().as_millis() as u64;
     if ratings_elapsed > SLOW_RATINGS_MS {
@@ -197,6 +210,7 @@ async fn fetch_ratings_inner(
             tmdb_ms = tmdb_dur.as_millis() as u64,
             omdb_ms = omdb_dur.as_millis() as u64,
             mdblist_ms = mdblist_dur.as_millis() as u64,
+            trakt_ms = trakt_dur.as_millis() as u64,
             "slow ratings fetch"
         );
     }
@@ -222,14 +236,14 @@ async fn fetch_ratings_inner(
     };
 
     // Badge order: IMDb, TMDB, RT, RT Audience, MC, Trakt, Letterboxd, MAL
-    // MDBList preferred for overlapping sources; OMDb fills gaps
+    // MDBList preferred for overlapping sources; OMDb and direct Trakt fill gaps
     let ordered: Vec<Option<RatingBadge>> = vec![
         find_mdb(RatingSource::Imdb).or_else(|| find_omdb(RatingSource::Imdb)),
         tmdb_badges,
         find_mdb(RatingSource::Rt).or_else(|| find_omdb(RatingSource::Rt)),
         find_mdb(RatingSource::RtAudience),
         find_mdb(RatingSource::Metacritic).or_else(|| find_omdb(RatingSource::Metacritic)),
-        find_mdb(RatingSource::Trakt),
+        find_mdb(RatingSource::Trakt).or(trakt_badge),
         find_mdb(RatingSource::Letterboxd),
         find_mdb(RatingSource::Mal),
     ];
@@ -318,6 +332,81 @@ async fn fetch_omdb_ratings(imdb_id: Option<&str>, omdb: Option<&OmdbClient>) ->
     }
 
     Some(badges)
+}
+
+async fn fetch_trakt_rating(
+    resolved: &ResolvedId,
+    tmdb: &TmdbClient,
+    trakt: Option<&TraktClient>,
+) -> Option<RatingBadge> {
+    let client = trakt?;
+
+    let resp = match resolved.media_type {
+        MediaType::Movie => {
+            let imdb_id = resolved.imdb_id.as_deref()?;
+            client.get_movie_rating(imdb_id).await
+        }
+        MediaType::Tv => {
+            let imdb_id = resolved.imdb_id.as_deref()?;
+            client.get_show_rating(imdb_id).await
+        }
+        MediaType::Episode => {
+            let ep = resolved.episode.as_ref()?;
+            // Trakt's episode ratings endpoint is keyed by the show's IMDb ID.
+            // Resolve it lazily here (only when Trakt is configured) so that
+            // non-Trakt deployments never pay for the extra TMDB lookup.
+            let show_imdb_id = fetch_show_imdb_id(tmdb, ep.show_tmdb_id).await?;
+            client
+                .get_episode_rating(&show_imdb_id, ep.season_number, ep.episode_number)
+                .await
+        }
+    };
+
+    let resp = match resp {
+        Ok(Some(r)) => r,
+        // 404 — the title/episode isn't on Trakt. Expected; no rating to show.
+        Ok(None) => return None,
+        Err(e) => {
+            tracing::warn!(
+                tmdb_id = resolved.tmdb_id,
+                imdb_id = ?resolved.imdb_id,
+                media_type = ?resolved.media_type,
+                "trakt rating fetch failed: {e}"
+            );
+            return None;
+        }
+    };
+
+    if resp.rating <= 0.0 || resp.votes == 0 {
+        return None;
+    }
+
+    Some(RatingBadge {
+        source: RatingSource::Trakt,
+        value: format!("{:.0}%", resp.rating * 10.0),
+    })
+}
+
+/// Look up a show's IMDb ID from its TMDB ID via TMDB's `external_ids` endpoint.
+/// Used only on the episode Trakt path, which keys ratings by show IMDb ID.
+async fn fetch_show_imdb_id(tmdb: &TmdbClient, show_tmdb_id: u64) -> Option<String> {
+    #[derive(Deserialize)]
+    struct ShowExternalIds {
+        imdb_id: Option<String>,
+    }
+
+    let ids: ShowExternalIds = match tmdb
+        .get(&format!("/tv/{show_tmdb_id}/external_ids"), &[])
+        .await
+    {
+        Ok(ids) => ids,
+        Err(e) => {
+            tracing::warn!(show_tmdb_id, "trakt: show external_ids fetch failed: {e}");
+            return None;
+        }
+    };
+
+    ids.imdb_id
 }
 
 /// Build a cache key suffix from actual rendered badges (post-filtering).

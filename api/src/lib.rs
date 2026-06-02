@@ -24,6 +24,7 @@ use services::fanart::{FanartClient, FanartImages};
 use services::mdblist::MdblistClient;
 use services::omdb::OmdbClient;
 use services::tmdb::TmdbClient;
+use services::trakt::TraktClient;
 
 pub use routes::build_app;
 
@@ -33,6 +34,7 @@ pub struct AppState {
     pub tmdb: TmdbClient,
     pub omdb: Option<OmdbClient>,
     pub mdblist: Option<MdblistClient>,
+    pub trakt: Option<TraktClient>,
 
     pub font: FontArc,
     pub refresh_locks: moka::sync::Cache<String, ()>,

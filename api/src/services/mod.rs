@@ -6,4 +6,5 @@ pub mod omdb;
 pub mod ratings;
 pub mod retry;
 pub mod tmdb;
+pub mod trakt;
 pub mod validation;

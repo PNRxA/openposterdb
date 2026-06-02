@@ -179,7 +179,7 @@ The `?imageSize=` parameter controls the output dimensions. When omitted, `mediu
 
 ## Features
 
-- **Multi-source ratings** — Aggregates from MDBList (IMDb, RT Critics, RT Audience, Metacritic, Trakt, Letterboxd, MAL) and optionally OMDb
+- **Multi-source ratings** — Aggregates from MDBList (IMDb, RT Critics, RT Audience, Metacritic, Trakt, Letterboxd, MAL), optionally OMDb, and optionally Trakt directly (for episode-level ratings and as a standalone provider)
 - **Multiple image sources** — Uses TMDB as the primary source for posters, logos, and backdrops, with Fanart.tv as an optional fallback (or preferred source). Supports language selection and textless posters from both sources
 - **Configurable per API key** — Override image source, language, and textless settings per key, or set global defaults
 - **ID resolution** — Accepts IMDb, TMDB, or TVDB IDs
@@ -212,7 +212,7 @@ docker compose up -d
 - Rust toolchain
 - Node.js 20.19+ (for admin UI)
 - A [TMDB API key](https://www.themoviedb.org/settings/api)
-- At least one of: [MDBList API key](https://mdblist.com/preferences/) (preferred — covers all 7 rating sources), [OMDb API key](https://www.omdbapi.com/apikey.aspx)
+- At least one of: [MDBList API key](https://mdblist.com/preferences/) (preferred — covers all 7 rating sources), [OMDb API key](https://www.omdbapi.com/apikey.aspx), [Trakt Client ID](https://trakt.tv/oauth/applications)
 - Optional: [Fanart.tv API key](https://fanart.tv/get-an-api-key/) (enables Fanart.tv as an alternative or preferred image source)
 
 
@@ -248,6 +248,7 @@ See [docker-compose.yml](docker-compose.yml) for the full compose configuration.
 | `JWT_SECRET` | *required* | 32-byte hex string (`openssl rand -hex 32`) |
 | `MDBLIST_API_KEY` | — | MDBList key — preferred, covers all 7 rating sources (IMDb, RT Critics, RT Audience, Metacritic, Trakt, Letterboxd, MAL) |
 | `OMDB_API_KEY` | — | OMDb key (IMDb, RT Critics, Metacritic only) |
+| `TRAKT_CLIENT_ID` | — | [Trakt](https://trakt.tv/oauth/applications) Client ID — provides Trakt community ratings for movies, shows, and episodes |
 | `LISTEN_ADDR` | `0.0.0.0:3000` | Server bind address |
 | `CACHE_DIR` | `./cache` | Poster and metadata cache directory |
 | `DB_DIR` | `./db` | SQLite database directory |

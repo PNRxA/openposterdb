@@ -15,6 +15,7 @@ use openposterdb_api::services::fanart::FanartClient;
 use openposterdb_api::services::mdblist::MdblistClient;
 use openposterdb_api::services::omdb::OmdbClient;
 use openposterdb_api::services::tmdb::TmdbClient;
+use openposterdb_api::services::trakt::TraktClient;
 use openposterdb_api::{build_app, upgrade, AppState, FONT_BYTES, MIGRATIONS, SCHEMA_SQL};
 
 #[tokio::main]
@@ -55,6 +56,11 @@ async fn main() {
         .as_ref()
         .map(|key| FanartClient::new(key.clone(), http.clone()));
 
+    let trakt = config
+        .trakt_client_id
+        .as_ref()
+        .map(|key| TraktClient::new(key.clone(), http.clone()));
+
     // Load JWT secret
     let jwt_secret = db::load_secret_from_env("JWT_SECRET");
     let secure_cookies = std::env::var("COOKIE_SECURE")
@@ -66,6 +72,7 @@ async fn main() {
         mdblist = config.mdblist_api_key.is_some(),
         omdb = config.omdb_api_key.is_some(),
         fanart = config.fanart_api_key.is_some(),
+        trakt = config.trakt_client_id.is_some(),
         "rating providers configured"
     );
     tracing::info!(
@@ -292,6 +299,7 @@ async fn main() {
         image_mem_cache,
         pending_last_used: pending_last_used.clone(),
         fanart,
+        trakt,
         fanart_cache,
         fanart_negative,
         tmdb_images_cache,

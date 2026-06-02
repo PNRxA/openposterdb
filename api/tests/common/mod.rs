@@ -120,6 +120,7 @@ async fn _setup_test_app(cors_origin: Option<String>, secure_cookies: bool, enab
             static_dir: None,
             cors_origin,
             fanart_api_key: if disable_fanart { None } else { Some("test".into()) },
+            trakt_client_id: None,
             enable_cdn_redirects,
             external_cache_only,
             free_key_enabled,
@@ -128,6 +129,7 @@ async fn _setup_test_app(cors_origin: Option<String>, secure_cookies: bool, enab
         tmdb: TmdbClient::new("test".into(), http.clone()),
         omdb: None,
         mdblist: None,
+        trakt: None,
 
         font,
         refresh_locks,

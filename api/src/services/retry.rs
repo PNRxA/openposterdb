@@ -48,6 +48,13 @@ pub const MDBLIST_RETRY: RetryConfig = RetryConfig {
     service_name: "mdblist",
 };
 
+pub const TRAKT_RETRY: RetryConfig = RetryConfig {
+    max_retries: 1,
+    base_delay: Duration::from_secs(2),
+    max_delay: Duration::from_secs(2),
+    service_name: "trakt",
+};
+
 /// Send an HTTP request with retry logic for transient failures.
 ///
 /// The closure must rebuild and send the request each time (since `RequestBuilder`
