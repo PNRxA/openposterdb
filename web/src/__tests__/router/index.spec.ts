@@ -29,6 +29,7 @@ function makeRouter() {
           { path: 'logos', name: 'logos', component: { template: '<div>Logos</div>' } },
           { path: 'backdrops', name: 'backdrops', component: { template: '<div>Backdrops</div>' } },
           { path: 'episodes', name: 'episodes', component: { template: '<div>Episodes</div>' } },
+          { path: 'seasons', name: 'seasons', component: { template: '<div>Seasons</div>' } },
           { path: 'keys', name: 'keys', component: { template: '<div>Keys</div>' } },
         ],
       },
@@ -155,6 +156,17 @@ describe('router', () => {
     await router.isReady()
 
     expect(router.currentRoute.value.name).toBe('episodes')
+  })
+
+  it('admin user can access /admin/seasons', async () => {
+    const router = makeRouter()
+    const auth = useAuthStore()
+    auth.token = 'valid-token'
+
+    await router.push('/admin/seasons')
+    await router.isReady()
+
+    expect(router.currentRoute.value.name).toBe('seasons')
   })
 
   it('unauthenticated user visiting /docs with disablePublicPages is redirected to login', async () => {

@@ -176,6 +176,7 @@ pub fn settings_cache_suffix(
         cache::ImageType::Logo => ratings::ratings_cache_suffix(&settings.ratings_order, &settings.ratings_exclude, settings.logo_ratings_limit),
         cache::ImageType::Backdrop => ratings::ratings_cache_suffix(&settings.ratings_order, &settings.ratings_exclude, settings.backdrop_ratings_limit),
         cache::ImageType::Episode => ratings::ratings_cache_suffix(&settings.ratings_order, &settings.ratings_exclude, settings.episode_ratings_limit),
+        cache::ImageType::Season => ratings::ratings_cache_suffix(&settings.ratings_order, &settings.ratings_exclude, settings.season_ratings_limit),
     };
     settings_cache_suffix_with_ratings(settings, kind, image_size, &ratings_suffix)
 }
@@ -234,6 +235,14 @@ pub fn settings_cache_suffix_with_ratings(
         logo_badge_background: _,
         backdrop_badge_background: _,
         episode_badge_background: _,
+        season_ratings_limit: _,
+        season_badge_style: _,
+        season_label_style: _,
+        season_badge_size: _,
+        season_position: _,
+        season_badge_direction: _,
+        season_badge_shape: _,
+        season_badge_background: _,
     } = settings;
 
     let resolved_size = resolve_image_size(image_size);
@@ -294,6 +303,19 @@ pub fn settings_cache_suffix_with_ratings(
             let bgd = badge_background_cache_suffix(settings.episode_badge_background.as_str());
             let blur = if settings.episode_blur { ".blur" } else { "" };
             format!("{rs}{ps}{bs}{ls}{bd}{bsz}{shp}{bgd}{blur}{is_suffix}")
+        }
+        cache::ImageType::Season => {
+            // Seasons render as 2:3 posters using the season_* badge settings.
+            // The `_s` kind prefix and the `season-{id}-S{n}` id_value keep these
+            // keys distinct from series posters, so no extra season token is needed.
+            let ps = position_cache_suffix(settings.season_position.as_str());
+            let bs = badge_style_cache_suffix(settings.season_badge_style.for_shape(settings.season_badge_shape).as_str());
+            let ls = label_style_cache_suffix(settings.season_label_style.as_str());
+            let bd = badge_direction_cache_suffix(settings.season_badge_direction.as_str());
+            let bsz = settings.season_badge_size.cache_suffix();
+            let shp = badge_shape_cache_suffix(settings.season_badge_shape.as_str());
+            let bgd = badge_background_cache_suffix(settings.season_badge_background.as_str());
+            format!("{rs}{ps}{bs}{ls}{bd}{bsz}{shp}{bgd}{is_suffix}")
         }
     }
 }
@@ -451,7 +473,7 @@ async fn resolve_with_ratings(
     // parent series so ratings and assets are series-level.
     if uplift_episodes && resolved.media_type == MediaType::Episode {
         if let Some(ref ep) = resolved.episode {
-            let series_id = id::format_tmdb_id_value(ep.show_tmdb_id, &MediaType::Tv, None);
+            let series_id = id::format_tmdb_id_value(ep.show_tmdb_id, &MediaType::Tv, None, None);
             resolved = id::resolve(IdType::Tmdb, &series_id, &state.tmdb, &state.id_cache).await?;
         }
     }
@@ -494,6 +516,7 @@ struct CrossIdInfo {
     media_type: MediaType,
     release_date: Option<String>,
     episode: Option<id::EpisodeInfo>,
+    season: Option<id::SeasonInfo>,
 }
 
 impl CrossIdInfo {
@@ -506,6 +529,7 @@ impl CrossIdInfo {
             media_type: resolved.media_type,
             release_date: resolved.release_date.clone(),
             episode: resolved.episode.clone(),
+            season: resolved.season.clone(),
         }
     }
 }
@@ -542,7 +566,7 @@ fn spawn_cross_id_cache(
             }
         }
         {
-            let tmdb_val = format_tmdb_id_value(cross_ids.tmdb_id, &cross_ids.media_type, cross_ids.episode.as_ref());
+            let tmdb_val = format_tmdb_id_value(cross_ids.tmdb_id, &cross_ids.media_type, cross_ids.episode.as_ref(), cross_ids.season.as_ref());
             if id_type != IdType::Tmdb {
                 alternates.push(("tmdb", tmdb_val));
             }
@@ -911,10 +935,11 @@ fn fanart_variant_paths(
     id_value: &str,
     variant: &str,
     suffix: &str,
+    image_type: cache::ImageType,
 ) -> Result<(String, std::path::PathBuf), AppError> {
     let cache_key = format!("{id_type_str}/{id_value}{variant}{suffix}");
     let cache_path_base = format!("{id_value}{variant}{suffix}");
-    let cache_path = cache::typed_cache_path(cache_dir, cache::ImageType::Poster, id_type_str, &cache_path_base)?;
+    let cache_path = cache::typed_cache_path(cache_dir, image_type, id_type_str, &cache_path_base)?;
     Ok((cache_key, cache_path))
 }
 
@@ -966,7 +991,7 @@ async fn try_fanart_path(
 
     for variant in &variants_to_check {
         let (cache_key, cache_path) =
-            fanart_variant_paths(&state.config.cache_dir, id_type_str, id_value, variant, &suffix)?;
+            fanart_variant_paths(&state.config.cache_dir, id_type_str, id_value, variant, &suffix, cache::ImageType::Poster)?;
         let variant_cache_suffix = format!("{variant}{suffix}");
         if let Some(bytes) =
             check_fanart_cache_variant(state, &cache_key, &cache_path, id_type, id_value, &variant_cache_suffix, settings, image_size).await?
@@ -990,7 +1015,7 @@ async fn try_fanart_path(
                 PosterMatch::Language => format!("_f_{}", settings.lang),
             };
             let (cache_key, cache_path) =
-                fanart_variant_paths(&state.config.cache_dir, id_type_str, id_value, &actual_variant, &suffix)?;
+                fanart_variant_paths(&state.config.cache_dir, id_type_str, id_value, &actual_variant, &suffix, cache::ImageType::Poster)?;
             let fanart_cache_suffix = format!("{actual_variant}{suffix}");
             let bytes = post_render_cache(state, bytes, &cache_path, &cache_key, rd.as_deref(), cache::ImageType::Poster, cross_ids, id_type, fanart_cache_suffix).await;
             state
@@ -1462,8 +1487,9 @@ async fn fetch_fanart_images(
             (key, images)
         }
         // Episode included for exhaustiveness — episodes use `handle_episode_inner`
-        // which does not call fanart functions.
-        MediaType::Tv | MediaType::Episode => {
+        // which does not call fanart functions. Seasons share the TV endpoint
+        // (keyed by tvdb/tmdb show id) and filter to per-season posters later.
+        MediaType::Tv | MediaType::Episode | MediaType::Season => {
             let tv_id = match resolved.tvdb_id {
                 Some(id) => id,
                 None => resolve_tvdb_id(tmdb, resolved.tmdb_id).await.unwrap_or(resolved.tmdb_id),
@@ -1492,7 +1518,9 @@ async fn fetch_fanart_images(
 fn select_images_for_kind(images: &FanartImages, kind: cache::ImageType) -> &[FanartPoster] {
     match kind {
         // Episode included for exhaustiveness — episodes don't use fanart.
-        cache::ImageType::Poster | cache::ImageType::Episode => &images.posters,
+        // Season included for exhaustiveness — seasons are filtered per-season in
+        // fetch_fanart_image, so this arm is never used for real season selection.
+        cache::ImageType::Poster | cache::ImageType::Episode | cache::ImageType::Season => &images.posters,
         cache::ImageType::Logo => &images.logos,
         cache::ImageType::Backdrop => &images.backdrops,
     }
@@ -1510,11 +1538,20 @@ async fn fetch_fanart_image(
     external_cache_only: bool,
 ) -> Option<FanartResult> {
     let images = fetch_fanart_images(fanart, tmdb, cache, resolved).await?;
-    let candidates = select_images_for_kind(&images, kind);
 
-    let (selected, match_tier) = FanartClient::select_image(candidates, lang, textless)?;
-    let url = selected.url.clone();
-    let fanart_id = selected.id.clone();
+    // Seasons select from per-season posters (with "all" fallback) rather than
+    // the show-level poster list. The owned Vec must outlive the borrowed
+    // `selected`, so clone the chosen poster and drop the Vec before use.
+    let (url, fanart_id, match_tier) = if kind == cache::ImageType::Season {
+        let season_number = resolved.season.as_ref()?.season_number;
+        let season_candidates = images.season_posters_for(season_number);
+        let (selected, match_tier) = FanartClient::select_image(&season_candidates, lang, textless)?;
+        (selected.url.clone(), selected.id.clone(), match_tier)
+    } else {
+        let candidates = select_images_for_kind(&images, kind);
+        let (selected, match_tier) = FanartClient::select_image(candidates, lang, textless)?;
+        (selected.url.clone(), selected.id.clone(), match_tier)
+    };
 
     // Try to serve from base fanart cache
     let ext = kind.ext();
@@ -1580,7 +1617,8 @@ async fn get_tmdb_images_cached(
         MediaType::Movie => "movie",
         // Episode included for exhaustiveness — episodes are served by
         // `handle_episode_inner`, which does not use TMDB images API lookups.
-        MediaType::Tv | MediaType::Episode => "tv",
+        // Seasons resolve lang-specific posters via the show's TMDB images.
+        MediaType::Tv | MediaType::Episode | MediaType::Season => "tv",
     };
     let cache_key = format!("{}:{}:{}", media_type_str, resolved.tmdb_id, lang_base(lang));
     let tmdb = state.tmdb.clone();
@@ -1632,8 +1670,8 @@ async fn try_tmdb_logo_backdrop(
     let candidates = match kind {
         cache::ImageType::Logo => &tmdb_images.logos,
         cache::ImageType::Backdrop => &tmdb_images.backdrops,
-        // Episode included for exhaustiveness — episodes don't use TMDB images API.
-        cache::ImageType::Poster | cache::ImageType::Episode => &tmdb_images.posters,
+        // Episode/Season included for exhaustiveness — neither uses this helper.
+        cache::ImageType::Poster | cache::ImageType::Episode | cache::ImageType::Season => &tmdb_images.posters,
     };
     let selected = crate::services::tmdb::TmdbClient::select_image(candidates, lang, textless)?;
     let size = resolve_image_size(image_size).tmdb_size();
@@ -1678,6 +1716,410 @@ async fn try_fanart_with_negative_cache(
             None
         }
     }
+}
+
+/// Returns (poster_bytes, release_date, fanart_match_tier, cross_id_info) for a season.
+///
+/// Mirrors `generate_poster_with_source` but renders 2:3 season posters using
+/// the `season_*` render settings and a season-scoped fanart fetch (so the
+/// per-season filter in `fetch_fanart_image` applies).
+async fn generate_season_with_source(
+    state: &AppState,
+    resolved: &id::ResolvedId,
+    badges: Vec<ratings::RatingBadge>,
+    cross_ids: &CrossIdInfo,
+    settings: &RenderSettings,
+    image_size: Option<ImageSize>,
+    fanart_already_tried: bool,
+) -> Result<(Vec<u8>, Option<String>, Option<PosterMatch>, CrossIdInfo), AppError> {
+    let default_poster_path = resolved
+        .poster_path
+        .as_deref()
+        .ok_or_else(|| {
+            let id_desc = resolved.imdb_id.as_deref().unwrap_or("unknown");
+            AppError::IdNotFound(format!("no poster available for {id_desc} / tmdb:{} (TMDB has no season or series poster_path)", resolved.tmdb_id))
+        })?;
+
+    // Unified fallback chain (same as posters):
+    //   TMDB preferred: TMDB(lang) → Fanart(lang) → TMDB(default)
+    //   Fanart preferred: Fanart(lang) → TMDB(lang) → TMDB(default)
+    // The default case (lang=en, textless=false) skips lang-specific lookups —
+    // `resolved.poster_path` is already the TMDB(default) season/series poster.
+    let is_default = &*settings.lang == "en" && !settings.textless;
+
+    let try_fanart = || async {
+        if fanart_already_tried {
+            return None;
+        }
+        if let Some(ref fanart) = state.fanart {
+            fetch_fanart_image(
+                fanart,
+                &state.tmdb,
+                &state.fanart_cache,
+                resolved,
+                &settings.lang,
+                settings.textless,
+                cache::ImageType::Season,
+                &state.config.cache_dir,
+                state.config.external_cache_only,
+            )
+            .await
+        } else {
+            None
+        }
+    };
+
+    let (lang_poster_path, fanart_result) = if settings.image_source.is_fanart() {
+        // Fanart(lang) → TMDB(lang) → TMDB(default)
+        let fr = try_fanart().await;
+        let tp = if fr.is_none() && !is_default {
+            resolve_tmdb_poster_path(state, resolved, &settings.lang, settings.textless).await
+        } else {
+            None
+        };
+        (tp, fr)
+    } else {
+        // TMDB(lang) → Fanart(lang) → TMDB(default)
+        let tp = if !is_default {
+            resolve_tmdb_poster_path(state, resolved, &settings.lang, settings.textless).await
+        } else {
+            None
+        };
+        let fr = if tp.is_none() && !is_default {
+            try_fanart().await
+        } else {
+            None
+        };
+        (tp, fr)
+    };
+    let poster_path = lang_poster_path.as_deref().unwrap_or(default_poster_path);
+    let match_tier = fanart_result.as_ref().map(|r| r.match_tier);
+    let fanart_bytes = fanart_result.map(|r| r.bytes);
+
+    let resolved_size = resolve_image_size(image_size);
+    let target_width = resolved_size.poster_target_width();
+    let badge_scale = resolved_size.badge_scale(cache::ImageType::Season) * settings.season_badge_size.scale_factor();
+    let tmdb_size: Arc<str> = resolved_size.tmdb_size().into();
+
+    let bytes = generate::generate_poster(generate::ImageParams {
+        poster_path,
+        badges: &badges,
+        tmdb: &state.tmdb,
+        font: &state.font,
+        quality: state.config.image_quality,
+        cache_dir: &state.config.cache_dir,
+        image_stale_secs: state.config.image_stale_secs,
+        poster_bytes_override: fanart_bytes,
+        poster_position: settings.season_position,
+        badge_style: settings.season_badge_style,
+        label_style: settings.season_label_style,
+        badge_appearance: settings.season_appearance(),
+        badge_direction: settings.season_badge_direction,
+        // Seasons have no split/fit columns. Use fixed values matching the season
+        // cache key (which omits these tokens) so output stays consistent.
+        poster_badge_split: false,
+        poster_fit: crate::services::db::default_poster_fit(),
+        render_semaphore: state.render_semaphore.clone(),
+        target_width,
+        badge_scale,
+        badge_size: settings.season_badge_size,
+        tmdb_size,
+        external_cache_only: state.config.external_cache_only,
+    })
+    .await?;
+
+    Ok((bytes, cross_ids.release_date.clone(), match_tier, cross_ids.clone()))
+}
+
+/// Try to serve a season poster from the fanart cache (memory → filesystem →
+/// fresh generation). Returns `Ok(Some(bytes))` on hit, `Ok(None)` to fall
+/// through to TMDB, or `Err` on hard failure. Mirrors `try_fanart_path`.
+async fn try_fanart_path_season(
+    state: &AppState,
+    id_type_str: &str,
+    id_value: &str,
+    id_type: IdType,
+    resolved: &id::ResolvedId,
+    ratings_result: &ratings::RatingsResult,
+    cross_ids: &CrossIdInfo,
+    settings: &RenderSettings,
+    image_size: Option<ImageSize>,
+) -> Result<Option<Bytes>, AppError> {
+    let neg_key = format!("{id_type_str}/{id_value}_f_tl_neg");
+    let textless_known_missing = settings.textless
+        && state.fanart_negative.get(&neg_key).await.is_some();
+
+    let lang_variant = format!("_f_{}", settings.lang);
+    let lang_neg_key = format!("{id_type_str}/{id_value}_f_{}_neg", settings.lang);
+    let lang_known_missing = state.fanart_negative.get(&lang_neg_key).await.is_some();
+
+    if lang_known_missing && (!settings.textless || textless_known_missing) {
+        return Ok(None);
+    }
+
+    let badges = ratings::apply_rating_preferences(ratings_result.badges.clone(), &settings.ratings_order, &settings.ratings_exclude, settings.season_ratings_limit);
+    let ratings_suffix = ratings::badges_cache_suffix(&badges);
+
+    let suffix = settings_cache_suffix_with_ratings(settings, cache::ImageType::Season, image_size, &ratings_suffix);
+
+    let mut variants_to_check: Vec<String> = Vec::new();
+    if settings.textless && !textless_known_missing {
+        variants_to_check.push("_f_tl".to_string());
+    }
+    if !lang_known_missing {
+        variants_to_check.push(lang_variant.clone());
+    }
+
+    for variant in &variants_to_check {
+        let (cache_key, cache_path) =
+            fanart_variant_paths(&state.config.cache_dir, id_type_str, id_value, variant, &suffix, cache::ImageType::Season)?;
+        let variant_cache_suffix = format!("{variant}{suffix}");
+        if let Some(bytes) =
+            check_fanart_cache_variant(state, &cache_key, &cache_path, id_type, id_value, &variant_cache_suffix, settings, image_size).await?
+        {
+            return Ok(Some(bytes));
+        }
+    }
+
+    let result = generate_season_with_source(state, resolved, badges, cross_ids, settings, image_size, false).await;
+
+    match result {
+        Ok((bytes, rd, Some(tier), cross_ids)) => {
+            if settings.textless && tier == PosterMatch::Language {
+                state.fanart_negative.insert(neg_key, ()).await;
+            }
+
+            let actual_variant = match tier {
+                PosterMatch::Textless => "_f_tl".to_string(),
+                PosterMatch::Language => format!("_f_{}", settings.lang),
+            };
+            let (cache_key, cache_path) =
+                fanart_variant_paths(&state.config.cache_dir, id_type_str, id_value, &actual_variant, &suffix, cache::ImageType::Season)?;
+            let fanart_cache_suffix = format!("{actual_variant}{suffix}");
+            let bytes = post_render_cache(state, bytes, &cache_path, &cache_key, rd.as_deref(), cache::ImageType::Season, cross_ids, id_type, fanart_cache_suffix).await;
+            state
+                .image_mem_cache
+                .insert(
+                    cache_key,
+                    MemCacheEntry { bytes: bytes.clone(), last_checked: Instant::now() },
+                )
+                .await;
+            Ok(Some(bytes))
+        }
+        Ok((_bytes, _rd, None, _cross_ids)) => {
+            if settings.textless {
+                state.fanart_negative.insert(neg_key, ()).await;
+            }
+            state.fanart_negative.insert(lang_neg_key, ()).await;
+            Ok(None)
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "fanart season generation failed, falling through to TMDB");
+            Ok(None)
+        }
+    }
+}
+
+/// Background stale-cache refresh for season posters. Mirrors
+/// `trigger_background_refresh` (the poster one) so the refreshed bytes match
+/// the live path: `generate_season_with_source` handles fanart-or-tmdb internally.
+fn trigger_season_refresh(
+    state: &AppState,
+    cache_key: &str,
+    cache_path: &std::path::Path,
+    id_type: IdType,
+    id_value: &str,
+    cache_suffix: &str,
+    settings: &RenderSettings,
+    image_size: Option<ImageSize>,
+) {
+    let state2 = state.clone();
+    let id_value = id_value.to_string();
+    let settings = settings.clone();
+    let cross_id = Some((id_type, cache_suffix.to_string()));
+    spawn_background_refresh(state, cache_key, cache_path, cross_id, async move {
+        let skip_ratings = settings.season_ratings_limit == 0;
+        let (resolved, ratings_result, cross_ids) =
+            resolve_with_ratings(&state2, id_type, &id_value, false, skip_ratings).await?;
+        if !skip_ratings {
+            let id_key = format!("{}/{id_value}", id_type.as_str());
+            let sources = ratings::available_sources_string(&ratings_result.badges);
+            upsert_available_ratings_cached(&state2, &id_key, &sources, cross_ids.release_date.as_deref()).await;
+        }
+        let badges = ratings::apply_rating_preferences(ratings_result.badges, &settings.ratings_order, &settings.ratings_exclude, settings.season_ratings_limit);
+        let (bytes, rd, _tier, cross_ids) =
+            generate_season_with_source(&state2, &resolved, badges, &cross_ids, &settings, image_size, false).await?;
+        Ok((bytes, rd, cache::ImageType::Season, cross_ids))
+    });
+}
+
+/// Serve a season poster with season-specific settings. Mirrors `handle_inner`
+/// (the poster handler) but uses `cache::ImageType::Season`, the `season_*`
+/// render settings, and rejects non-season ids.
+pub async fn handle_season_inner(
+    state: &AppState,
+    id_type_str: &str,
+    id_value_jpg: &str,
+    mut settings: RenderSettings,
+    image_size: Option<ImageSize>,
+) -> Result<(Bytes, Option<String>), AppError> {
+    let request_start = Instant::now();
+    let id_type = IdType::parse(id_type_str)?;
+    let id_value = id_value_jpg.strip_suffix(".jpg").unwrap_or(id_value_jpg);
+
+    cache::validate_id_value(id_value)?;
+
+    // Resolve "default" badge direction and style early, before cache key construction
+    settings.season_badge_direction = settings.season_badge_direction.resolve(settings.season_position);
+    settings.season_badge_style = settings.season_badge_style.resolve(settings.season_badge_direction);
+
+    let use_fanart = settings.image_source.is_fanart();
+    let id_key = format!("{id_type_str}/{id_value}");
+    let variant = tmdb_poster_variant(&settings.lang, settings.textless);
+
+    // Fast path (non-fanart): reconstruct the cache key from SQLite-stored
+    // available sources, avoiding external API calls on cache hits.
+    if !use_fanart {
+        let fast_path_start = Instant::now();
+        let fast_path_available = if settings.season_ratings_limit == 0 {
+            Some(String::new())
+        } else {
+            read_available_ratings_cached(state, &id_key).await
+        };
+        if let Some(available) = fast_path_available {
+            let available_ratings_ms = fast_path_start.elapsed().as_millis() as u64;
+            let ratings_suffix = ratings::badges_suffix_from_available(&available, &settings.ratings_order, &settings.ratings_exclude, settings.season_ratings_limit);
+            let suffix = settings_cache_suffix_with_ratings(&settings, cache::ImageType::Season, image_size, &ratings_suffix);
+            let cache_value = format!("{id_value}{variant}{suffix}");
+            let cache_path = cache::typed_cache_path(&state.config.cache_dir, cache::ImageType::Season, id_type_str, &cache_value)?;
+            let cache_key = format!("{id_type_str}/{cache_value}");
+
+            let cache_suffix: Arc<str> = suffix.into();
+            {
+                let id_value = id_value.to_string();
+                let cache_suffix = cache_suffix.clone();
+                let settings = settings.clone();
+                let cache_check_start = Instant::now();
+                if let Some(bytes) = check_caches(state, &cache_key, &cache_path, |s, k, p| {
+                    trigger_season_refresh(s, k, p, id_type, &id_value, &cache_suffix, &settings, image_size);
+                }).await? {
+                    let cache_check_ms = cache_check_start.elapsed().as_millis() as u64;
+                    let release_date = cache::read_meta_db(&state.db, &cache_key).await;
+                    let total_ms = request_start.elapsed().as_millis() as u64;
+                    if total_ms > SLOW_REQUEST_MS {
+                        tracing::warn!(
+                            id = %id_key,
+                            total_ms,
+                            available_ratings_ms,
+                            cache_check_ms,
+                            "slow season request (fast path hit)"
+                        );
+                    }
+                    return Ok((bytes, release_date));
+                }
+            }
+        }
+    }
+
+    // Slow path: resolve ID and fetch ratings. No episode uplift — seasons must
+    // stay seasons.
+    let slow_path_start = Instant::now();
+    let resolve_start = Instant::now();
+    let skip_ratings = settings.season_ratings_limit == 0;
+    let (resolved, ratings_result, cross_ids) =
+        resolve_with_ratings(state, id_type, id_value, false, skip_ratings).await?;
+    let resolve_ms = resolve_start.elapsed().as_millis() as u64;
+
+    // The season endpoint only serves seasons.
+    if resolved.media_type != MediaType::Season {
+        return Err(AppError::BadRequest("season endpoint requires a season-… id".into()));
+    }
+
+    // Persist available sources for future fast-path lookups.
+    if !skip_ratings {
+        let sources = ratings::available_sources_string(&ratings_result.badges);
+        upsert_available_ratings_cached(state, &id_key, &sources, cross_ids.release_date.as_deref()).await;
+    }
+
+    // Fanart → TMDB fallback strategy (same as posters).
+    if use_fanart {
+        if let Some(bytes) = try_fanart_path_season(state, id_type_str, id_value, id_type, &resolved, &ratings_result, &cross_ids, &settings, image_size).await? {
+            return Ok((bytes, cross_ids.release_date));
+        }
+    }
+
+    let settings = &settings;
+
+    let badges = ratings::apply_rating_preferences(ratings_result.badges, &settings.ratings_order, &settings.ratings_exclude, settings.season_ratings_limit);
+    let ratings_suffix = ratings::badges_cache_suffix(&badges);
+
+    let suffix = settings_cache_suffix_with_ratings(settings, cache::ImageType::Season, image_size, &ratings_suffix);
+    let cache_value = format!("{id_value}{variant}{suffix}");
+    let cache_path = cache::typed_cache_path(&state.config.cache_dir, cache::ImageType::Season, id_type_str, &cache_value)?;
+    let cache_key = format!("{id_type_str}/{cache_value}");
+
+    let cache_suffix: Arc<str> = suffix.into();
+    let release_date = cross_ids.release_date.clone();
+    {
+        let id_type = id_type;
+        let id_value = id_value.to_string();
+        let cache_suffix = cache_suffix.clone();
+        let settings = settings.clone();
+        let slow_cache_check_start = Instant::now();
+        if let Some(bytes) = check_caches(state, &cache_key, &cache_path, |s, k, p| {
+            trigger_season_refresh(s, k, p, id_type, &id_value, &cache_suffix, &settings, image_size);
+        }).await? {
+            let total_ms = request_start.elapsed().as_millis() as u64;
+            if total_ms > SLOW_REQUEST_MS {
+                tracing::warn!(
+                    id = %id_key,
+                    total_ms,
+                    resolve_ms,
+                    cache_check_ms = slow_cache_check_start.elapsed().as_millis() as u64,
+                    "slow season request (slow path cache hit)"
+                );
+            }
+            return Ok((bytes, release_date));
+        }
+    }
+
+    // Request coalescing — concurrent requests for the same season share one generation
+    let generate_start = Instant::now();
+    let state2 = state.clone();
+    let cache_key2 = cache_key.clone();
+    let cache_path2 = cache_path.clone();
+    let settings2 = settings.clone();
+    let bytes: Bytes = state
+        .image_inflight
+        .try_get_with(cache_key.clone(), async move {
+            let (rendered, rd, _used_fanart, gen_cross_ids) =
+                generate_season_with_source(&state2, &resolved, badges, &cross_ids, &settings2, image_size, use_fanart).await?;
+            let bytes = post_render_cache(&state2, rendered, &cache_path2, &cache_key2, rd.as_deref(), cache::ImageType::Season, gen_cross_ids, id_type, cache_suffix.to_string()).await;
+            Ok::<_, AppError>(bytes)
+        })
+        .await
+        .map_err(AppError::from_cached)?;
+
+    let total_ms = request_start.elapsed().as_millis() as u64;
+    if total_ms > SLOW_REQUEST_MS {
+        tracing::warn!(
+            id = %id_key,
+            total_ms,
+            resolve_ms,
+            generate_ms = generate_start.elapsed().as_millis() as u64,
+            slow_path_ms = slow_path_start.elapsed().as_millis() as u64,
+            "slow season request (generated)"
+        );
+    }
+
+    state
+        .image_mem_cache
+        .insert(
+            cache_key,
+            MemCacheEntry { bytes: bytes.clone(), last_checked: Instant::now() },
+        )
+        .await;
+    Ok((bytes, release_date))
 }
 
 /// Serve an episode image with episode-specific settings (position, direction, blur).
@@ -1736,11 +2178,13 @@ pub async fn handle_episode_inner(
             match resolved.media_type {
                 MediaType::Movie => "movie",
                 MediaType::Tv => "series",
+                MediaType::Season => "season",
                 MediaType::Episode => unreachable!(),
             },
             match resolved.media_type {
                 MediaType::Movie => "poster",
                 MediaType::Tv => "poster",
+                MediaType::Season => "season",
                 MediaType::Episode => unreachable!(),
             },
         )));
@@ -1845,7 +2289,7 @@ pub async fn handle_logo_backdrop_inner(
     let variant = match kind {
         cache::ImageType::Backdrop => format!("{kind_prefix}{source_prefix}"),
         cache::ImageType::Logo => format!("{kind_prefix}{source_prefix}_{fanart_lang}"),
-        cache::ImageType::Poster | cache::ImageType::Episode => return Err(AppError::Other("handle_logo_backdrop_inner only handles logos and backdrops".into())),
+        cache::ImageType::Poster | cache::ImageType::Episode | cache::ImageType::Season => return Err(AppError::Other("handle_logo_backdrop_inner only handles logos and backdrops".into())),
     };
     let image_type: cache::ImageType = lb_kind.into();
 
@@ -2140,6 +2584,7 @@ mod tests {
             poster_path: None,
             release_date: Some("2020-01-01".into()),
             episode: None,
+            season: None,
         };
         let ratings = ratings::RatingsResult {
             badges: vec![],
@@ -2165,6 +2610,7 @@ mod tests {
             poster_path: None,
             release_date: None,
             episode: None,
+            season: None,
         };
         let ratings = ratings::RatingsResult {
             badges: vec![],
@@ -2331,6 +2777,7 @@ mod tests {
             poster_path: None,
             release_date: None,
             episode: None,
+            season: None,
         };
         let ratings = ratings::RatingsResult {
             badges: vec![],

@@ -158,6 +158,15 @@ pub async fn fetch_ratings(
             })?;
             format!("{}/episode/S{}E{}", ep.show_tmdb_id, ep.season_number, ep.episode_number)
         }
+        MediaType::Season => {
+            let s = resolved.season.as_ref().ok_or_else(|| {
+                AppError::Other(format!(
+                    "season media type but no SeasonInfo for tmdb_id={}",
+                    resolved.tmdb_id
+                ))
+            })?;
+            format!("{}/season/S{}", s.show_tmdb_id, s.season_number)
+        }
     };
 
     let resolved = resolved.clone();
@@ -286,6 +295,11 @@ async fn fetch_tmdb_rating(resolved: &ResolvedId, tmdb: &TmdbClient) -> Option<R
             let ep = resolved.episode.as_ref()?;
             format!("/tv/{}/season/{}/episode/{}", ep.show_tmdb_id, ep.season_number, ep.episode_number)
         }
+        MediaType::Season => {
+            // The TMDB season endpoint exposes the season's own vote_average.
+            let s = resolved.season.as_ref()?;
+            format!("/tv/{}/season/{}", s.show_tmdb_id, s.season_number)
+        }
     };
 
     let details: Details = match tmdb.get(&path, &[]).await {
@@ -376,6 +390,13 @@ async fn fetch_trakt_rating(
             client
                 .get_episode_rating(&show_imdb_id, ep.season_number, ep.episode_number)
                 .await
+        }
+        MediaType::Season => {
+            let s = resolved.season.as_ref()?;
+            // Trakt's season ratings endpoint is keyed by the show's IMDb ID,
+            // resolved lazily (same as episodes) so non-Trakt deploys don't pay.
+            let show_imdb_id = fetch_show_imdb_id(tmdb, s.show_tmdb_id).await?;
+            client.get_season_rating(&show_imdb_id, s.season_number).await
         }
     };
 
@@ -1118,6 +1139,7 @@ mod tests {
             poster_path: None,
             release_date: None,
             episode: None,
+            season: None,
         }
     }
 

@@ -76,4 +76,15 @@ impl TraktClient {
         ))
         .await
     }
+
+    pub async fn get_season_rating(
+        &self,
+        show_id: &str,
+        season: u32,
+    ) -> Result<Option<TraktRatingsResponse>, AppError> {
+        self.get_rating(&format!(
+            "https://api.trakt.tv/shows/{show_id}/seasons/{season}/ratings"
+        ))
+        .await
+    }
 }

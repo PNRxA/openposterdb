@@ -222,6 +222,14 @@ pub struct FreeKeySettingsResponse {
     pub logo_badge_background: BadgeBackground,
     pub backdrop_badge_background: BadgeBackground,
     pub episode_badge_background: BadgeBackground,
+    pub season_ratings_limit: i32,
+    pub season_badge_style: BadgeStyle,
+    pub season_label_style: LabelStyle,
+    pub season_badge_size: BadgeSize,
+    pub season_position: BadgePosition,
+    pub season_badge_direction: BadgeDirection,
+    pub season_badge_shape: BadgeShape,
+    pub season_badge_background: BadgeBackground,
 }
 
 impl From<&RenderSettings> for FreeKeySettingsResponse {
@@ -267,6 +275,14 @@ impl From<&RenderSettings> for FreeKeySettingsResponse {
             logo_badge_background: s.logo_badge_background,
             backdrop_badge_background: s.backdrop_badge_background,
             episode_badge_background: s.episode_badge_background,
+            season_ratings_limit: s.season_ratings_limit,
+            season_badge_style: s.season_badge_style,
+            season_label_style: s.season_label_style,
+            season_badge_size: s.season_badge_size,
+            season_position: s.season_position,
+            season_badge_direction: s.season_badge_direction,
+            season_badge_shape: s.season_badge_shape,
+            season_badge_background: s.season_badge_background,
         }
     }
 }
@@ -393,6 +409,7 @@ fn apply_query_overrides(
             cache::ImageType::Logo => s.logo_ratings_limit = limit,
             cache::ImageType::Backdrop => s.backdrop_ratings_limit = limit,
             cache::ImageType::Episode => s.episode_ratings_limit = limit,
+            cache::ImageType::Season => s.season_ratings_limit = limit,
         }
     }
     if let Some(ref order) = query.ratings_order {
@@ -410,6 +427,7 @@ fn apply_query_overrides(
             cache::ImageType::Logo => s.logo_badge_style = style,
             cache::ImageType::Backdrop => s.backdrop_badge_style = style,
             cache::ImageType::Episode => s.episode_badge_style = style,
+            cache::ImageType::Season => s.season_badge_style = style,
         }
     }
     if let Some(style) = query.label_style {
@@ -418,6 +436,7 @@ fn apply_query_overrides(
             cache::ImageType::Logo => s.logo_label_style = style,
             cache::ImageType::Backdrop => s.backdrop_label_style = style,
             cache::ImageType::Episode => s.episode_label_style = style,
+            cache::ImageType::Season => s.season_label_style = style,
         }
     }
     if let Some(size) = query.badge_size {
@@ -426,6 +445,7 @@ fn apply_query_overrides(
             cache::ImageType::Logo => s.logo_badge_size = size,
             cache::ImageType::Backdrop => s.backdrop_badge_size = size,
             cache::ImageType::Episode => s.episode_badge_size = size,
+            cache::ImageType::Season => s.season_badge_size = size,
         }
     }
     if let Some(shape) = query.badge_shape {
@@ -434,6 +454,7 @@ fn apply_query_overrides(
             cache::ImageType::Logo => s.logo_badge_shape = shape,
             cache::ImageType::Backdrop => s.backdrop_badge_shape = shape,
             cache::ImageType::Episode => s.episode_badge_shape = shape,
+            cache::ImageType::Season => s.season_badge_shape = shape,
         }
     }
     if let Some(background) = query.badge_background {
@@ -442,6 +463,7 @@ fn apply_query_overrides(
             cache::ImageType::Logo => s.logo_badge_background = background,
             cache::ImageType::Backdrop => s.backdrop_badge_background = background,
             cache::ImageType::Episode => s.episode_badge_background = background,
+            cache::ImageType::Season => s.season_badge_background = background,
         }
     }
 
@@ -485,6 +507,14 @@ fn apply_query_overrides(
             s.episode_blur = blur;
         }
     }
+    if kind == cache::ImageType::Season {
+        if let Some(dir) = query.badge_direction {
+            s.season_badge_direction = dir;
+        }
+        if let Some(pos) = query.position {
+            s.season_position = pos;
+        }
+    }
 
     // -- source override (applies to all image types) --
     if let Some(src) = query.image_source {
@@ -507,6 +537,7 @@ fn cdn_route_segment(kind: cache::ImageType) -> &'static str {
         cache::ImageType::Logo => "logo-default",
         cache::ImageType::Backdrop => "backdrop-default",
         cache::ImageType::Episode => "episode-default",
+        cache::ImageType::Season => "season-default",
     }
 }
 
@@ -572,6 +603,9 @@ async fn dispatch_image(
         }
         cache::ImageType::Episode => {
             serve::handle_episode_inner(state, id_type_str, id_value_raw, settings.clone(), image_size).await
+        }
+        cache::ImageType::Season => {
+            serve::handle_season_inner(state, id_type_str, id_value_raw, settings.clone(), image_size).await
         }
     }
 }
@@ -759,6 +793,35 @@ pub async fn episode_handler(
     image_handler_inner(state, &api_key, &id_type_str, &id_value, query, cache::ImageType::Episode).await
 }
 
+#[utoipa::path(
+    get,
+    path = "/{api_key}/{id_type}/season-default/{id_value}",
+    operation_id = "getSeason",
+    tag = "Images",
+    summary = "Get season poster",
+    description = "Returns a JPEG season poster (2:3) with rating badge overlays. Uses the season's own poster from TMDB (or Fanart.tv), falling back to the series poster when the season has none. Season ratings come from TMDB and Trakt where available, falling back to show-level for other sources.",
+    params(
+        ("api_key" = String, Path, description = "Your API key (64-character hex string). Use `t0-free-rpdb` as a free public key if enabled on this instance."),
+        ("id_type" = IdTypeParam, Path, description = "The type of media ID being used.", example = "tmdb"),
+        ("id_value" = String, Path, description = "The season ID. For TMDB use `season-{show_id}-S{season}` (e.g. `season-1396-S2`). For IMDB use `season-{series_imdb_id}-S{season}` (e.g. `season-tt0903747-S2`). For TVDB use `season-{series_tvdb_id}-S{season}` (e.g. `season-81189-S2`)."),
+        ImageQuery,
+    ),
+    responses(
+        (status = 200, description = "Season poster image", content_type = "image/jpeg",
+            headers(("Cache-Control" = String, description = "Cache directive, e.g. `public, max-age=3600, stale-while-revalidate=86400`"))),
+        (status = 400, description = "Invalid request — bad ID type, image size, or language format, or non-season ID used on season endpoint."),
+        (status = 401, description = "Invalid or missing API key."),
+        (status = 404, description = "Season not found."),
+    ),
+)]
+pub async fn season_handler(
+    State(state): State<Arc<AppState>>,
+    Path((api_key, id_type_str, id_value)): Path<(String, String, String)>,
+    Query(query): Query<ImageQuery>,
+) -> Response {
+    image_handler_inner(state, &api_key, &id_type_str, &id_value, query, cache::ImageType::Season).await
+}
+
 // --- Content-addressed CDN handlers (`/c/{settings_hash}/...`) ---
 
 /// Cache errors on `/c/` routes for 1 hour so Cloudflare doesn't cache them indefinitely
@@ -842,6 +905,14 @@ pub async fn cdn_episode_handler(
     Query(query): Query<ImageQuery>,
 ) -> Response {
     cdn_handler_inner(state, &settings_hash, &id_type_str, &id_value, query, cache::ImageType::Episode).await
+}
+
+pub async fn cdn_season_handler(
+    State(state): State<Arc<AppState>>,
+    Path((settings_hash, id_type_str, id_value)): Path<(String, String, String)>,
+    Query(query): Query<ImageQuery>,
+) -> Response {
+    cdn_handler_inner(state, &settings_hash, &id_type_str, &id_value, query, cache::ImageType::Season).await
 }
 
 #[cfg(test)]

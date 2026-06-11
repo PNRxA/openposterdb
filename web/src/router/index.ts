@@ -110,6 +110,12 @@ const router = createRouter({
           meta: { title: 'Episodes' },
         },
         {
+          path: 'seasons',
+          name: 'seasons',
+          component: () => import('@/views/SeasonsView.vue'),
+          meta: { title: 'Seasons' },
+        },
+        {
           path: 'keys',
           name: 'keys',
           component: () => import('@/views/ApiKeysView.vue'),

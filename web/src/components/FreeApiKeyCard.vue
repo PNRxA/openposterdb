@@ -48,7 +48,7 @@ onMounted(() => {
 })
 
 const idType = ref<'imdb' | 'tmdb' | 'tvdb'>('imdb')
-const imageType = ref<'poster' | 'logo' | 'backdrop' | 'episode'>('poster')
+const imageType = ref<'poster' | 'logo' | 'backdrop' | 'episode' | 'season'>('poster')
 const idValue = ref('tt0013442')
 const lang = ref('any')
 const imageSize = ref<'default' | 'small' | 'medium' | 'large' | 'verylarge'>('default')
@@ -81,7 +81,7 @@ const ratingsOrderChanged = computed(
 const fetchError = ref('')
 const fetchLoading = ref(false)
 const resultUrl = ref('')
-const resultImageType = ref<'poster' | 'logo' | 'backdrop' | 'episode'>('poster')
+const resultImageType = ref<'poster' | 'logo' | 'backdrop' | 'episode' | 'season'>('poster')
 
 const sizeOptions = computed(() => {
   if (imageType.value === 'backdrop' || imageType.value === 'episode') {
@@ -146,6 +146,8 @@ const typeDefaults = computed(() => {
       return { badge_style: d.backdrop_badge_style, label_style: d.backdrop_label_style, badge_size: d.backdrop_badge_size, ratings_limit: d.backdrop_ratings_limit, position: d.backdrop_position, badge_direction: d.backdrop_badge_direction, badge_shape: d.backdrop_badge_shape, badge_background: d.backdrop_badge_background }
     case 'episode':
       return { badge_style: d.episode_badge_style, label_style: d.episode_label_style, badge_size: d.episode_badge_size, ratings_limit: d.episode_ratings_limit, position: d.episode_position, badge_direction: d.episode_badge_direction, badge_shape: d.episode_badge_shape, badge_background: d.episode_badge_background }
+    case 'season':
+      return { badge_style: d.season_badge_style, label_style: d.season_label_style, badge_size: d.season_badge_size, ratings_limit: d.season_ratings_limit, position: d.season_position, badge_direction: d.season_badge_direction, badge_shape: d.season_badge_shape, badge_background: d.season_badge_background }
     default: // poster
       return { badge_style: d.poster_badge_style, label_style: d.poster_label_style, badge_size: d.poster_badge_size, ratings_limit: d.ratings_limit, position: d.poster_position, badge_direction: d.poster_badge_direction, badge_shape: d.poster_badge_shape, badge_background: d.poster_badge_background }
   }
@@ -595,6 +597,7 @@ async function handleFetch() {
               <SelectItem value="logo">Logo</SelectItem>
               <SelectItem value="backdrop">Backdrop</SelectItem>
               <SelectItem value="episode">Episode</SelectItem>
+              <SelectItem value="season">Season</SelectItem>
             </SelectContent>
           </Select>
           <div class="flex gap-2 flex-1 min-w-[200px]">

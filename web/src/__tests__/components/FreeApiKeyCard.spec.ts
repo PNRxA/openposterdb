@@ -47,6 +47,12 @@ function makeDefaults(overrides: Partial<FreeKeyDefaults> = {}): FreeKeyDefaults
     episode_position: 'bc',
     episode_badge_direction: 'd',
     episode_blur: false,
+    season_ratings_limit: 3,
+    season_badge_style: 'v',
+    season_label_style: 'o',
+    season_badge_size: 'm',
+    season_position: 'bc',
+    season_badge_direction: 'd',
     ...overrides,
   }
 }
@@ -350,6 +356,63 @@ describe('FreeApiKeyCard', () => {
     expect(curlText).toContain('badge_direction=v')
     expect(curlText).toContain('position=tr')
     expect(curlText).toContain('blur=true')
+  })
+
+  // --- Season support ---
+
+  it('season queryString includes badge_direction and position', async () => {
+    const wrapper = mountCard(true)
+    await setSelectById(wrapper, 'free-image-type', 'season')
+    await setSelectById(wrapper, 'free-badge-direction', 'v')
+    await setSelectById(wrapper, 'free-image-position', 'tr')
+
+    const curlText = findCurlCode(wrapper).text()
+    expect(curlText).toContain('badge_direction=v')
+    expect(curlText).toContain('position=tr')
+  })
+
+  it('season has no blur control', async () => {
+    const wrapper = mountCard(true)
+    await setSelectById(wrapper, 'free-image-type', 'season')
+    expect(wrapper.find('#free-blur').exists()).toBe(false)
+  })
+
+  it('season has no fit or textless controls', async () => {
+    const wrapper = mountCard(true)
+    await setSelectById(wrapper, 'free-image-type', 'season')
+    expect(wrapper.find('#free-fit').exists()).toBe(false)
+    expect(wrapper.find('#free-textless').exists()).toBe(false)
+  })
+
+  it('season keeps the image_source control (accepts image_source)', async () => {
+    const wrapper = mountCard(true)
+    await setSelectById(wrapper, 'free-image-type', 'season')
+    expect(wrapper.find('#free-image-source').exists()).toBe(true)
+  })
+
+  it('season uses .jpg extension and season-default path in curl example', async () => {
+    const wrapper = mountCard(true)
+    await setSelectById(wrapper, 'free-image-type', 'season')
+
+    const curlText = findCurlCode(wrapper).text()
+    expect(curlText).toContain('season-default/')
+    expect(curlText).toContain('.jpg')
+  })
+
+  it('season keeps position and badge_direction controls', async () => {
+    const wrapper = mountCard(true)
+    await setSelectById(wrapper, 'free-image-type', 'season')
+
+    expect(wrapper.find('#free-image-position').exists()).toBe(true)
+    expect(wrapper.find('#free-badge-direction').exists()).toBe(true)
+  })
+
+  it('reflects season per-image-type defaults when switching to season', async () => {
+    const wrapper = mountCard(true, makeDefaults({ poster_badge_style: 'v', season_badge_style: 'h' }))
+    expect(wrapper.text()).toContain('Badge style: default (Vertical)')
+
+    await setSelectById(wrapper, 'free-image-type', 'season')
+    expect(wrapper.text()).toContain('Badge style: default (Horizontal)')
   })
 
   // --- Backdrop edge inset support ---

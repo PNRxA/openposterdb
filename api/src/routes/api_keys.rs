@@ -26,6 +26,7 @@ pub fn api_key_self_routes() -> Router<Arc<AppState>> {
         .route("/api/key/me/preview/logo", get(handlers::preview::preview_logo))
         .route("/api/key/me/preview/backdrop", get(handlers::preview::preview_backdrop))
         .route("/api/key/me/preview/episode", get(handlers::preview::preview_episode))
+        .route("/api/key/me/preview/season", get(handlers::preview::preview_season))
         .route(
             "/api/key/me/settings",
             get(handlers::api_keys::get_own_settings)

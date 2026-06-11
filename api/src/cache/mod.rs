@@ -38,6 +38,7 @@ pub enum ImageType {
     Logo,
     Backdrop,
     Episode,
+    Season,
 }
 
 impl ImageType {
@@ -47,12 +48,13 @@ impl ImageType {
             ImageType::Logo => "logos",
             ImageType::Backdrop => "backdrops",
             ImageType::Episode => "episodes",
+            ImageType::Season => "seasons",
         }
     }
 
     pub fn ext(self) -> &'static str {
         match self {
-            ImageType::Poster | ImageType::Backdrop | ImageType::Episode => "jpg",
+            ImageType::Poster | ImageType::Backdrop | ImageType::Episode | ImageType::Season => "jpg",
             ImageType::Logo => "png",
         }
     }
@@ -63,6 +65,7 @@ impl ImageType {
             ImageType::Logo => "l",
             ImageType::Backdrop => "b",
             ImageType::Episode => "e",
+            ImageType::Season => "s",
         }
     }
 
@@ -73,13 +76,14 @@ impl ImageType {
             ImageType::Logo => "_l",
             ImageType::Backdrop => "_b",
             ImageType::Episode => "_e",
+            ImageType::Season => "_s",
         }
     }
 
     /// Strip the file extension matching this image type from a string.
     pub fn strip_ext(self, s: &str) -> &str {
         match self {
-            ImageType::Poster | ImageType::Backdrop | ImageType::Episode => s.strip_suffix(".jpg").unwrap_or(s),
+            ImageType::Poster | ImageType::Backdrop | ImageType::Episode | ImageType::Season => s.strip_suffix(".jpg").unwrap_or(s),
             ImageType::Logo => s.strip_suffix(".png").unwrap_or(s),
         }
     }
@@ -91,12 +95,13 @@ impl ImageType {
             ImageType::Logo => "logo",
             ImageType::Backdrop => "backdrop",
             ImageType::Episode => "episode",
+            ImageType::Season => "season",
         }
     }
 
     pub fn content_type(self) -> &'static str {
         match self {
-            ImageType::Poster | ImageType::Backdrop | ImageType::Episode => "image/jpeg",
+            ImageType::Poster | ImageType::Backdrop | ImageType::Episode | ImageType::Season => "image/jpeg",
             ImageType::Logo => "image/png",
         }
     }

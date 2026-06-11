@@ -64,6 +64,16 @@ TMDB and TVDB IDs also work for episodes:
 
 The episode endpoint accepts a series-level ID combined with season/episode numbers — no episode-specific ID is needed.
 
+Season posters (a TV season's own poster art) use the `season-default` endpoint with a `season-{id}-S{season}` ID:
+
+| ID type | Season URL template |
+|---|---|
+| IMDb | `{base_url}/{api_key}/imdb/season-default/season-{imdb_id}-S{season}.jpg` |
+| TMDB | `{base_url}/{api_key}/tmdb/season-default/season-{tmdb_id}-S{season}.jpg` |
+| TVDB | `{base_url}/{api_key}/tvdb/season-default/season-{tvdb_id}-S{season}.jpg` |
+
+The ID is the **series** ID (IMDb/TMDB/TVDB) combined with the season number.
+
 ### Jellyfin
 
 OpenPosterDB has a dedicated [Jellyfin plugin](https://github.com/PNRxA/jellyfin-plugin-openposterdb) — a separate, open-source remote image provider. It fetches posters, backdrops, logos and episode stills (with rating badges) from your self-hosted instance, keyed off each item's IMDb / TMDB / TVDB id. Install it from the plugin repository, then point it at your instance:
@@ -140,6 +150,19 @@ GET /{api_key}/{id_type}/episode-default/{id_value}.jpg
 - `?blur=true` applies Gaussian blur for spoiler protection (badges remain sharp)
 - IMDB episode ratings require an OMDb API key (MDBList does not support episode-level ratings)
 
+### Season
+
+```
+GET /{api_key}/{id_type}/season-default/{id_value}.jpg
+```
+
+- Returns a JPEG season poster (2:3 portrait) with rating badges — a TV season's own poster art
+- ID format is `season-{id}-S{season}` using the **series** IMDb/TMDB/TVDB ID (e.g. `season-1396-S2` for TMDB, `season-tt0903747-S2` for IMDb, `season-81189-S2` for TVDB)
+- Uses the season's own poster from TMDB (or Fanart.tv season posters), falling back to the series poster when the season has no art of its own
+- Season ratings are season-scoped where the source supports it — TMDB (the season's vote average) and Trakt (the season rating). IMDb/RT/Metacritic fall back to show-level ratings; MDBList is not queried for seasons
+- Dedicated season settings: position, direction, badge style/size, label style, shape, background, ratings limit (mirrors poster controls; no blur)
+- Renders through the same 2:3 poster pipeline, so it accepts the poster image sizes (`small` is not valid)
+
 ### Key Validation
 
 ```
@@ -152,7 +175,7 @@ GET /{api_key}/isValid
 **Common parameters:**
 
 - `id_type`: `imdb`, `tmdb`, `tvdb`
-- `id_value`: e.g. `tt1234567`, `movie-123`, `series-456`, `episode-1396-S1E1`. Episode IMDb IDs (e.g. `tt0959621`), TVDB episode IDs, and series-level IDs with season/episode (e.g. `episode-tt14786934-S1E1`, `episode-81189-S3E5`) are also supported
+- `id_value`: e.g. `tt1234567`, `movie-123`, `series-456`, `episode-1396-S1E1`, `season-1396-S2`. Episode IMDb IDs (e.g. `tt0959621`), TVDB episode IDs, series-level IDs with season/episode (e.g. `episode-tt14786934-S1E1`, `episode-81189-S3E5`), and season IDs (e.g. `season-tt0903747-S2`, `season-81189-S2`) are also supported
 - `?fallback=true`: accepted for RPDB plugin compatibility but ignored as OPDB falls back to TMDB by default
 - `?lang={code}`: override the image language for this request (e.g. `?lang=de` for German, `?lang=pt-BR` for Brazilian Portuguese). Supports regional variants — when a region-specific image exists (e.g. `pt-BR`), it is preferred; otherwise falls back to the base language (`pt`), then English. Applies to posters and logos. Backdrops are language-agnostic and ignore this parameter
 - `?imageSize={size}`: control output image dimensions. Available sizes vary by image type (see [Image Sizes](#image-sizes))
@@ -191,6 +214,8 @@ The `?imageSize=` parameter controls the output dimensions. When omitted, `mediu
 | `very-large` / `verylarge` | 2000 × 2962 |
 
 Heights are representative for a standard ~2:3 source under the default `native` fit, which preserves the source aspect ratio (so the exact height varies per poster). The `cover`, `pad`, and `blur` fits instead produce an exact 2:3 frame (580 × 870, 1280 × 1920, 2000 × 3000).
+
+Season posters use the same sizes as posters (they share the 2:3 poster pipeline).
 
 **Logo sizes:**
 
@@ -381,6 +406,7 @@ Logos, backdrops, and episodes include a kind prefix in their cache keys to dist
 | Logo | `_l` |
 | Backdrop | `_b` |
 | Episode | `_e` |
+| Season | `_s` |
 
 ### Source Variant Markers
 
@@ -408,6 +434,7 @@ The `image_meta` table tracks metadata for cached images:
 | `image_type` | `l` | Logo |
 | `image_type` | `b` | Backdrop |
 | `image_type` | `e` | Episode |
+| `image_type` | `s` | Season |
 
 ### Settings Short Values
 

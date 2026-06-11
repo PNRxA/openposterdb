@@ -152,6 +152,16 @@ fn preview_render_settings(
             s.episode_badge_shape = appearance.shape;
             s.episode_badge_background = appearance.background;
         }
+        cache::ImageType::Season => {
+            s.season_ratings_limit = ratings_limit;
+            s.season_badge_style = badge_style;
+            s.season_label_style = label_style;
+            s.season_badge_size = badge_size;
+            s.season_position = position;
+            s.season_badge_direction = badge_direction;
+            s.season_badge_shape = appearance.shape;
+            s.season_badge_background = appearance.background;
+        }
     }
     s
 }
@@ -230,6 +240,66 @@ pub async fn preview_poster(
     let quality = state.config.image_quality;
     let buf = tokio::task::spawn_blocking(move || {
         generate::render_poster_sync(poster_png, &badges, &font, quality, position, badge_style, label_style, badge_appearance, badge_direction, target_width, badge_scale, badge_size, split, poster_fit)
+    })
+    .await
+    .map_err(|e| AppError::Other(e.to_string()))??;
+
+    cache::write(&cache_path, &buf).await?;
+    let bytes = bytes::Bytes::from(buf);
+    state.preview_cache.insert(cache_key, bytes.clone()).await;
+
+    Ok(preview_response(bytes))
+}
+
+/// Season posters render through the 2:3 poster pipeline using the `season_*`
+/// badge settings (no split/fit/blur), so the preview reuses the sample poster.
+pub async fn preview_season(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<ImageQuery>,
+) -> Result<Response, AppError> {
+    let image_size = parse_preview_image_size(&query.image_size, cache::ImageType::Season)?;
+    let badge_size = query.badge_size.unwrap_or_else(db::default_season_badge_size);
+    let resolved_size = serve::resolve_image_size(image_size);
+    let target_width = resolved_size.poster_target_width();
+    let badge_scale = resolved_size.badge_scale(cache::ImageType::Season) * badge_size.scale_factor();
+
+    let ratings_limit = query.ratings_limit.unwrap_or_else(db::default_season_ratings_limit);
+    db::validate_ratings_limit(ratings_limit)?;
+    let default_order = db::default_ratings_order();
+    let ratings_order = query.ratings_order.as_deref().unwrap_or(&default_order);
+    db::validate_ratings_order(ratings_order)?;
+    let ratings_exclude = query.ratings_exclude.as_deref().unwrap_or("");
+    db::validate_ratings_exclude(ratings_exclude)?;
+    let position = query.position.unwrap_or_else(db::default_season_position);
+    let badge_direction = query.badge_direction.unwrap_or_else(db::default_season_badge_direction).resolve(position);
+    let badge_style = query.badge_style.unwrap_or_else(db::default_season_badge_style).resolve(badge_direction);
+    let label_style = query.label_style.unwrap_or_else(db::default_label_style);
+    let badge_appearance = preview_badge_appearance(&query);
+    let ratings_suffix = ratings::ratings_cache_suffix(ratings_order, ratings_exclude, ratings_limit);
+    let preview_settings = preview_render_settings(cache::ImageType::Season, badge_style, label_style, badge_size, position, badge_direction, badge_appearance, ratings_limit, ratings_order, ratings_exclude);
+    let suffix = serve::settings_cache_suffix_with_ratings(&preview_settings, cache::ImageType::Season, image_size, &ratings_suffix);
+    let cache_key = format!("preview-season:{suffix}");
+    let cache_path = cache::preview_path(&state.config.cache_dir, cache::ImageType::Season, &suffix, "jpg")?;
+
+    if let Some(cached) = state.preview_cache.get(&cache_key).await {
+        return Ok(preview_response(cached));
+    }
+
+    if let Some(entry) = cache::read(&cache_path, 0).await {
+        let bytes: bytes::Bytes = entry.bytes.into();
+        state.preview_cache.insert(cache_key, bytes.clone()).await;
+        return Ok(preview_response(bytes));
+    }
+
+    let badges = sample_badges();
+    let badges = ratings::apply_rating_preferences(badges, ratings_order, ratings_exclude, ratings_limit);
+
+    let poster_png: &'static Vec<u8> = &SAMPLE_POSTER_PNG;
+    let font = state.font.clone();
+    let quality = state.config.image_quality;
+    let poster_fit = db::default_poster_fit();
+    let buf = tokio::task::spawn_blocking(move || {
+        generate::render_poster_sync(poster_png, &badges, &font, quality, position, badge_style, label_style, badge_appearance, badge_direction, target_width, badge_scale, badge_size, false, poster_fit)
     })
     .await
     .map_err(|e| AppError::Other(e.to_string()))??;

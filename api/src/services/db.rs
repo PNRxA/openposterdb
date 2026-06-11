@@ -531,6 +531,8 @@ impl ImageSize {
             crate::cache::ImageType::Logo => self.logo_target_width() as f32 / 780.0,
             crate::cache::ImageType::Backdrop => self.backdrop_target_width() as f32 / 1920.0,
             crate::cache::ImageType::Episode => self.episode_target_width() as f32 / 780.0,
+            // Seasons render as 2:3 posters, so they share the poster width/scale.
+            crate::cache::ImageType::Season => self.poster_target_width() as f32 / 580.0,
         }
     }
 
@@ -649,6 +651,28 @@ pub fn default_episode_badge_size() -> BadgeSize {
 
 pub fn default_episode_ratings_limit() -> i32 {
     1
+}
+
+// Season posters render through the 2:3 poster pipeline, so their badge
+// defaults mirror the poster defaults rather than the episode (still) ones.
+pub fn default_season_position() -> BadgePosition {
+    BadgePosition::BottomCenter
+}
+
+pub fn default_season_badge_style() -> BadgeStyle {
+    BadgeStyle::Default
+}
+
+pub fn default_season_badge_direction() -> BadgeDirection {
+    BadgeDirection::Default
+}
+
+pub fn default_season_badge_size() -> BadgeSize {
+    BadgeSize::Medium
+}
+
+pub fn default_season_ratings_limit() -> i32 {
+    default_ratings_limit()
 }
 
 pub fn default_backdrop_position() -> BadgePosition {
@@ -875,11 +899,12 @@ pub fn validate_render_settings(
     logo_ratings_limit: i32,
     backdrop_ratings_limit: i32,
     episode_ratings_limit: i32,
+    season_ratings_limit: i32,
 ) -> Result<(), AppError> {
     validate_lang(lang)?;
     validate_ratings_order(ratings_order)?;
     validate_ratings_exclude(ratings_exclude)?;
-    for limit in [ratings_limit, logo_ratings_limit, backdrop_ratings_limit, episode_ratings_limit] {
+    for limit in [ratings_limit, logo_ratings_limit, backdrop_ratings_limit, episode_ratings_limit, season_ratings_limit] {
         validate_ratings_limit(limit)?;
     }
     Ok(())
@@ -2020,6 +2045,14 @@ pub struct UpsertApiKeySettings<'a> {
     pub episode_badge_background: &'a str,
     pub backdrop_edge_inset_x: i32,
     pub backdrop_edge_inset_y: i32,
+    pub season_ratings_limit: i32,
+    pub season_badge_style: &'a str,
+    pub season_label_style: &'a str,
+    pub season_badge_size: &'a str,
+    pub season_position: &'a str,
+    pub season_badge_direction: &'a str,
+    pub season_badge_shape: &'a str,
+    pub season_badge_background: &'a str,
 }
 
 pub async fn upsert_api_key_settings(
@@ -2068,6 +2101,14 @@ pub async fn upsert_api_key_settings(
         episode_badge_background: Set(params.episode_badge_background.to_string()),
         backdrop_edge_inset_x: Set(params.backdrop_edge_inset_x),
         backdrop_edge_inset_y: Set(params.backdrop_edge_inset_y),
+        season_ratings_limit: Set(params.season_ratings_limit),
+        season_badge_style: Set(params.season_badge_style.to_string()),
+        season_label_style: Set(params.season_label_style.to_string()),
+        season_badge_size: Set(params.season_badge_size.to_string()),
+        season_position: Set(params.season_position.to_string()),
+        season_badge_direction: Set(params.season_badge_direction.to_string()),
+        season_badge_shape: Set(params.season_badge_shape.to_string()),
+        season_badge_background: Set(params.season_badge_background.to_string()),
     };
     api_key_settings::Entity::insert(model)
         .on_conflict(
@@ -2113,6 +2154,14 @@ pub async fn upsert_api_key_settings(
                     api_key_settings::Column::EpisodeBadgeBackground,
                     api_key_settings::Column::BackdropEdgeInsetX,
                     api_key_settings::Column::BackdropEdgeInsetY,
+                    api_key_settings::Column::SeasonRatingsLimit,
+                    api_key_settings::Column::SeasonBadgeStyle,
+                    api_key_settings::Column::SeasonLabelStyle,
+                    api_key_settings::Column::SeasonBadgeSize,
+                    api_key_settings::Column::SeasonPosition,
+                    api_key_settings::Column::SeasonBadgeDirection,
+                    api_key_settings::Column::SeasonBadgeShape,
+                    api_key_settings::Column::SeasonBadgeBackground,
                 ])
                 .to_owned(),
         )
@@ -2185,6 +2234,14 @@ pub struct RenderSettings {
     pub logo_badge_background: BadgeBackground,
     pub backdrop_badge_background: BadgeBackground,
     pub episode_badge_background: BadgeBackground,
+    pub season_ratings_limit: i32,
+    pub season_badge_style: BadgeStyle,
+    pub season_label_style: LabelStyle,
+    pub season_badge_size: BadgeSize,
+    pub season_position: BadgePosition,
+    pub season_badge_direction: BadgeDirection,
+    pub season_badge_shape: BadgeShape,
+    pub season_badge_background: BadgeBackground,
 }
 
 impl RenderSettings {
@@ -2203,6 +2260,10 @@ impl RenderSettings {
     /// Badge appearance (shape + background) for episode stills.
     pub fn episode_appearance(&self) -> BadgeAppearance {
         BadgeAppearance { shape: self.episode_badge_shape, background: self.episode_badge_background }
+    }
+    /// Badge appearance (shape + background) for season posters.
+    pub fn season_appearance(&self) -> BadgeAppearance {
+        BadgeAppearance { shape: self.season_badge_shape, background: self.season_badge_background }
     }
 }
 
@@ -2250,6 +2311,14 @@ impl Default for RenderSettings {
             logo_badge_background: default_badge_background(),
             backdrop_badge_background: default_badge_background(),
             episode_badge_background: default_badge_background(),
+            season_ratings_limit: default_season_ratings_limit(),
+            season_badge_style: default_season_badge_style(),
+            season_label_style: default_label_style(),
+            season_badge_size: default_season_badge_size(),
+            season_position: default_season_position(),
+            season_badge_direction: default_season_badge_direction(),
+            season_badge_shape: default_badge_shape(),
+            season_badge_background: default_badge_background(),
         }
     }
 }
@@ -2338,6 +2407,17 @@ pub fn parse_global_render_settings(globals: &HashMap<String, String>) -> Render
         logo_badge_background: global_or(globals, "logo_badge_background", BadgeBackground::parse, defaults.logo_badge_background),
         backdrop_badge_background: global_or(globals, "backdrop_badge_background", BadgeBackground::parse, defaults.backdrop_badge_background),
         episode_badge_background: global_or(globals, "episode_badge_background", BadgeBackground::parse, defaults.episode_badge_background),
+        season_ratings_limit: globals
+            .get("season_ratings_limit")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(defaults.season_ratings_limit),
+        season_badge_style: global_or(globals, "season_badge_style", BadgeStyle::parse, defaults.season_badge_style),
+        season_label_style: global_or(globals, "season_label_style", LabelStyle::parse, defaults.season_label_style),
+        season_badge_size: global_or(globals, "season_badge_size", BadgeSize::parse, defaults.season_badge_size),
+        season_position: global_or(globals, "season_position", BadgePosition::parse, defaults.season_position),
+        season_badge_direction: global_or(globals, "season_badge_direction", BadgeDirection::parse, defaults.season_badge_direction),
+        season_badge_shape: global_or(globals, "season_badge_shape", BadgeShape::parse, defaults.season_badge_shape),
+        season_badge_background: global_or(globals, "season_badge_background", BadgeBackground::parse, defaults.season_badge_background),
     }
 }
 
@@ -2391,6 +2471,14 @@ pub async fn get_effective_render_settings(
                 logo_badge_background: parse_setting_or_default(&s.logo_badge_background, "logo_badge_background", BadgeBackground::parse, default_badge_background()),
                 backdrop_badge_background: parse_setting_or_default(&s.backdrop_badge_background, "backdrop_badge_background", BadgeBackground::parse, default_badge_background()),
                 episode_badge_background: parse_setting_or_default(&s.episode_badge_background, "episode_badge_background", BadgeBackground::parse, default_badge_background()),
+                season_ratings_limit: s.season_ratings_limit,
+                season_badge_style: parse_setting_or_default(&s.season_badge_style, "season_badge_style", BadgeStyle::parse, default_season_badge_style()),
+                season_label_style: parse_setting_or_default(&s.season_label_style, "season_label_style", LabelStyle::parse, LabelStyle::Official),
+                season_badge_size: parse_setting_or_default(&s.season_badge_size, "season_badge_size", BadgeSize::parse, default_season_badge_size()),
+                season_position: parse_setting_or_default(&s.season_position, "season_position", BadgePosition::parse, default_season_position()),
+                season_badge_direction: parse_setting_or_default(&s.season_badge_direction, "season_badge_direction", BadgeDirection::parse, default_season_badge_direction()),
+                season_badge_shape: parse_setting_or_default(&s.season_badge_shape, "season_badge_shape", BadgeShape::parse, default_badge_shape()),
+                season_badge_background: parse_setting_or_default(&s.season_badge_background, "season_badge_background", BadgeBackground::parse, default_badge_background()),
             };
         }
         Ok(None) => {} // no per-key override, fall through

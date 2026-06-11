@@ -490,3 +490,277 @@ async fn poster_invalid_fit_rejected() {
     let res = app.oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
 }
+
+// --- Season endpoint rejects non-season ids ---
+//
+// A non-season id on the season endpoint must never serve an image: the handler
+// rejects ids that resolve to a non-Season media type. With a fake TMDB key the
+// id never resolves, so we only assert the request is NOT a 200 (true both when
+// resolution fails and when it succeeds and the handler returns its 400).
+
+#[tokio::test]
+async fn season_endpoint_rejects_non_season_id() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    let req = Request::builder()
+        .uri(format!(
+            "/{api_key}/tmdb/season-default/series-1396.jpg"
+        ))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_ne!(res.status(), StatusCode::OK, "non-season id must not serve a 200 on the season endpoint");
+}
+
+// --- Season query overrides ---
+//
+// Seasons mirror the poster controls (badge_style, ratings_limit, badge_size,
+// position, badge_direction, badge_shape, badge_background) but have NO
+// blur/fit/split. Override validation happens before any network resolution,
+// so valid overrides on a well-formed `season-{id}-S{n}` id must not produce a
+// 400 (resolution later fails with a fake TMDB key, which is not a 400), and
+// invalid overrides must produce a 400 — same as the poster tests above.
+
+#[tokio::test]
+async fn season_badge_style_accepted() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    let req = Request::builder()
+        .uri(format!(
+            "/{api_key}/tmdb/season-default/season-1396-S2.jpg?badge_style=h"
+        ))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_ne!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn season_ratings_limit_accepted() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    let req = Request::builder()
+        .uri(format!(
+            "/{api_key}/tmdb/season-default/season-1396-S2.jpg?ratings_limit=3"
+        ))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_ne!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn season_badge_size_accepted() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    let req = Request::builder()
+        .uri(format!(
+            "/{api_key}/tmdb/season-default/season-1396-S2.jpg?badge_size=xl"
+        ))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_ne!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn season_position_accepted() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    let req = Request::builder()
+        .uri(format!(
+            "/{api_key}/tmdb/season-default/season-1396-S2.jpg?position=tl"
+        ))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_ne!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn season_badge_direction_accepted() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    let req = Request::builder()
+        .uri(format!(
+            "/{api_key}/tmdb/season-default/season-1396-S2.jpg?badge_direction=h"
+        ))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_ne!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn season_badge_shape_accepted() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    let req = Request::builder()
+        .uri(format!(
+            "/{api_key}/tmdb/season-default/season-1396-S2.jpg?badge_shape=p"
+        ))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_ne!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn season_badge_background_accepted() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    let req = Request::builder()
+        .uri(format!(
+            "/{api_key}/tmdb/season-default/season-1396-S2.jpg?badge_background=k"
+        ))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_ne!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn season_all_overrides_accepted() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    let req = Request::builder()
+        .uri(format!(
+            "/{api_key}/tmdb/season-default/season-1396-S2.jpg?badge_style=v&label_style=i&badge_size=l&badge_direction=h&position=tl&badge_shape=p&badge_background=k&ratings_limit=5&ratings_order=imdb,tmdb&ratings_exclude=rt&image_source=t"
+        ))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_ne!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn season_no_overrides_accepted() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    let req = Request::builder()
+        .uri(format!(
+            "/{api_key}/tmdb/season-default/season-1396-S2.jpg"
+        ))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_ne!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn season_invalid_ratings_limit_rejected() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    let req = Request::builder()
+        .uri(format!(
+            "/{api_key}/tmdb/season-default/season-1396-S2.jpg?ratings_limit=11"
+        ))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn season_invalid_badge_style_rejected() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    let req = Request::builder()
+        .uri(format!(
+            "/{api_key}/tmdb/season-default/season-1396-S2.jpg?badge_style=z"
+        ))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn season_invalid_badge_shape_rejected() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    let req = Request::builder()
+        .uri(format!(
+            "/{api_key}/tmdb/season-default/season-1396-S2.jpg?badge_shape=z"
+        ))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn season_invalid_badge_background_rejected() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    let req = Request::builder()
+        .uri(format!(
+            "/{api_key}/tmdb/season-default/season-1396-S2.jpg?badge_background=z"
+        ))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+// --- Auth / routing guards (no network) ---
+//
+// These assert behavior that happens BEFORE any TMDB resolution.
+
+#[tokio::test]
+async fn season_invalid_api_key_rejected() {
+    let (app, _) = common::setup_test_app().await;
+    // No valid key created; an unknown key must be rejected with 401.
+    let req = Request::builder()
+        .uri("/0000000000000000000000000000000000000000000000000000000000000000/tmdb/season-default/season-1396-S2.jpg")
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn season_invalid_id_type_rejected() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    // `bogus` is not a known id_type — rejected with 400 before any network call.
+    let req = Request::builder()
+        .uri(format!(
+            "/{api_key}/bogus/season-default/season-1396-S2.jpg"
+        ))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}

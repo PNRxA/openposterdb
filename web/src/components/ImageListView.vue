@@ -45,7 +45,7 @@ interface ListResponse {
 }
 
 const props = defineProps<{
-  kind: 'poster' | 'logo' | 'backdrop' | 'episode'
+  kind: 'poster' | 'logo' | 'backdrop' | 'episode' | 'season'
   listFn: (page: number, pageSize: number) => Promise<Response>
   imageFn: (key: string) => Promise<Response>
   fetchFn: (idType: string, idValue: string) => Promise<Response>
@@ -189,7 +189,7 @@ const previewSizeClass = computed(() => {
 })
 
 const skeletonClass = computed(() => {
-  if (props.kind === 'poster') return 'h-[400px] w-[270px] max-w-full rounded-md'
+  if (props.kind === 'poster' || props.kind === 'season') return 'h-[400px] w-[270px] max-w-full rounded-md'
   if (props.kind === 'logo') return 'h-[200px] w-[400px] max-w-full rounded-md'
   return 'h-[270px] w-[480px] max-w-full rounded-md'
 })

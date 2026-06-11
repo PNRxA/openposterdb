@@ -11,6 +11,8 @@ const mockAdminApi = vi.hoisted(() => ({
   previewPoster: vi.fn().mockResolvedValue({ ok: true, blob: () => Promise.resolve(new Blob()) }),
   previewLogo: vi.fn().mockResolvedValue({ ok: true, blob: () => Promise.resolve(new Blob()) }),
   previewBackdrop: vi.fn().mockResolvedValue({ ok: true, blob: () => Promise.resolve(new Blob()) }),
+  previewEpisode: vi.fn().mockResolvedValue({ ok: true, blob: () => Promise.resolve(new Blob()) }),
+  previewSeason: vi.fn().mockResolvedValue({ ok: true, blob: () => Promise.resolve(new Blob()) }),
 }))
 
 vi.mock('@/lib/api', () => ({
@@ -48,6 +50,12 @@ const defaultSettings = {
   episode_position: 'tr',
   episode_badge_direction: 'v',
   episode_blur: false,
+  season_ratings_limit: 3,
+  season_badge_style: 'd',
+  season_label_style: 'o',
+  season_badge_size: 'm',
+  season_position: 'bc',
+  season_badge_direction: 'd',
 }
 
 function mountView() {
@@ -355,6 +363,66 @@ describe('SettingsView', () => {
       }),
     )
     vi.useRealTimers()
+  })
+
+  it('auto-save payload includes season settings', async () => {
+    vi.useFakeTimers()
+    mockAdminApi.getSettings.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          ...defaultSettings,
+          season_ratings_limit: 2,
+          season_badge_style: 'h',
+          season_label_style: 'i',
+          season_badge_size: 's',
+          season_position: 'tl',
+          season_badge_direction: 'h',
+        }),
+    })
+    mockAdminApi.updateSettings.mockResolvedValue({ ok: true })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    // Toggle fanart to trigger auto-save
+    await wrapper.find('[data-testid="fanart-checkbox"]').setValue(true)
+    vi.advanceTimersByTime(700)
+    await flushPromises()
+
+    expect(mockAdminApi.updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        season_ratings_limit: 2,
+        season_badge_style: 'h',
+        season_label_style: 'i',
+        season_badge_size: 's',
+        season_position: 'tl',
+        season_badge_direction: 'h',
+      }),
+    )
+    vi.useRealTimers()
+  })
+
+  it('toggleFreeApiKey payload includes season fields', async () => {
+    mockAdminApi.updateSettings.mockResolvedValue({ ok: true })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    const toggle = wrapper.find('button[role="switch"]')
+    await toggle.trigger('click')
+    await flushPromises()
+
+    expect(mockAdminApi.updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        season_ratings_limit: 3,
+        season_badge_style: 'd',
+        season_label_style: 'o',
+        season_badge_size: 'm',
+        season_position: 'bc',
+        season_badge_direction: 'd',
+      }),
+    )
   })
 
   it('toggleFreeApiKey payload includes episode fields', async () => {

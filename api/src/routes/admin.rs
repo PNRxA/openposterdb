@@ -21,10 +21,14 @@ pub fn admin_routes() -> Router<Arc<AppState>> {
         .route("/api/admin/episodes", get(handlers::admin::list_episodes))
         .route("/api/admin/episodes/{id_type}/{id_value}/image", get(handlers::admin::episode_image))
         .route("/api/admin/episodes/{id_type}/{id_value}/fetch", post(handlers::admin::fetch_episode))
+        .route("/api/admin/seasons", get(handlers::admin::list_seasons))
+        .route("/api/admin/seasons/{id_type}/{id_value}/image", get(handlers::admin::season_image))
+        .route("/api/admin/seasons/{id_type}/{id_value}/fetch", post(handlers::admin::fetch_season))
         .route("/api/admin/preview/poster", get(handlers::preview::preview_poster))
         .route("/api/admin/preview/logo", get(handlers::preview::preview_logo))
         .route("/api/admin/preview/backdrop", get(handlers::preview::preview_backdrop))
         .route("/api/admin/preview/episode", get(handlers::preview::preview_episode))
+        .route("/api/admin/preview/season", get(handlers::preview::preview_season))
         .route(
             "/api/admin/settings",
             get(handlers::admin::get_settings).put(handlers::admin::update_settings),

@@ -103,6 +103,7 @@ pub static FONT_BYTES: &[u8] = include_bytes!("../assets/fonts/Inter-Bold.ttf");
         handlers::image::logo_handler,
         handlers::image::backdrop_handler,
         handlers::image::episode_handler,
+        handlers::image::season_handler,
         handlers::image::is_valid_handler,
     ),
     components(schemas(
@@ -125,8 +126,9 @@ mod tests {
         assert!(paths.contains(&"/{api_key}/{id_type}/logo-default/{id_value}"));
         assert!(paths.contains(&"/{api_key}/{id_type}/backdrop-default/{id_value}"));
         assert!(paths.contains(&"/{api_key}/{id_type}/episode-default/{id_value}"));
+        assert!(paths.contains(&"/{api_key}/{id_type}/season-default/{id_value}"));
         assert!(paths.contains(&"/{api_key}/isValid"));
-        assert_eq!(paths.len(), 5);
+        assert_eq!(paths.len(), 6);
     }
 
     #[test]
@@ -396,6 +398,40 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
     ),
     (
         "ALTER TABLE api_key_settings ADD COLUMN backdrop_edge_inset_y INTEGER NOT NULL DEFAULT 0",
+        "duplicate column",
+    ),
+    // Season poster badge settings. Defaults mirror the poster badge defaults
+    // (seasons render through the 2:3 poster pipeline).
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN season_ratings_limit INTEGER NOT NULL DEFAULT 3",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN season_badge_style TEXT NOT NULL DEFAULT 'd'",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN season_label_style TEXT NOT NULL DEFAULT 'o'",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN season_badge_size TEXT NOT NULL DEFAULT 'm'",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN season_position TEXT NOT NULL DEFAULT 'bc'",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN season_badge_direction TEXT NOT NULL DEFAULT 'd'",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN season_badge_shape TEXT NOT NULL DEFAULT 'r'",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN season_badge_background TEXT NOT NULL DEFAULT 'd'",
         "duplicate column",
     ),
 ];

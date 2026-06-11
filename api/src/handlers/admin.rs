@@ -153,6 +153,14 @@ pub struct GlobalSettingsResponse {
     pub logo_badge_background: BadgeBackground,
     pub backdrop_badge_background: BadgeBackground,
     pub episode_badge_background: BadgeBackground,
+    pub season_ratings_limit: i32,
+    pub season_badge_style: BadgeStyle,
+    pub season_label_style: LabelStyle,
+    pub season_badge_size: BadgeSize,
+    pub season_position: BadgePosition,
+    pub season_badge_direction: BadgeDirection,
+    pub season_badge_shape: BadgeShape,
+    pub season_badge_background: BadgeBackground,
 }
 
 pub async fn get_settings(
@@ -213,6 +221,14 @@ pub async fn get_settings(
         logo_badge_background: settings.logo_badge_background,
         backdrop_badge_background: settings.backdrop_badge_background,
         episode_badge_background: settings.episode_badge_background,
+        season_ratings_limit: settings.season_ratings_limit,
+        season_badge_style: settings.season_badge_style,
+        season_label_style: settings.season_label_style,
+        season_badge_size: settings.season_badge_size,
+        season_position: settings.season_position,
+        season_badge_direction: settings.season_badge_direction,
+        season_badge_shape: settings.season_badge_shape,
+        season_badge_background: settings.season_badge_background,
     }))
 }
 
@@ -299,18 +315,35 @@ pub struct UpdateGlobalSettingsRequest {
     pub backdrop_badge_background: BadgeBackground,
     #[serde(default = "db::default_badge_background")]
     pub episode_badge_background: BadgeBackground,
+    #[serde(default = "db::default_season_ratings_limit")]
+    pub season_ratings_limit: i32,
+    #[serde(default = "db::default_season_badge_style")]
+    pub season_badge_style: BadgeStyle,
+    #[serde(default = "db::default_label_style")]
+    pub season_label_style: LabelStyle,
+    #[serde(default = "db::default_season_badge_size")]
+    pub season_badge_size: BadgeSize,
+    #[serde(default = "db::default_season_position")]
+    pub season_position: BadgePosition,
+    #[serde(default = "db::default_season_badge_direction")]
+    pub season_badge_direction: BadgeDirection,
+    #[serde(default = "db::default_badge_shape")]
+    pub season_badge_shape: BadgeShape,
+    #[serde(default = "db::default_badge_background")]
+    pub season_badge_background: BadgeBackground,
 }
 
 pub async fn update_settings(
     State(state): State<Arc<AppState>>,
     Json(req): Json<UpdateGlobalSettingsRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    db::validate_render_settings(&req.lang, req.ratings_limit, &req.ratings_order, &req.ratings_exclude, req.logo_ratings_limit, req.backdrop_ratings_limit, req.episode_ratings_limit)?;
+    db::validate_render_settings(&req.lang, req.ratings_limit, &req.ratings_order, &req.ratings_exclude, req.logo_ratings_limit, req.backdrop_ratings_limit, req.episode_ratings_limit, req.season_ratings_limit)?;
     let textless_str = if req.textless { "true" } else { "false" };
     let limit_str = req.ratings_limit.to_string();
     let logo_limit_str = req.logo_ratings_limit.to_string();
     let backdrop_limit_str = req.backdrop_ratings_limit.to_string();
     let episode_limit_str = req.episode_ratings_limit.to_string();
+    let season_limit_str = req.season_ratings_limit.to_string();
     let episode_blur_str = if req.episode_blur { "true" } else { "false" };
     let poster_badge_split_str = if req.poster_badge_split { "true" } else { "false" };
     let backdrop_edge_inset_x_str = db::clamp_edge_inset(req.backdrop_edge_inset_x).to_string();
@@ -356,6 +389,14 @@ pub async fn update_settings(
         ("logo_badge_background", req.logo_badge_background.as_str()),
         ("backdrop_badge_background", req.backdrop_badge_background.as_str()),
         ("episode_badge_background", req.episode_badge_background.as_str()),
+        ("season_ratings_limit", &season_limit_str),
+        ("season_badge_style", req.season_badge_style.as_str()),
+        ("season_label_style", req.season_label_style.as_str()),
+        ("season_badge_size", req.season_badge_size.as_str()),
+        ("season_position", req.season_position.as_str()),
+        ("season_badge_direction", req.season_badge_direction.as_str()),
+        ("season_badge_shape", req.season_badge_shape.as_str()),
+        ("season_badge_background", req.season_badge_background.as_str()),
     ];
     let free_key_str;
     if state.config.free_key_enabled.is_none() {
@@ -475,6 +516,42 @@ pub async fn fetch_episode(
         .map_err(|e| AppError::Other(e.to_string()))?;
 
     let (bytes, _) = serve::handle_episode_inner(&state, &id_type, &id_value, (*settings).clone(), None).await?;
+    Ok(serve::image_response(bytes, "image/jpeg"))
+}
+
+// --- Seasons ---
+
+pub async fn list_seasons(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<ListImagesQuery>,
+) -> Result<Json<ListImagesResponse>, AppError> {
+    list_images(&state, &query, cache::ImageType::Season).await
+}
+
+pub async fn season_image(
+    State(state): State<Arc<AppState>>,
+    Path((id_type, id_value)): Path<(String, String)>,
+) -> Result<Response, AppError> {
+    image_from_cache_key(&state, &id_type, &id_value, cache::ImageType::Season, "image/jpeg").await
+}
+
+pub async fn fetch_season(
+    State(state): State<Arc<AppState>>,
+    Path((id_type, id_value)): Path<(String, String)>,
+) -> Result<Response, AppError> {
+    crate::id::IdType::parse(&id_type)?;
+
+    let db_ref = state.db.clone();
+    let settings = state
+        .global_settings_cache
+        .try_get_with((), async move {
+            let globals = db::get_global_settings(&db_ref).await?;
+            Ok::<_, AppError>(Arc::new(db::parse_global_render_settings(&globals)))
+        })
+        .await
+        .map_err(|e| AppError::Other(e.to_string()))?;
+
+    let (bytes, _) = serve::handle_season_inner(&state, &id_type, &id_value, (*settings).clone(), None).await?;
     Ok(serve::image_response(bytes, "image/jpeg"))
 }
 

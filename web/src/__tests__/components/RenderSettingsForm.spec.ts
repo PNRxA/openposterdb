@@ -41,14 +41,22 @@ const defaultSettings: RenderSettings = {
   episode_position: 'tr',
   episode_badge_direction: 'v',
   episode_blur: false,
+  season_ratings_limit: 3,
+  season_badge_style: 'd',
+  season_label_style: 'o',
+  season_badge_size: 'm',
+  season_position: 'bc',
+  season_badge_direction: 'd',
   poster_badge_shape: 'r',
   logo_badge_shape: 'r',
   backdrop_badge_shape: 'r',
   episode_badge_shape: 'r',
+  season_badge_shape: 'r',
   poster_badge_background: 'd',
   logo_badge_background: 'd',
   backdrop_badge_background: 'd',
   episode_badge_background: 'd',
+  season_badge_background: 'd',
 }
 
 function makeFetchPreview() {
@@ -370,6 +378,127 @@ describe('RenderSettingsForm', () => {
     expect(wrapper.find('[data-testid="episode-badge-style-select"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="episode-badge-direction-select"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="episode-blur-checkbox"]').exists()).toBe(true)
+  })
+
+  // --- Season preview ---
+
+  it('renders season section when fetchSeasonPreview is provided', () => {
+    const fetchSeasonPreview = makeFetchPreview()
+    const settings = { ...defaultSettings }
+    const wrapper = mount(RenderSettingsForm, {
+      props: {
+        settings,
+        loadSettings: vi.fn().mockResolvedValue(settings),
+        saveSettings: vi.fn().mockResolvedValue(null),
+        fetchPreview: makeFetchPreview(),
+        fetchSeasonPreview,
+      },
+      global: {
+        plugins: [createPinia()],
+        stubs: shadcnStubs,
+      },
+    })
+    expect(wrapper.text()).toContain('Season')
+    expect(wrapper.find('img[alt="Season preview"]').exists()).toBe(true)
+  })
+
+  it('does not render season section when fetchSeasonPreview is absent', () => {
+    const wrapper = mountForm()
+    expect(wrapper.find('img[alt="Season preview"]').exists()).toBe(false)
+  })
+
+  it('calls fetchSeasonPreview on mount with season settings', async () => {
+    const fetchSeasonPreview = makeFetchPreview()
+    const settings = { ...defaultSettings }
+    mount(RenderSettingsForm, {
+      props: {
+        settings,
+        loadSettings: vi.fn().mockResolvedValue(settings),
+        saveSettings: vi.fn().mockResolvedValue(null),
+        fetchPreview: makeFetchPreview(),
+        fetchSeasonPreview,
+      },
+      global: {
+        plugins: [createPinia()],
+        stubs: shadcnStubs,
+      },
+    })
+    await flushPromises()
+
+    expect(fetchSeasonPreview).toHaveBeenCalledWith(
+      3, // season_ratings_limit
+      expect.any(String), // ratings_order
+      'd', // season_badge_style
+      'o', // season_label_style
+      'm', // season_badge_size
+      'bc', // season_position
+      'd', // season_badge_direction
+      '', // ratings_exclude
+      'r', // season_badge_shape
+      'd', // season_badge_background
+    )
+  })
+
+  it('renders season position and badge controls but no blur control', () => {
+    const fetchSeasonPreview = makeFetchPreview()
+    const settings = { ...defaultSettings }
+    const wrapper = mount(RenderSettingsForm, {
+      props: {
+        settings,
+        loadSettings: vi.fn().mockResolvedValue(settings),
+        saveSettings: vi.fn().mockResolvedValue(null),
+        fetchPreview: makeFetchPreview(),
+        fetchSeasonPreview,
+      },
+      global: {
+        plugins: [createPinia()],
+        stubs: shadcnStubs,
+      },
+    })
+    expect(wrapper.find('[data-testid="season-position-select"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="season-badge-style-select"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="season-badge-direction-select"]').exists()).toBe(true)
+    // Season has no blur control (unlike episode).
+    expect(wrapper.find('[data-testid="season-blur-checkbox"]').exists()).toBe(false)
+  })
+
+  it('auto-save payload includes season fields', async () => {
+    const saveSettings = vi.fn().mockResolvedValue(null)
+    const settings = { ...defaultSettings }
+    const wrapper = mount(RenderSettingsForm, {
+      props: {
+        settings,
+        loadSettings: vi.fn().mockResolvedValue(settings),
+        saveSettings,
+        fetchPreview: makeFetchPreview(),
+        fetchSeasonPreview: makeFetchPreview(),
+      },
+      global: {
+        plugins: [createPinia()],
+        stubs: shadcnStubs,
+      },
+    })
+
+    // Toggle textless to trigger an auto-save.
+    await wrapper.find('[data-testid="textless-checkbox"]').setValue(true)
+    await flushPromises()
+
+    expect(saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        season_ratings_limit: 3,
+        season_badge_style: 'd',
+        season_label_style: 'o',
+        season_badge_size: 'm',
+        season_position: 'bc',
+        season_badge_direction: 'd',
+        season_badge_shape: 'r',
+        season_badge_background: 'd',
+      }),
+    )
+    // Season carries no blur field.
+    expect(saveSettings).toHaveBeenCalledWith(
+      expect.not.objectContaining({ season_blur: expect.anything() }),
+    )
   })
 
   // --- Backdrop edge inset ---

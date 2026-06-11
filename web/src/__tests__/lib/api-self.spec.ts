@@ -252,6 +252,58 @@ describe('selfApi', () => {
     expect(url).toContain('label_style=i')
   })
 
+  it('previewSeason calls GET with correct URL and params', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await selfApi.previewSeason(3, 'imdb,rt,tmdb')
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toContain('/api/key/me/preview/season')
+    expect(url).toContain('ratings_limit=3')
+    expect(url).toContain('ratings_order=imdb%2Crt%2Ctmdb')
+  })
+
+  it('previewSeason includes position when provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await selfApi.previewSeason(3, 'imdb,rt', undefined, undefined, undefined, 'bc')
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toContain('position=bc')
+  })
+
+  it('previewSeason includes badge_direction when provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await selfApi.previewSeason(3, 'imdb,rt', undefined, undefined, undefined, 'bc', 'h')
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toContain('badge_direction=h')
+  })
+
+  it('previewSeason includes label_style when provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await selfApi.previewSeason(3, 'imdb,rt', 'v', 'i')
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toContain('label_style=i')
+  })
+
+  it('previewSeason has no blur parameter', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await selfApi.previewSeason(3, 'imdb,rt', 'v', 'i', 'm', 'bc', 'v')
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).not.toContain('blur')
+  })
+
   it('updateSettings includes episode fields', async () => {
     const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200, { ok: true }))
     vi.stubGlobal('fetch', fetchMock)
@@ -295,5 +347,50 @@ describe('selfApi', () => {
     expect(body.episode_position).toBe('tr')
     expect(body.episode_badge_direction).toBe('v')
     expect(body.episode_blur).toBe(false)
+  })
+
+  it('updateSettings includes season fields', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200, { ok: true }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await selfApi.updateSettings({
+      image_source: 't',
+      lang: 'en',
+      textless: false,
+      ratings_limit: 3,
+      ratings_order: 'imdb,rt,tmdb',
+      ratings_exclude: '',
+      poster_position: 'bc',
+      logo_ratings_limit: 3,
+      backdrop_ratings_limit: 3,
+      poster_badge_style: 'h',
+      logo_badge_style: 'h',
+      backdrop_badge_style: 'v',
+      poster_label_style: 't',
+      logo_label_style: 't',
+      backdrop_label_style: 't',
+      poster_badge_direction: 'd',
+      poster_badge_split: false,
+      poster_badge_size: 'l',
+      logo_badge_size: 's',
+      backdrop_badge_size: 'xl',
+      season_ratings_limit: 3,
+      season_badge_style: 'd',
+      season_label_style: 'o',
+      season_badge_size: 'm',
+      season_position: 'bc',
+      season_badge_direction: 'd',
+    })
+
+    const [, options] = fetchMock.mock.calls[0]
+    const body = JSON.parse(options.body)
+    expect(body.season_ratings_limit).toBe(3)
+    expect(body.season_badge_style).toBe('d')
+    expect(body.season_label_style).toBe('o')
+    expect(body.season_badge_size).toBe('m')
+    expect(body.season_position).toBe('bc')
+    expect(body.season_badge_direction).toBe('d')
+    // Season carries no blur field.
+    expect(body.season_blur).toBeUndefined()
   })
 })

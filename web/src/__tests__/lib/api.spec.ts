@@ -428,4 +428,87 @@ describe('api', () => {
     const [url] = fetchMock.mock.calls[0]
     expect(url).toContain('label_style=i')
   })
+
+  it('adminApi.getSeasons calls GET with correct URL', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.getSeasons(1, 50)
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/admin/seasons?page=1&page_size=50')
+  })
+
+  it('adminApi.getSeasonImage calls GET with correct URL', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.getSeasonImage('tmdb/872585-S1')
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/admin/seasons/tmdb/872585-S1/image')
+  })
+
+  it('adminApi.fetchSeason calls POST with correct URL', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.fetchSeason('tmdb', '872585-S1')
+
+    const [url, options] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/admin/seasons/tmdb/872585-S1/fetch')
+    expect(options.method).toBe('POST')
+  })
+
+  it('adminApi.previewSeason calls GET with correct URL and params', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.previewSeason(3, 'imdb,rt,tmdb')
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toContain('/api/admin/preview/season')
+    expect(url).toContain('ratings_limit=3')
+    expect(url).toContain('ratings_order=imdb%2Crt%2Ctmdb')
+  })
+
+  it('adminApi.previewSeason includes position when provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.previewSeason(3, 'imdb,rt', undefined, undefined, undefined, 'bc')
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toContain('position=bc')
+  })
+
+  it('adminApi.previewSeason includes badge_direction when provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.previewSeason(3, 'imdb,rt', undefined, undefined, undefined, 'bc', 'h')
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toContain('badge_direction=h')
+  })
+
+  it('adminApi.previewSeason includes label_style when provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.previewSeason(3, 'imdb,rt', 'v', 'i')
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toContain('label_style=i')
+  })
+
+  it('adminApi.previewSeason has no blur parameter', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.previewSeason(3, 'imdb,rt', 'v', 'i', 'm', 'bc', 'v')
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).not.toContain('blur')
+  })
 })
