@@ -136,6 +136,8 @@ pub struct RatingsResult {
     pub tmdb_id: Option<u64>,
     pub tvdb_id: Option<u64>,
     pub imdb_id: Option<String>,
+    /// CSM age rating string (e.g. "12+"), sourced from MDBList's `age_rating` field.
+    pub csm_age: Option<String>,
 }
 
 pub async fn fetch_ratings(
@@ -229,9 +231,9 @@ async fn fetch_ratings_inner(
         );
     }
 
-    let (mdblist_badges, mdb_tmdb_id, mdb_tvdb_id, mdb_imdb_id) = match mdblist_raw {
-        Some((badges, tmdb_id, tvdb_id, imdb_id)) => (Some(badges), tmdb_id, tvdb_id, imdb_id),
-        None => (None, None, None, None),
+    let (mdblist_badges, mdb_tmdb_id, mdb_tvdb_id, mdb_imdb_id, mdb_csm_age) = match mdblist_raw {
+        Some((badges, tmdb_id, tvdb_id, imdb_id, csm_age)) => (Some(badges), tmdb_id, tvdb_id, imdb_id, csm_age),
+        None => (None, None, None, None, None),
     };
 
     let find_omdb = |src: RatingSource| -> Option<RatingBadge> {
@@ -270,6 +272,7 @@ async fn fetch_ratings_inner(
         tmdb_id: mdb_tmdb_id,
         tvdb_id: mdb_tvdb_id,
         imdb_id: mdb_imdb_id,
+        csm_age: mdb_csm_age,
     }
 }
 
@@ -1192,7 +1195,7 @@ fn mdblist_lookup_for(resolved: &ResolvedId) -> Option<MdblistLookup<'_>> {
 async fn fetch_mdblist_ratings(
     resolved: &ResolvedId,
     mdblist: Option<&MdblistClient>,
-) -> Option<(Vec<RatingBadge>, Option<u64>, Option<u64>, Option<String>)> {
+) -> Option<(Vec<RatingBadge>, Option<u64>, Option<u64>, Option<String>, Option<String>)> {
     let client = mdblist?;
 
     let resp = match mdblist_lookup_for(resolved)? {
@@ -1212,7 +1215,8 @@ async fn fetch_mdblist_ratings(
         },
     };
 
-    Some((mdblist_badges(&resp), resp.ids.tmdb, resp.ids.tvdb, resp.ids.imdb))
+    let csm_age = resp.csm_age();
+    Some((mdblist_badges(&resp), resp.ids.tmdb, resp.ids.tvdb, resp.ids.imdb, csm_age))
 }
 
 /// Map a raw MDBList response into rating badges.

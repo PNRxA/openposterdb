@@ -153,6 +153,9 @@ pub struct GlobalSettingsResponse {
     pub logo_badge_background: BadgeBackground,
     pub backdrop_badge_background: BadgeBackground,
     pub episode_badge_background: BadgeBackground,
+    pub csm_enabled: bool,
+    pub csm_position: BadgePosition,
+    pub csm_size: BadgeSize,
 }
 
 pub async fn get_settings(
@@ -213,6 +216,9 @@ pub async fn get_settings(
         logo_badge_background: settings.logo_badge_background,
         backdrop_badge_background: settings.backdrop_badge_background,
         episode_badge_background: settings.episode_badge_background,
+        csm_enabled: settings.csm_enabled,
+        csm_position: settings.csm_position,
+        csm_size: settings.csm_size,
     }))
 }
 
@@ -299,6 +305,12 @@ pub struct UpdateGlobalSettingsRequest {
     pub backdrop_badge_background: BadgeBackground,
     #[serde(default = "db::default_badge_background")]
     pub episode_badge_background: BadgeBackground,
+    #[serde(default)]
+    pub csm_enabled: bool,
+    #[serde(default = "db::default_csm_position")]
+    pub csm_position: BadgePosition,
+    #[serde(default = "db::default_csm_size")]
+    pub csm_size: BadgeSize,
 }
 
 pub async fn update_settings(
@@ -315,6 +327,7 @@ pub async fn update_settings(
     let poster_badge_split_str = if req.poster_badge_split { "true" } else { "false" };
     let backdrop_edge_inset_x_str = db::clamp_edge_inset(req.backdrop_edge_inset_x).to_string();
     let backdrop_edge_inset_y_str = db::clamp_edge_inset(req.backdrop_edge_inset_y).to_string();
+    let csm_enabled_str = if req.csm_enabled { "true" } else { "false" };
     let mut batch: Vec<(&str, &str)> = vec![
         ("image_source", req.image_source.as_str()),
         ("lang", &req.lang),
@@ -356,6 +369,9 @@ pub async fn update_settings(
         ("logo_badge_background", req.logo_badge_background.as_str()),
         ("backdrop_badge_background", req.backdrop_badge_background.as_str()),
         ("episode_badge_background", req.episode_badge_background.as_str()),
+        ("csm_enabled", csm_enabled_str),
+        ("csm_position", req.csm_position.as_str()),
+        ("csm_size", req.csm_size.as_str()),
     ];
     let free_key_str;
     if state.config.free_key_enabled.is_none() {

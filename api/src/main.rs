@@ -45,6 +45,12 @@ async fn main() {
         ))
         .timeout(Duration::from_secs(30))
         .connect_timeout(Duration::from_secs(10))
+        // TMDB (and other providers) return gzip-compressed responses; without
+        // explicit decompression support reqwest passes the raw bytes through
+        // and JSON parsing fails with "unexpected byte 0x1f" (gzip magic number).
+        .gzip(true)
+        .brotli(true)
+        .deflate(true)
         .build()
         .expect("failed to build HTTP client");
     let font = FontArc::try_from_slice(FONT_BYTES).expect("failed to load font");
