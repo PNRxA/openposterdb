@@ -398,4 +398,44 @@ pub const MIGRATIONS: &[(&str, &str)] = &[
         "ALTER TABLE api_key_settings ADD COLUMN backdrop_edge_inset_y INTEGER NOT NULL DEFAULT 0",
         "duplicate column",
     ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN quality_style TEXT NOT NULL DEFAULT 'text'",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN poster_lang_icon TEXT NOT NULL DEFAULT 'off'",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN logo_lang_icon TEXT NOT NULL DEFAULT 'off'",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN backdrop_lang_icon TEXT NOT NULL DEFAULT 'off'",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN poster_quality_position TEXT NOT NULL DEFAULT 'tr'",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN backdrop_quality_position TEXT NOT NULL DEFAULT 'tl'",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN poster_lang_position TEXT NOT NULL DEFAULT 'tl'",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN backdrop_lang_position TEXT NOT NULL DEFAULT 'bl'",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN quality_direction TEXT NOT NULL DEFAULT 'd'",
+        "duplicate column",
+    ),
+    (
+        "ALTER TABLE api_key_settings ADD COLUMN lang_exclude TEXT NOT NULL DEFAULT ''",
+        "duplicate column",
+    ),
 ];

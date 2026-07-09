@@ -47,6 +47,16 @@ fn test_upsert(key_id: i32) -> UpsertApiKeySettings<'static> {
         episode_badge_background: "d",
         backdrop_edge_inset_x: 0,
         backdrop_edge_inset_y: 0,
+        quality_style: "text",
+        poster_lang_icon: "off",
+        logo_lang_icon: "off",
+        backdrop_lang_icon: "off",
+        lang_exclude: "",
+        poster_quality_position: "tr",
+        backdrop_quality_position: "tl",
+        quality_direction: "d",
+        poster_lang_position: "tl",
+        backdrop_lang_position: "bl",
     }
 }
 

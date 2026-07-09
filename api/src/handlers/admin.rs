@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::cache;
 use crate::error::AppError;
 use crate::image::serve::{self, LogoBackdropKind};
-use crate::services::db::{self, default_ratings_limit, default_logo_backdrop_ratings_limit, default_ratings_order, BadgeBackground, BadgeDirection, BadgeShape, BadgeSize, BadgeStyle, LabelStyle, BadgePosition, ImageSource, PosterFit};
+use crate::services::db::{self, default_ratings_limit, default_logo_backdrop_ratings_limit, default_ratings_order, BadgeBackground, BadgeDirection, BadgeShape, BadgeSize, BadgeStyle, LabelStyle, LangIcon, BadgePosition, ImageSource, PosterFit, QualityStyle};
 use crate::AppState;
 
 #[derive(Serialize)]
@@ -153,6 +153,16 @@ pub struct GlobalSettingsResponse {
     pub logo_badge_background: BadgeBackground,
     pub backdrop_badge_background: BadgeBackground,
     pub episode_badge_background: BadgeBackground,
+    pub quality_style: QualityStyle,
+    pub poster_lang_icon: LangIcon,
+    pub logo_lang_icon: LangIcon,
+    pub backdrop_lang_icon: LangIcon,
+    pub lang_exclude: String,
+    pub poster_quality_position: BadgePosition,
+    pub backdrop_quality_position: BadgePosition,
+    pub poster_lang_position: BadgePosition,
+    pub backdrop_lang_position: BadgePosition,
+    pub quality_direction: BadgeDirection,
 }
 
 pub async fn get_settings(
@@ -213,6 +223,16 @@ pub async fn get_settings(
         logo_badge_background: settings.logo_badge_background,
         backdrop_badge_background: settings.backdrop_badge_background,
         episode_badge_background: settings.episode_badge_background,
+        quality_style: settings.quality_style,
+        poster_lang_icon: settings.poster_lang_icon,
+        logo_lang_icon: settings.logo_lang_icon,
+        backdrop_lang_icon: settings.backdrop_lang_icon,
+        lang_exclude: settings.lang_exclude.to_string(),
+        poster_quality_position: settings.poster_quality_position,
+        backdrop_quality_position: settings.backdrop_quality_position,
+        poster_lang_position: settings.poster_lang_position,
+        backdrop_lang_position: settings.backdrop_lang_position,
+        quality_direction: settings.quality_direction,
     }))
 }
 
@@ -299,6 +319,26 @@ pub struct UpdateGlobalSettingsRequest {
     pub backdrop_badge_background: BadgeBackground,
     #[serde(default = "db::default_badge_background")]
     pub episode_badge_background: BadgeBackground,
+    #[serde(default = "db::default_quality_style")]
+    pub quality_style: QualityStyle,
+    #[serde(default = "db::default_lang_icon")]
+    pub poster_lang_icon: LangIcon,
+    #[serde(default = "db::default_lang_icon")]
+    pub logo_lang_icon: LangIcon,
+    #[serde(default = "db::default_lang_icon")]
+    pub backdrop_lang_icon: LangIcon,
+    #[serde(default = "db::default_lang_exclude")]
+    pub lang_exclude: String,
+    #[serde(default = "db::default_poster_quality_position")]
+    pub poster_quality_position: BadgePosition,
+    #[serde(default = "db::default_backdrop_quality_position")]
+    pub backdrop_quality_position: BadgePosition,
+    #[serde(default = "db::default_poster_lang_position")]
+    pub poster_lang_position: BadgePosition,
+    #[serde(default = "db::default_backdrop_lang_position")]
+    pub backdrop_lang_position: BadgePosition,
+    #[serde(default = "db::default_quality_direction")]
+    pub quality_direction: BadgeDirection,
 }
 
 pub async fn update_settings(
@@ -306,6 +346,7 @@ pub async fn update_settings(
     Json(req): Json<UpdateGlobalSettingsRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     db::validate_render_settings(&req.lang, req.ratings_limit, &req.ratings_order, &req.ratings_exclude, req.logo_ratings_limit, req.backdrop_ratings_limit, req.episode_ratings_limit)?;
+    db::validate_lang_exclude(&req.lang_exclude)?;
     let textless_str = if req.textless { "true" } else { "false" };
     let limit_str = req.ratings_limit.to_string();
     let logo_limit_str = req.logo_ratings_limit.to_string();
@@ -356,6 +397,16 @@ pub async fn update_settings(
         ("logo_badge_background", req.logo_badge_background.as_str()),
         ("backdrop_badge_background", req.backdrop_badge_background.as_str()),
         ("episode_badge_background", req.episode_badge_background.as_str()),
+        ("quality_style", req.quality_style.as_str()),
+        ("poster_lang_icon", req.poster_lang_icon.as_str()),
+        ("logo_lang_icon", req.logo_lang_icon.as_str()),
+        ("backdrop_lang_icon", req.backdrop_lang_icon.as_str()),
+        ("lang_exclude", req.lang_exclude.as_str()),
+        ("poster_quality_position", req.poster_quality_position.as_str()),
+        ("backdrop_quality_position", req.backdrop_quality_position.as_str()),
+        ("poster_lang_position", req.poster_lang_position.as_str()),
+        ("backdrop_lang_position", req.backdrop_lang_position.as_str()),
+        ("quality_direction", req.quality_direction.as_str()),
     ];
     let free_key_str;
     if state.config.free_key_enabled.is_none() {

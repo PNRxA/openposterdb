@@ -393,6 +393,160 @@ async fn poster_ratings_limit_ten_accepted() {
     assert_ne!(res.status(), StatusCode::BAD_REQUEST);
 }
 
+// --- Quality (#1) + main-language (#6) overlay badges ---
+
+/// Helper: GET a URL and assert it is not a 400.
+async fn assert_not_bad_request(app: &axum::Router, uri: String) {
+    let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_ne!(res.status(), StatusCode::BAD_REQUEST, "unexpected 400");
+}
+
+/// Helper: GET a URL and assert it IS a 400.
+async fn assert_bad_request(app: &axum::Router, uri: String) {
+    let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST, "expected 400");
+}
+
+#[tokio::test]
+async fn quality_stacked_tiers_accepted() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+    assert_not_bad_request(&app, format!("/{api_key}/imdb/poster-default/tt0000001.jpg?quality=4k,dv")).await;
+}
+
+#[tokio::test]
+async fn quality_logo_style_accepted_all_types() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+    for kind in ["poster-default", "logo-default", "backdrop-default"] {
+        assert_not_bad_request(&app, format!("/{api_key}/imdb/{kind}/tt0000001.jpg?quality=1080p,hdr&quality_style=logo")).await;
+    }
+}
+
+#[tokio::test]
+async fn lang_icon_flag_and_text_accepted() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+    assert_not_bad_request(&app, format!("/{api_key}/imdb/poster-default/tt0000001.jpg?lang_icon=flag")).await;
+    assert_not_bad_request(&app, format!("/{api_key}/imdb/backdrop-default/tt0000001.jpg?lang_icon=text")).await;
+    assert_not_bad_request(&app, format!("/{api_key}/imdb/poster-default/tt0000001.jpg?lang_icon=off")).await;
+}
+
+#[tokio::test]
+async fn lang_code_override_accepted() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+    assert_not_bad_request(&app, format!("/{api_key}/imdb/poster-default/tt0000001.jpg?lang_icon=flag&lang_code=ja")).await;
+}
+
+#[tokio::test]
+async fn overlay_badges_survive_zero_ratings() {
+    // Overlay badges are injected after rating preferences, so they must still
+    // be requestable with ratings disabled.
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+    assert_not_bad_request(&app, format!("/{api_key}/imdb/poster-default/tt0000001.jpg?ratings_limit=0&quality=4k&quality_style=logo&lang_icon=flag")).await;
+}
+
+#[tokio::test]
+async fn invalid_quality_tier_rejected() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+    assert_bad_request(&app, format!("/{api_key}/imdb/poster-default/tt0000001.jpg?quality=8k")).await;
+}
+
+#[tokio::test]
+async fn invalid_quality_style_rejected() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+    assert_bad_request(&app, format!("/{api_key}/imdb/poster-default/tt0000001.jpg?quality_style=bogus")).await;
+}
+
+#[tokio::test]
+async fn invalid_lang_icon_rejected() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+    assert_bad_request(&app, format!("/{api_key}/imdb/poster-default/tt0000001.jpg?lang_icon=bogus")).await;
+}
+
+#[tokio::test]
+async fn independent_overlay_positions_accepted() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+    // Quality top-left, language bottom-right — independent of ratings.
+    assert_not_bad_request(
+        &app,
+        format!("/{api_key}/imdb/poster-default/tt0000001.jpg?quality=4k,dv&quality_position=tl&lang_icon=flag&lang_position=br"),
+    )
+    .await;
+    assert_not_bad_request(
+        &app,
+        format!("/{api_key}/imdb/backdrop-default/tt0000001.jpg?quality=hdr&quality_position=bl&lang_icon=text&lang_position=tr"),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn invalid_overlay_position_rejected() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+    assert_bad_request(&app, format!("/{api_key}/imdb/poster-default/tt0000001.jpg?quality_position=bogus")).await;
+    assert_bad_request(&app, format!("/{api_key}/imdb/poster-default/tt0000001.jpg?lang_position=xyz")).await;
+}
+
+#[tokio::test]
+async fn quality_direction_accepted() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+    for dir in ["d", "h", "v"] {
+        assert_not_bad_request(
+            &app,
+            format!("/{api_key}/imdb/poster-default/tt0000001.jpg?quality=4k,dv&quality_direction={dir}"),
+        )
+        .await;
+    }
+}
+
+#[tokio::test]
+async fn invalid_quality_direction_rejected() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+    assert_bad_request(&app, format!("/{api_key}/imdb/poster-default/tt0000001.jpg?quality_direction=diagonal")).await;
+}
+
+#[tokio::test]
+async fn lang_exclude_accepted() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+    assert_not_bad_request(
+        &app,
+        format!("/{api_key}/imdb/poster-default/tt0000001.jpg?lang_icon=flag&lang_exclude=en,es"),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn invalid_lang_exclude_rejected() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+    assert_bad_request(&app, format!("/{api_key}/imdb/poster-default/tt0000001.jpg?lang_exclude=english")).await;
+}
+
+#[tokio::test]
+async fn episode_accepts_but_ignores_overlay_params() {
+    // Episodes never render the quality/language overlay badges, but the shared
+    // query params must still be accepted (ignored), not rejected.
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+    assert_not_bad_request(
+        &app,
+        format!("/{api_key}/imdb/episode-default/episode-tt0903747-S1E1.jpg?quality=4k,dv&quality_style=logo&lang_icon=flag&quality_position=tl"),
+    )
+    .await;
+}
+
 // --- Badge shape / background / split / fit / edge inset query params ---
 
 #[tokio::test]

@@ -229,7 +229,7 @@ pub async fn preview_poster(
     let font = state.font.clone();
     let quality = state.config.image_quality;
     let buf = tokio::task::spawn_blocking(move || {
-        generate::render_poster_sync(poster_png, &badges, &font, quality, position, badge_style, label_style, badge_appearance, badge_direction, target_width, badge_scale, badge_size, split, poster_fit)
+        generate::render_poster_sync(poster_png, &badges, &generate::OverlaySpec::default(), &font, quality, position, badge_style, label_style, badge_appearance, badge_direction, target_width, badge_scale, badge_size, split, poster_fit)
     })
     .await
     .map_err(|e| AppError::Other(e.to_string()))??;
@@ -284,7 +284,7 @@ pub async fn preview_logo(
     let font = state.font.clone();
 
     let buf = tokio::task::spawn_blocking(move || {
-        generate::render_logo_sync(logo_png, &badges, &font, badge_style, label_style, badge_appearance, target_width, badge_scale)
+        generate::render_logo_sync(logo_png, &badges, &generate::OverlaySpec::default(), &font, badge_style, label_style, badge_appearance, target_width, badge_scale)
     })
     .await
     .map_err(|e| AppError::Other(e.to_string()))??;
@@ -346,7 +346,7 @@ pub async fn preview_backdrop(
     let quality = state.config.image_quality;
 
     let buf = tokio::task::spawn_blocking(move || {
-        generate::render_backdrop_sync(backdrop_png, &badges, &font, quality, position, badge_style, label_style, badge_appearance, badge_direction, target_width, badge_scale, badge_size, edge_inset_x, edge_inset_y)
+        generate::render_backdrop_sync(backdrop_png, &badges, &generate::OverlaySpec::default(), &font, quality, position, badge_style, label_style, badge_appearance, badge_direction, target_width, badge_scale, badge_size, edge_inset_x, edge_inset_y)
     })
     .await
     .map_err(|e| AppError::Other(e.to_string()))??;
@@ -495,7 +495,7 @@ mod tests {
     fn sample_poster_renders_with_badges() {
         let font = ab_glyph::FontArc::try_from_slice(crate::FONT_BYTES).unwrap();
         let badges = sample_badges();
-        let result = generate::render_poster_sync(&SAMPLE_POSTER_PNG, &badges, &font, 85, BadgePosition::BottomCenter, BadgeStyle::Horizontal, LabelStyle::Text, BadgeAppearance::default(), BadgeDirection::Horizontal, 500, 1.0, BadgeSize::Medium, false, db::PosterFit::Native);
+        let result = generate::render_poster_sync(&SAMPLE_POSTER_PNG, &badges, &generate::OverlaySpec::default(), &font, 85, BadgePosition::BottomCenter, BadgeStyle::Horizontal, LabelStyle::Text, BadgeAppearance::default(), BadgeDirection::Horizontal, 500, 1.0, BadgeSize::Medium, false, db::PosterFit::Native);
         let buf = result.expect("rendering should succeed");
         // Valid JPEG
         assert_eq!(buf[0], 0xFF);
@@ -506,7 +506,7 @@ mod tests {
     #[test]
     fn sample_poster_renders_with_no_badges() {
         let font = ab_glyph::FontArc::try_from_slice(crate::FONT_BYTES).unwrap();
-        let result = generate::render_poster_sync(&SAMPLE_POSTER_PNG, &[], &font, 85, BadgePosition::BottomCenter, BadgeStyle::Horizontal, LabelStyle::Text, BadgeAppearance::default(), BadgeDirection::Horizontal, 500, 1.0, BadgeSize::Medium, false, db::PosterFit::Native);
+        let result = generate::render_poster_sync(&SAMPLE_POSTER_PNG, &[], &generate::OverlaySpec::default(), &font, 85, BadgePosition::BottomCenter, BadgeStyle::Horizontal, LabelStyle::Text, BadgeAppearance::default(), BadgeDirection::Horizontal, 500, 1.0, BadgeSize::Medium, false, db::PosterFit::Native);
         let buf = result.expect("rendering should succeed");
         assert_eq!(buf[0], 0xFF);
         assert_eq!(buf[1], 0xD8);

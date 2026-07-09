@@ -1118,6 +1118,7 @@ mod tests {
             poster_path: None,
             release_date: None,
             episode: None,
+            original_language: None,
         }
     }
 

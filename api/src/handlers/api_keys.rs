@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 use super::auth::AuthUser;
 use super::middleware::ApiKeyUser;
 use crate::error::AppError;
-use crate::services::db::{self, default_ratings_limit, default_logo_backdrop_ratings_limit, default_ratings_order, BadgeBackground, BadgeDirection, BadgeShape, BadgeSize, BadgeStyle, LabelStyle, BadgePosition, ImageSource, PosterFit};
+use crate::services::db::{self, default_ratings_limit, default_logo_backdrop_ratings_limit, default_ratings_order, BadgeBackground, BadgeDirection, BadgeShape, BadgeSize, BadgeStyle, LabelStyle, LangIcon, BadgePosition, ImageSource, PosterFit, QualityStyle};
 use crate::services::validation;
 use crate::AppState;
 
@@ -135,6 +135,16 @@ pub struct RenderSettingsResponse {
     pub logo_badge_background: BadgeBackground,
     pub backdrop_badge_background: BadgeBackground,
     pub episode_badge_background: BadgeBackground,
+    pub quality_style: QualityStyle,
+    pub poster_lang_icon: LangIcon,
+    pub logo_lang_icon: LangIcon,
+    pub backdrop_lang_icon: LangIcon,
+    pub lang_exclude: String,
+    pub poster_quality_position: BadgePosition,
+    pub backdrop_quality_position: BadgePosition,
+    pub poster_lang_position: BadgePosition,
+    pub backdrop_lang_position: BadgePosition,
+    pub quality_direction: BadgeDirection,
 }
 
 pub async fn get_settings(
@@ -192,6 +202,16 @@ fn settings_to_response(settings: &db::RenderSettings, fanart_available: bool) -
         logo_badge_background: settings.logo_badge_background,
         backdrop_badge_background: settings.backdrop_badge_background,
         episode_badge_background: settings.episode_badge_background,
+        quality_style: settings.quality_style,
+        poster_lang_icon: settings.poster_lang_icon,
+        logo_lang_icon: settings.logo_lang_icon,
+        backdrop_lang_icon: settings.backdrop_lang_icon,
+        lang_exclude: settings.lang_exclude.to_string(),
+        poster_quality_position: settings.poster_quality_position,
+        backdrop_quality_position: settings.backdrop_quality_position,
+        poster_lang_position: settings.poster_lang_position,
+        backdrop_lang_position: settings.backdrop_lang_position,
+        quality_direction: settings.quality_direction,
     }
 }
 
@@ -277,6 +297,26 @@ pub struct UpdateSettingsRequest {
     pub backdrop_badge_background: BadgeBackground,
     #[serde(default = "db::default_badge_background")]
     pub episode_badge_background: BadgeBackground,
+    #[serde(default = "db::default_quality_style")]
+    pub quality_style: QualityStyle,
+    #[serde(default = "db::default_lang_icon")]
+    pub poster_lang_icon: LangIcon,
+    #[serde(default = "db::default_lang_icon")]
+    pub logo_lang_icon: LangIcon,
+    #[serde(default = "db::default_lang_icon")]
+    pub backdrop_lang_icon: LangIcon,
+    #[serde(default = "db::default_lang_exclude")]
+    pub lang_exclude: String,
+    #[serde(default = "db::default_poster_quality_position")]
+    pub poster_quality_position: BadgePosition,
+    #[serde(default = "db::default_backdrop_quality_position")]
+    pub backdrop_quality_position: BadgePosition,
+    #[serde(default = "db::default_poster_lang_position")]
+    pub poster_lang_position: BadgePosition,
+    #[serde(default = "db::default_backdrop_lang_position")]
+    pub backdrop_lang_position: BadgePosition,
+    #[serde(default = "db::default_quality_direction")]
+    pub quality_direction: BadgeDirection,
 }
 
 fn build_upsert(id: i32, req: &UpdateSettingsRequest) -> db::UpsertApiKeySettings<'_> {
@@ -322,6 +362,16 @@ fn build_upsert(id: i32, req: &UpdateSettingsRequest) -> db::UpsertApiKeySetting
         episode_badge_background: req.episode_badge_background.as_str(),
         backdrop_edge_inset_x: db::clamp_edge_inset(req.backdrop_edge_inset_x),
         backdrop_edge_inset_y: db::clamp_edge_inset(req.backdrop_edge_inset_y),
+        quality_style: req.quality_style.as_str(),
+        poster_lang_icon: req.poster_lang_icon.as_str(),
+        logo_lang_icon: req.logo_lang_icon.as_str(),
+        backdrop_lang_icon: req.backdrop_lang_icon.as_str(),
+        lang_exclude: &req.lang_exclude,
+        poster_quality_position: req.poster_quality_position.as_str(),
+        backdrop_quality_position: req.backdrop_quality_position.as_str(),
+        quality_direction: req.quality_direction.as_str(),
+        poster_lang_position: req.poster_lang_position.as_str(),
+        backdrop_lang_position: req.backdrop_lang_position.as_str(),
     }
 }
 
@@ -334,6 +384,7 @@ pub async fn update_settings(
         .await?
         .ok_or_else(|| AppError::IdNotFound(format!("API key {id} not found")))?;
     db::validate_render_settings(&req.lang, req.ratings_limit, &req.ratings_order, &req.ratings_exclude, req.logo_ratings_limit, req.backdrop_ratings_limit, req.episode_ratings_limit)?;
+    db::validate_lang_exclude(&req.lang_exclude)?;
     db::upsert_api_key_settings(&state.db, build_upsert(id, &req)).await?;
     state.settings_cache.invalidate(&id).await;
     Ok(Json(json!({ "ok": true })))
@@ -382,6 +433,7 @@ pub async fn update_own_settings(
 ) -> Result<Json<Value>, AppError> {
     let id = api_key_user.key_id;
     db::validate_render_settings(&req.lang, req.ratings_limit, &req.ratings_order, &req.ratings_exclude, req.logo_ratings_limit, req.backdrop_ratings_limit, req.episode_ratings_limit)?;
+    db::validate_lang_exclude(&req.lang_exclude)?;
     db::upsert_api_key_settings(&state.db, build_upsert(id, &req)).await?;
     state.settings_cache.invalidate(&id).await;
     Ok(Json(json!({ "ok": true })))

@@ -172,9 +172,17 @@ GET /{api_key}/isValid
 - `?split={true|false}`: split the badges evenly across two opposite sides of the poster (poster only). The axis follows the badge layout — a vertical layout splits left/right, horizontal rows split top/bottom. With an odd number of badges the configured side gets the extra one (e.g. 4 badges → 2 + 2, 3 badges → 2 + 1)
 - `?fit={native|cover|pad|blur}`: how a poster is fit to the standard 2:3 output frame (poster only). `native` (default) keeps the source aspect ratio; `cover` scales to fill 2:3 and center-crops the overflow; `pad` fits the whole poster inside 2:3 with solid black bars; `blur` fits the whole poster inside 2:3 and fills the bars with a blurred, zoomed copy of the poster. The non-native modes guarantee a uniform 2:3 image so downstream apps that place posters in fixed 2:3 containers don't crop the art
 - `?edge_inset_x={0-50}` / `?edge_inset_y={0-50}`: inset the backdrop ratings further from the anchored edge, as a percentage of the backdrop's width/height (backdrop only). Useful when a media player crops the backdrop and clips the ratings. `edge_inset_x` only applies to left/right positions and `edge_inset_y` only to top/bottom positions; the inset for a centered axis is ignored. Example: `?position=tr&edge_inset_y=10` nudges top-right ratings down by 10% of the height
+- `?quality={tiers}`: overlay one or more quality badges, comma-separated and stackable. Valid tiers: `4k`, `1080p`, `720p`, `hdr`, `dv` (Dolby Vision). Example: `?quality=4k,dv`. OpenPosterDB has no quality metadata of its own, so the caller (the addon/media server that knows the stream) must supply this — there is no auto-detection. Quality badges are drawn after the rating badges and ignore `ratings_limit`/`ratings_order`/`ratings_exclude`
+- `?quality_style={text|logo}`: how the quality badge renders — `text` (default: a `4K`/`HDR`/… chip) or `logo` (the brand logo on a white plate; a tier without a bundled logo falls back to text)
+- `?quality_direction={d|h|v}`: layout direction when multiple quality tiers are shown — `d` (default: auto — resolved from the quality anchor: a column at corner/side positions, a row at top/bottom-center), `h` (horizontal row), `v` (vertical column). Ignored on logos and episodes
+- `?lang_icon={off|flag|text}`: overlay a badge for the title's main language — `off` (default), `flag` (a country flag), or `text` (the uppercase ISO code, e.g. `EN`). The language is taken from TMDB's `original_language`; languages without a mapped flag fall back to text. Configurable independently per image type (poster/logo/backdrop) — the override applies to the endpoint's type; episodes never show it
+- `?lang_code={code}`: override the language used by `lang_icon` (ISO 639-1, e.g. `?lang_code=ja`). When omitted, the title's detected `original_language` is used. (This is independent of `?lang=`, which selects the image *artwork* language.)
+- `?lang_exclude={codes}`: comma-separated languages to *hide* the language badge for, matched against the title's main language (e.g. `?lang_exclude=en` shows the badge on every title except English ones — handy to flag only foreign-language titles). Region variants are matched by base language (`pt` excludes `pt-BR`)
+- `?quality_position={bc|tc|l|r|tl|tr|bl|br}`: anchor for the quality badge, independent of the rating badges and the language badge. Per image type with separate defaults — posters default to `tr`, backdrops to `tl`. Ignored on logos and episodes
+- `?lang_position={bc|tc|l|r|tl|tr|bl|br}`: anchor for the main-language badge, independent of the rating badges and the quality badge. Per image type — posters default to `tl`, backdrops to `bl`. Ignored on logos and episodes
 - RPDB-compatible — use `http://localhost:3000` as the base URL (drop-in replacement for `https://api.ratingposterdb.com`). Old parameter names `?poster_source=` and `?fanart_textless=` are accepted as aliases
 
-`textless`, `split`, and `fit` are poster-only. `blur` is episode-only. `edge_inset_x`/`edge_inset_y` are backdrop-only. `badge_direction` and `position` are silently ignored on logo endpoints. For shared parameters (`ratings_limit`, `badge_style`, `label_style`, `badge_size`, `badge_shape`, `badge_background`, `image_source`), the override is applied to the correct image-type-specific setting (e.g. `?badge_style=h` on the poster endpoint sets `poster_badge_style`, on the logo endpoint sets `logo_badge_style`).
+`textless`, `split`, and `fit` are poster-only. `blur` is episode-only. `edge_inset_x`/`edge_inset_y` are backdrop-only. `badge_direction` and `position` are silently ignored on logo endpoints. `quality`, `quality_style`, `lang_icon` (per image type), `lang_code`, and `lang_exclude` apply to posters, backdrops, and logos — **episodes never show the quality or language badge**. `quality_position`/`lang_position`/`quality_direction` apply to posters and backdrops only (logos always stack their badges below the logo, so positions are ignored there; episodes show no overlay badges at all). For shared parameters (`ratings_limit`, `badge_style`, `label_style`, `badge_size`, `badge_shape`, `badge_background`, `image_source`), the override is applied to the correct image-type-specific setting (e.g. `?badge_style=h` on the poster endpoint sets `poster_badge_style`, on the logo endpoint sets `logo_badge_style`).
 
 Management endpoints (auth, keys, settings) are under `/api/` and return JSON.
 
@@ -336,22 +344,22 @@ Cache keys uniquely identify a rendered image. They are used as keys in the in-m
 
 **Poster:**
 ```
-{id_type}/{id_value}{ratings_suffix}{pos_suffix}{style_suffix}{label_suffix}{direction_suffix}{badge_size_suffix}{shape_suffix}{background_suffix}{split_suffix}{fit_suffix}{size_suffix}
+{id_type}/{id_value}{ratings_suffix}{pos_suffix}{style_suffix}{label_suffix}{direction_suffix}{badge_size_suffix}{shape_suffix}{background_suffix}{split_suffix}{fit_suffix}{quality_suffix}{lang_suffix}{size_suffix}
 ```
 
 **Fanart poster:**
 ```
-{id_type}/{id_value}{variant}{ratings_suffix}{pos_suffix}{style_suffix}{label_suffix}{direction_suffix}{badge_size_suffix}{shape_suffix}{background_suffix}{split_suffix}{fit_suffix}{size_suffix}
+{id_type}/{id_value}{variant}{ratings_suffix}{pos_suffix}{style_suffix}{label_suffix}{direction_suffix}{badge_size_suffix}{shape_suffix}{background_suffix}{split_suffix}{fit_suffix}{quality_suffix}{lang_suffix}{size_suffix}
 ```
 
 **Logo:**
 ```
-{id_type}/{id_value}{kind_prefix}{variant}{ratings_suffix}{style_suffix}{label_suffix}{badge_size_suffix}{shape_suffix}{background_suffix}{size_suffix}
+{id_type}/{id_value}{kind_prefix}{variant}{ratings_suffix}{style_suffix}{label_suffix}{badge_size_suffix}{shape_suffix}{background_suffix}{quality_suffix}{lang_suffix}{size_suffix}
 ```
 
 **Backdrop:**
 ```
-{id_type}/{id_value}{kind_prefix}{variant}{ratings_suffix}{pos_suffix}{style_suffix}{label_suffix}{direction_suffix}{badge_size_suffix}{shape_suffix}{background_suffix}{edge_inset_suffix}{size_suffix}
+{id_type}/{id_value}{kind_prefix}{variant}{ratings_suffix}{pos_suffix}{style_suffix}{label_suffix}{direction_suffix}{badge_size_suffix}{shape_suffix}{background_suffix}{edge_inset_suffix}{quality_suffix}{lang_suffix}{size_suffix}
 ```
 
 ### Suffix Reference
@@ -369,6 +377,8 @@ Cache keys uniquely identify a rendered image. They are used as keys in the in-m
 | Split (poster) | `.x1` | `.x1` | Poster badges split onto opposite sides; only present when enabled |
 | Poster fit | `.f{fit}` | `.fc`, `.fp`, `.fb` | `c` = cover, `p` = pad, `b` = blur — `native` (default) emits no token |
 | Edge inset (backdrop) | `.eh{n}` / `.ev{n}` | `.eh8`, `.ev3` | Backdrop ratings inset from the edge by `n`% — `eh` horizontal, `ev` vertical; only the position-relevant axis, only when non-zero |
+| Quality | `.q{style}{tiers}.qp{pos}` (`.qd{dir}`) | `.qt4.qptr`, `.ql4v.qptl.qdv` | Quality overlay badge. `style`: `t` = text, `l` = logo. `tiers`: one char per tier (`4`=4k, `1`=1080p, `7`=720p, `h`=hdr, `v`=dv). `.qp{pos}` is its anchor; `.qd{dir}` is its layout direction, present only when overridden from auto. Omitted when no `?quality=` is set |
+| Language | `.li{icon}` (`-{code}`)`.lp{pos}` (`.lx{codes}`) | `.lif.lptl`, `.lit-ja.lptl.lxen` | Language overlay badge: `.lif` = flag, `.lit` = text. The `-{code}` suffix appears only when `?lang_code=` overrides the detected language. `.lp{pos}` is its anchor; `.lx{codes}` lists excluded languages (base codes, `_`-joined), present only when `?lang_exclude=` is set. Omitted when `lang_icon=off` (default) |
 | Image size | `.z{size}` | `.zm`, `.zl` | `s` = small, `m` = medium (default), `l` = large, `vl` = very-large |
 
 ### Image Kind Prefixes
@@ -423,6 +433,12 @@ Settings are stored as short single-character or two-character codes:
 | `badge_shape` | `r`, `p` | Rounded (default), Pill |
 | `badge_background` | `d`, `k`, `t`, `n` | Default (coloured label + dark value), Dark, Transparent, None |
 | `position` | `bc`, `tc`, `l`, `r`, `tl`, `tr`, `bl`, `br` | Bottom-center, Top-center, Left, Right, corners |
+| `quality_style` | `text`, `logo` | Quality badge as a text chip (default) or a brand logo |
+| `quality_direction` | `d`, `h`, `v` | Quality badge layout: auto (default — column at corners/sides, row at top/bottom-center), horizontal, vertical |
+| `poster_lang_icon` / `logo_lang_icon` / `backdrop_lang_icon` | `off`, `flag`, `text` | Main-language badge per image type: off (default), a country flag, or the ISO code |
+| `lang_exclude` | comma-separated codes | Languages to hide the language badge for (e.g. `en`); empty (default) = show for all |
+| `poster_quality_position` / `backdrop_quality_position` | `bc`, `tc`, `l`, `r`, `tl`, `tr`, `bl`, `br` | Quality badge anchor, per image type (defaults: poster `tr`, backdrop `tl`); independent of ratings/language |
+| `poster_lang_position` / `backdrop_lang_position` | `bc`, `tc`, `l`, `r`, `tl`, `tr`, `bl`, `br` | Language badge anchor, per image type (defaults: poster `tl`, backdrop `bl`); independent of ratings/quality |
 
 ### Example Cache Keys
 
@@ -447,6 +463,10 @@ imdb/tt0111161_b_t@mil.ptr.sv.lo.dv.bxl.zl
 
 # Episode with 1 rating, top-right position, vertical direction, vertical badges, official labels, medium badge size, blur enabled
 imdb/tt0959621_e@i.ptr.sv.lo.dv.bm.blur.zm
+
+# Poster: ratings bottom-center, quality logos (4K + Dolby Vision) top-right, language flag top-left
+# (?quality=4k,dv&quality_style=logo&quality_position=tr&lang_icon=flag&lang_position=tl)
+imdb/tt0111161@mil.pbc.sh.lo.dh.bm.ql4v.qptr.lif.lptl.zm
 ```
 
 ### Cross-ID Cache

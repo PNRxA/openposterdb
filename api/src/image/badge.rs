@@ -468,6 +468,172 @@ fn text_width(text: &str, font: &ab_glyph::PxScaleFont<&FontArc>) -> u32 {
     width.ceil() as u32
 }
 
+// --- Overlay badges (quality tiers, language flag/code — issues #1 & #6) ---
+
+/// White plate used behind brand/quality logos so a logo of any colour (e.g. a
+/// black wordmark) stays legible regardless of the badge background setting.
+const LOGO_PLATE: Rgba<u8> = Rgba([255, 255, 255, 255]);
+
+/// Cap an overlay image's width relative to its height so a very wide wordmark
+/// (e.g. the Dolby Vision logo) can't blow up a badge row.
+const OVERLAY_IMAGE_MAX_ASPECT: f32 = 4.5;
+
+/// A non-rating overlay badge rendered as a single cell — no label+value split.
+/// Built in `serve.rs` from the quality (#1) and main-language (#6) settings and
+/// appended after the rating badges so it bypasses ratings ordering/limiting.
+#[derive(Debug, Clone)]
+pub enum OverlayBadge {
+    /// Uppercase token on a dark chip (a quality tier in text style, or the
+    /// language ISO code).
+    Text(String),
+    /// A brand/quality logo rendered on a white plate.
+    Logo(&'static RgbaImage),
+    /// A country flag rendered on the configured chip background.
+    Flag(&'static RgbaImage),
+}
+
+/// Single-fill background for an overlay cell (no label/value split), mirroring
+/// [`section_colors`]'s value-section treatment for each background mode.
+fn overlay_background(background: BadgeBackground) -> Option<Rgba<u8>> {
+    match background {
+        BadgeBackground::Default | BadgeBackground::Dark => Some(DARK_BG),
+        BadgeBackground::Transparent => Some(with_alpha(DARK_BG, TRANSPARENT_ALPHA)),
+        BadgeBackground::None => None,
+    }
+}
+
+/// Fit an image within `max_w` × `max_h`, preserving aspect ratio.
+fn image_fit(img: &RgbaImage, max_w: u32, max_h: u32) -> (u32, u32) {
+    let (w, h) = (img.width(), img.height());
+    if w == 0 || h == 0 {
+        return (max_w, max_h);
+    }
+    let scale = (max_w as f32 / w as f32).min(max_h as f32 / h as f32);
+    ((w as f32 * scale).ceil().max(1.0) as u32, (h as f32 * scale).ceil().max(1.0) as u32)
+}
+
+/// Render a horizontal overlay badge (a single icon/logo/flag/text cell) sized
+/// to match the horizontal rating badge height for the given scale.
+pub fn render_overlay_badge(badge: &OverlayBadge, font: &FontArc, appearance: BadgeAppearance, badge_scale: f32) -> RgbaImage {
+    let dims = ScaledDims::new(badge_scale);
+    let fonts = BadgeFonts::new(font, badge_scale);
+    let (pill_pad, pill_pad_v) = match appearance.shape {
+        BadgeShape::Pill => (dims.pill_padding, dims.pill_padding_v),
+        BadgeShape::Rounded => (0, 0),
+    };
+    let badge_h = dims.badge_height + pill_pad_v;
+
+    // A logo always sits on a white plate (legibility); text and flags honor the
+    // configured background. The plate/background spans the whole cell.
+    let white_plate = matches!(badge, OverlayBadge::Logo(_));
+    let plate = if white_plate { Some(LOGO_PLATE) } else { overlay_background(appearance.background) };
+
+    let pad = match badge {
+        OverlayBadge::Text(_) => dims.badge_value_padding_h,
+        _ => dims.badge_padding_h,
+    };
+
+    // Resolve content (a scaled image, or text) and its drawn width.
+    let scaled_image = match badge {
+        OverlayBadge::Logo(img) | OverlayBadge::Flag(img) => {
+            let max_w = (dims.icon_height as f32 * OVERLAY_IMAGE_MAX_ASPECT) as u32;
+            let (w, h) = image_fit(img, max_w, dims.icon_height);
+            Some(imageops::resize(*img, w, h, imageops::FilterType::Lanczos3))
+        }
+        OverlayBadge::Text(_) => None,
+    };
+    let content_w = match (badge, &scaled_image) {
+        (OverlayBadge::Text(t), _) => text_width(t, &fonts.scaled),
+        (_, Some(img)) => img.width(),
+        _ => 0,
+    };
+
+    let total_width = pill_pad + pad + content_w + pad + pill_pad;
+    let mut img = RgbaImage::new(total_width.max(1), badge_h);
+
+    if let Some(color) = plate {
+        draw_filled_rect_mut(&mut img, Rect::at(0, 0).of_size(total_width.max(1), badge_h), color);
+        round_corners(&mut img, corner_radius(appearance.shape, badge_h, dims.badge_radius));
+    }
+    // Shadow only when there is no plate/background (so content stays legible
+    // drawn straight onto the artwork).
+    let shadow = if plate.is_some() { None } else { shadow_offset(appearance.background, badge_h) };
+
+    match (badge, scaled_image) {
+        (OverlayBadge::Text(text), _) => {
+            let x = pill_pad + pad;
+            let y = (badge_h as i32 - fonts.scale.x as i32) / 2;
+            draw_text_shadowed(&mut img, Rgba([255, 255, 255, 255]), x as i32, y, fonts.scale, fonts.font, text, shadow);
+        }
+        (_, Some(scaled)) => {
+            let ix = pill_pad + pad;
+            let iy = (badge_h.saturating_sub(scaled.height())) / 2;
+            overlay_icon_shadowed(&mut img, &scaled, ix as i64, iy as i64, shadow);
+        }
+        _ => {}
+    }
+
+    img
+}
+
+/// Render a vertical overlay badge sized to the vertical rating badge width, so
+/// it stacks cleanly with vertical rating badges (left/right positions).
+pub fn render_overlay_badge_vertical(badge: &OverlayBadge, font: &FontArc, appearance: BadgeAppearance, badge_scale: f32) -> RgbaImage {
+    let vert_badge_width = (BASE_VERT_BADGE_WIDTH as f32 * badge_scale).round() as u32;
+    let pill_pad = match appearance.shape {
+        BadgeShape::Pill => (BASE_PILL_PADDING as f32 * badge_scale).round() as u32,
+        BadgeShape::Rounded => 0,
+    };
+    let pad_v = (BASE_VERT_BADGE_PADDING_V as f32 * badge_scale).round() as u32 + pill_pad;
+    let icon_height = (BASE_ICON_HEIGHT as f32 * badge_scale).round() as u32;
+    let badge_radius = (BASE_BADGE_RADIUS as f32 * badge_scale).round() as u32;
+    let value_font_size = BASE_VERT_VALUE_FONT_SIZE * badge_scale;
+    let value_scale = PxScale::from(value_font_size);
+
+    let white_plate = matches!(badge, OverlayBadge::Logo(_));
+    let plate = if white_plate { Some(LOGO_PLATE) } else { overlay_background(appearance.background) };
+
+    // Fit content within the available width (minus padding).
+    let inner_w = vert_badge_width.saturating_sub(2 * pad_v).max(1);
+    let scaled_image = match badge {
+        OverlayBadge::Logo(img) | OverlayBadge::Flag(img) => {
+            let (w, h) = image_fit(img, inner_w, icon_height);
+            Some(imageops::resize(*img, w, h, imageops::FilterType::Lanczos3))
+        }
+        OverlayBadge::Text(_) => None,
+    };
+    let content_h = match &scaled_image {
+        Some(img) => img.height(),
+        None => value_font_size as u32,
+    };
+    let total_height = pad_v + content_h + pad_v;
+    let mut img = RgbaImage::new(vert_badge_width, total_height);
+
+    if let Some(color) = plate {
+        draw_filled_rect_mut(&mut img, Rect::at(0, 0).of_size(vert_badge_width, total_height), color);
+        round_corners(&mut img, corner_radius(appearance.shape, vert_badge_width, badge_radius));
+    }
+    let shadow = if plate.is_some() { None } else { shadow_offset(appearance.background, vert_badge_width) };
+
+    match (badge, scaled_image) {
+        (OverlayBadge::Text(text), _) => {
+            let value_scaled_font = font.as_scaled(value_scale);
+            let tw = text_width(text, &value_scaled_font);
+            let x = (vert_badge_width.saturating_sub(tw)) / 2;
+            let y = pad_v as i32;
+            draw_text_shadowed(&mut img, Rgba([255, 255, 255, 255]), x as i32, y, value_scale, font, text, shadow);
+        }
+        (_, Some(scaled)) => {
+            let ix = (vert_badge_width.saturating_sub(scaled.width())) / 2;
+            let iy = pad_v;
+            overlay_icon_shadowed(&mut img, &scaled, ix as i64, iy as i64, shadow);
+        }
+        _ => {}
+    }
+
+    img
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -783,6 +949,44 @@ mod tests {
         assert_eq!(dims.text_label_padding_h, BASE_TEXT_LABEL_PADDING_H);
         assert_eq!(dims.badge_radius, BASE_BADGE_RADIUS);
         assert_eq!(dims.icon_height, BASE_ICON_HEIGHT);
+    }
+
+    #[test]
+    fn render_overlay_text_badge_matches_badge_height() {
+        let badge = OverlayBadge::Text("4K".to_string());
+        let img = render_overlay_badge(&badge, &test_font(), BadgeAppearance::default(), 1.0);
+        assert_eq!(img.height(), BASE_BADGE_HEIGHT);
+        assert!(img.width() > 0);
+    }
+
+    #[test]
+    fn render_overlay_logo_and_flag_badges() {
+        let font = test_font();
+        let logo = crate::image::icons::quality_logo_for(crate::services::db::QualityTier::Uhd4k).unwrap();
+        let flag = crate::image::icons::flag_for_lang("en").unwrap();
+        for badge in [OverlayBadge::Logo(logo), OverlayBadge::Flag(flag)] {
+            let h = render_overlay_badge(&badge, &font, BadgeAppearance::default(), 1.0);
+            assert_eq!(h.height(), BASE_BADGE_HEIGHT);
+            assert!(h.width() > 0);
+            // Drew something (logo on plate / flag on chip).
+            assert!(h.pixels().any(|p| p[3] > 0));
+            let v = render_overlay_badge_vertical(&badge, &font, BadgeAppearance::default(), 1.0);
+            assert_eq!(v.width(), BASE_VERT_BADGE_WIDTH);
+            assert!(v.height() > 0);
+        }
+    }
+
+    #[test]
+    fn render_overlay_badge_all_appearances() {
+        let font = test_font();
+        let badge = OverlayBadge::Text("EN".to_string());
+        for shape in ALL_SHAPES {
+            for background in ALL_BACKGROUNDS {
+                let appearance = BadgeAppearance { shape, background };
+                let img = render_overlay_badge(&badge, &font, appearance, 1.0);
+                assert!(img.width() > 0 && img.height() > 0, "{shape:?}/{background:?}");
+            }
+        }
     }
 }
 

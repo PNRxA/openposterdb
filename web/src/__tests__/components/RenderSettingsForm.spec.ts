@@ -49,6 +49,16 @@ const defaultSettings: RenderSettings = {
   logo_badge_background: 'd',
   backdrop_badge_background: 'd',
   episode_badge_background: 'd',
+  quality_style: 'text',
+  quality_direction: 'd',
+  poster_lang_icon: 'off',
+  logo_lang_icon: 'off',
+  backdrop_lang_icon: 'off',
+  lang_exclude: '',
+  poster_quality_position: 'tr',
+  backdrop_quality_position: 'tl',
+  poster_lang_position: 'tl',
+  backdrop_lang_position: 'bl',
 }
 
 function makeFetchPreview() {
@@ -241,6 +251,176 @@ describe('RenderSettingsForm', () => {
     const wrapper = mountForm()
     const select = wrapper.find('[data-testid="poster-badge-direction-select"]')
     expect(select.exists()).toBe(true)
+  })
+
+  // --- Quality + main-language overlay badge settings (persisted) ---
+
+  it('renders the quality-style dropdown and a per-image-type lang-icon dropdown', () => {
+    // The logo/backdrop lang-icon selects live in their own sections, which only
+    // render when the matching preview fetcher is provided.
+    const settings = { ...defaultSettings }
+    const wrapper = mount(RenderSettingsForm, {
+      props: {
+        settings,
+        loadSettings: vi.fn().mockResolvedValue(settings),
+        saveSettings: vi.fn().mockResolvedValue(null),
+        fetchPreview: makeFetchPreview(),
+        fetchLogoPreview: makeFetchPreview(),
+        fetchBackdropPreview: makeFetchPreview(),
+      },
+      global: {
+        plugins: [createPinia()],
+        stubs: shadcnStubs,
+      },
+    })
+    expect(wrapper.find('[data-testid="quality-style-select"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="poster-lang-icon-select"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="logo-lang-icon-select"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="backdrop-lang-icon-select"]').exists()).toBe(true)
+  })
+
+  it('renders per-image-type quality-position and lang-position dropdowns', () => {
+    const wrapper = mountForm()
+    expect(wrapper.find('[data-testid="poster-quality-position-select"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="backdrop-quality-position-select"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="poster-lang-position-select"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="backdrop-lang-position-select"]').exists()).toBe(true)
+  })
+
+  it('renders the lang-exclude text input', () => {
+    const wrapper = mountForm()
+    expect(wrapper.find('[data-testid="lang-exclude-input"]').exists()).toBe(true)
+  })
+
+  it('includes lang_exclude in the auto-save payload', async () => {
+    const saveSettings = vi.fn().mockResolvedValue(null)
+    const settings = { ...defaultSettings, lang_exclude: 'en' }
+    const wrapper = mount(RenderSettingsForm, {
+      props: {
+        settings,
+        loadSettings: vi.fn().mockResolvedValue(settings),
+        saveSettings,
+        fetchPreview: makeFetchPreview(),
+      },
+      global: {
+        plugins: [createPinia()],
+        stubs: shadcnStubs,
+      },
+    })
+
+    // Trigger an auto-save via an unrelated control; the payload carries the
+    // current lang_exclude value from the loaded settings.
+    await wrapper.find('[data-testid="textless-checkbox"]').setValue(true)
+    await flushPromises()
+
+    expect(saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ lang_exclude: 'en' }),
+    )
+  })
+
+  it('renders the quality-direction dropdown', () => {
+    const wrapper = mountForm()
+    expect(wrapper.find('[data-testid="quality-direction-select"]').exists()).toBe(true)
+  })
+
+  it('includes quality_style and the three per-type lang_icon values in the auto-save payload', async () => {
+    const saveSettings = vi.fn().mockResolvedValue(null)
+    const settings = {
+      ...defaultSettings,
+      quality_style: 'logo',
+      poster_lang_icon: 'flag',
+      logo_lang_icon: 'text',
+      backdrop_lang_icon: 'off',
+    }
+    const wrapper = mount(RenderSettingsForm, {
+      props: {
+        settings,
+        loadSettings: vi.fn().mockResolvedValue(settings),
+        saveSettings,
+        fetchPreview: makeFetchPreview(),
+      },
+      global: {
+        plugins: [createPinia()],
+        stubs: shadcnStubs,
+      },
+    })
+
+    // Trigger an auto-save via an unrelated control; the payload carries the
+    // current quality_style and per-type lang_icon values from the loaded settings.
+    await wrapper.find('[data-testid="textless-checkbox"]').setValue(true)
+    await flushPromises()
+
+    expect(saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        quality_style: 'logo',
+        poster_lang_icon: 'flag',
+        logo_lang_icon: 'text',
+        backdrop_lang_icon: 'off',
+      }),
+    )
+  })
+
+  it('includes the four per-type quality/lang positions in the auto-save payload', async () => {
+    const saveSettings = vi.fn().mockResolvedValue(null)
+    const settings = {
+      ...defaultSettings,
+      poster_quality_position: 'bl',
+      backdrop_quality_position: 'br',
+      poster_lang_position: 'tc',
+      backdrop_lang_position: 'l',
+    }
+    const wrapper = mount(RenderSettingsForm, {
+      props: {
+        settings,
+        loadSettings: vi.fn().mockResolvedValue(settings),
+        saveSettings,
+        fetchPreview: makeFetchPreview(),
+      },
+      global: {
+        plugins: [createPinia()],
+        stubs: shadcnStubs,
+      },
+    })
+
+    // Trigger an auto-save via an unrelated control; the payload carries the
+    // current per-type position values from the loaded settings.
+    await wrapper.find('[data-testid="textless-checkbox"]').setValue(true)
+    await flushPromises()
+
+    expect(saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        poster_quality_position: 'bl',
+        backdrop_quality_position: 'br',
+        poster_lang_position: 'tc',
+        backdrop_lang_position: 'l',
+      }),
+    )
+  })
+
+  it('includes quality_direction in the auto-save payload', async () => {
+    const saveSettings = vi.fn().mockResolvedValue(null)
+    const settings = { ...defaultSettings, quality_direction: 'v' }
+    const wrapper = mount(RenderSettingsForm, {
+      props: {
+        settings,
+        loadSettings: vi.fn().mockResolvedValue(settings),
+        saveSettings,
+        fetchPreview: makeFetchPreview(),
+      },
+      global: {
+        plugins: [createPinia()],
+        stubs: shadcnStubs,
+      },
+    })
+
+    // Trigger an auto-save via an unrelated control; the payload carries the
+    // current quality_direction value from the loaded settings.
+    await wrapper.find('[data-testid="textless-checkbox"]').setValue(true)
+    await flushPromises()
+
+    expect(saveSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ quality_direction: 'v' }),
+    )
   })
 
   // --- Exclude ratings ---

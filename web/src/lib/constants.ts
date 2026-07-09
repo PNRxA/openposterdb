@@ -74,6 +74,18 @@ export const BADGE_SIZE_LABELS: Record<string, string> = { xs: 'Extra Small', s:
 export const BADGE_SHAPE_LABELS: Record<string, string> = { r: 'Rounded', p: 'Pill' }
 export const BADGE_BACKGROUND_LABELS: Record<string, string> = { d: 'Default', k: 'Dark', t: 'Transparent', n: 'None' }
 export const IMAGE_SOURCE_LABELS: Record<string, string> = { t: 'TMDB', f: 'Fanart.tv' }
+// Quality overlay badge. `quality` tiers are caller-supplied per request and
+// stackable (e.g. `4k,dv`); `quality_style` chooses between text chips and brand
+// logos. `lang_icon` renders the title's main language as a flag or ISO code.
+export const QUALITY_TIERS = [
+  { key: '4k', label: '4K' },
+  { key: '1080p', label: '1080p' },
+  { key: '720p', label: '720p' },
+  { key: 'hdr', label: 'HDR' },
+  { key: 'dv', label: 'Dolby Vision' },
+] as const
+export const QUALITY_STYLE_LABELS: Record<string, string> = { text: 'Text', logo: 'Logo' }
+export const LANG_ICON_LABELS: Record<string, string> = { off: 'Off', flag: 'Flag', text: 'Text' }
 export const POSTER_FIT_LABELS: Record<string, string> = { native: 'Native', cover: 'Crop to 2:3', blur: 'Blur fill', pad: 'Letterbox' }
 export const POSITION_LABELS: Record<string, string> = {
   bc: 'Bottom Center', tc: 'Top Center', l: 'Left', r: 'Right',

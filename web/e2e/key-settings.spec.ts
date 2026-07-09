@@ -188,7 +188,9 @@ test.describe('key settings (self-service)', () => {
   test('poster position dropdown is visible', async ({ page, request }) => {
     await loginWithApiKey(page, request)
 
-    await expect(page.locator('text=Badge position')).toBeVisible()
+    // Exact match: the overlay-badge "Quality badge position" / "Main-language
+    // badge position" labels also contain "Badge position".
+    await expect(page.getByText('Badge position', { exact: true })).toBeVisible()
   })
 
   test('badge direction dropdown is visible with default', async ({ page, request }) => {

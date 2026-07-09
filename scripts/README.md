@@ -157,3 +157,37 @@ Defaults to `http://localhost:3000`. Uses the free API key. Fetches assets for:
 - The General (`tt0017925`)
 
 Logos and backdrops that aren't available are silently skipped.
+
+---
+
+## fetch-flags.sh
+
+Downloads the language-flag icon set used by the language overlay badge
+(`?lang_icon=flag`) into `api/assets/icons/flags/`, keyed by ISO 3166-1 country
+code. Source: [flagcdn.com](https://flagcdn.com) (public-domain flags derived
+from [flag-icons](https://github.com/lipis/flag-icons)).
+
+```bash
+./scripts/fetch-flags.sh
+```
+
+The API maps a title's TMDB `original_language` to a representative country (see
+`flag_country_for_lang` in `api/src/image/icons.rs`); languages without a mapped
+flag fall back to a text badge. Edit the country list in the script to add flags,
+then re-run to refresh the committed assets.
+
+---
+
+## fetch-quality-logos.sh
+
+Downloads the quality-tier logo set used by the quality overlay badge
+(`?quality=...&quality_style=logo`) into `api/assets/icons/quality/`. Source:
+Wikimedia Commons (PNG thumbnails rasterized from the uploaded SVGs). Logos are
+rendered on a white plate so any logo colour stays legible.
+
+```bash
+./scripts/fetch-quality-logos.sh
+```
+
+Tiers without a bundled logo fall back to a text badge. Requires `python3` (used
+to resolve Wikimedia thumbnail URLs).

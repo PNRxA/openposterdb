@@ -1,6 +1,8 @@
 use image::RgbaImage;
+use std::collections::HashMap;
 use std::sync::LazyLock;
 
+use crate::services::db::QualityTier;
 use crate::services::ratings::{RatingBadge, RatingSource};
 
 static IMDB_BYTES: &[u8] = include_bytes!("../../assets/icons/imdb.png");
@@ -119,6 +121,115 @@ pub fn official_icon_for_badge(badge: &RatingBadge) -> &'static RgbaImage {
     }
 }
 
+// --- Quality overlay logos (issue #1) ---
+
+/// Embedded quality-tier logo bytes, keyed by `QualityTier::as_str()`.
+static QUALITY_LOGO_BYTES: &[(&str, &[u8])] = &[
+    ("4k", include_bytes!("../../assets/icons/quality/4k.png")),
+    ("1080p", include_bytes!("../../assets/icons/quality/1080p.png")),
+    ("720p", include_bytes!("../../assets/icons/quality/720p.png")),
+    ("hdr", include_bytes!("../../assets/icons/quality/hdr.png")),
+    ("dv", include_bytes!("../../assets/icons/quality/dv.png")),
+];
+
+static QUALITY_LOGOS: LazyLock<HashMap<&'static str, RgbaImage>> =
+    LazyLock::new(|| QUALITY_LOGO_BYTES.iter().map(|(k, b)| (*k, decode(b))).collect());
+
+/// Logo image for a quality tier, or `None` if no logo asset is bundled (the
+/// caller then falls back to a text badge).
+pub fn quality_logo_for(tier: QualityTier) -> Option<&'static RgbaImage> {
+    QUALITY_LOGOS.get(tier.as_str())
+}
+
+// --- Language flags (issue #6) ---
+
+/// Embedded flag bytes, keyed by ISO 3166-1 alpha-2 country code. Fetched by
+/// `scripts/fetch-flags.sh`.
+macro_rules! flag_bytes {
+    ($cc:literal) => {
+        ($cc, include_bytes!(concat!("../../assets/icons/flags/", $cc, ".png")) as &[u8])
+    };
+}
+
+static FLAG_BYTES: &[(&str, &[u8])] = &[
+    flag_bytes!("us"), flag_bytes!("gb"), flag_bytes!("jp"), flag_bytes!("kr"),
+    flag_bytes!("cn"), flag_bytes!("fr"), flag_bytes!("de"), flag_bytes!("es"),
+    flag_bytes!("it"), flag_bytes!("pt"), flag_bytes!("br"), flag_bytes!("ru"),
+    flag_bytes!("in"), flag_bytes!("nl"), flag_bytes!("se"), flag_bytes!("dk"),
+    flag_bytes!("no"), flag_bytes!("fi"), flag_bytes!("pl"), flag_bytes!("tr"),
+    flag_bytes!("th"), flag_bytes!("id"), flag_bytes!("cz"), flag_bytes!("gr"),
+    flag_bytes!("il"), flag_bytes!("hu"), flag_bytes!("ro"), flag_bytes!("ua"),
+    flag_bytes!("vn"), flag_bytes!("ir"), flag_bytes!("my"), flag_bytes!("ph"),
+    flag_bytes!("bd"), flag_bytes!("sa"), flag_bytes!("is"), flag_bytes!("ee"),
+    flag_bytes!("lv"), flag_bytes!("lt"), flag_bytes!("sk"), flag_bytes!("si"),
+    flag_bytes!("hr"), flag_bytes!("rs"), flag_bytes!("bg"),
+];
+
+static FLAGS: LazyLock<HashMap<&'static str, RgbaImage>> =
+    LazyLock::new(|| FLAG_BYTES.iter().map(|(k, b)| (*k, decode(b))).collect());
+
+/// Map a title's main language (ISO 639-1, region-stripped) to a representative
+/// country whose flag we bundle. TMDB `original_language` is a *language* code,
+/// not a country, so this picks the most common representative flag (e.g.
+/// `en`→UK, `pt`→Portugal). Returns `None` for unmapped languages, in which
+/// case the caller falls back to a text badge.
+pub fn flag_country_for_lang(code: &str) -> Option<&'static str> {
+    // Canonicalize ("pt-BR"→"pt", TMDB alias "cn"→"zh", drop "no language"
+    // sentinels) so the flag lookup matches the exclude/cache identity.
+    let base = crate::services::db::canonical_lang(code)?;
+    let cc = match base.as_str() {
+        "en" => "gb",
+        "ja" => "jp",
+        "ko" => "kr",
+        "zh" => "cn",
+        "fr" => "fr",
+        "de" => "de",
+        "es" | "ca" | "eu" | "gl" => "es",
+        "it" => "it",
+        "pt" => "pt",
+        "ru" => "ru",
+        "hi" | "ta" | "te" | "ml" | "kn" | "mr" | "pa" => "in",
+        "nl" => "nl",
+        "sv" => "se",
+        "da" => "dk",
+        "no" | "nb" | "nn" => "no",
+        "fi" => "fi",
+        "pl" => "pl",
+        "tr" => "tr",
+        "th" => "th",
+        "id" => "id",
+        "cs" => "cz",
+        "el" => "gr",
+        "he" => "il",
+        "hu" => "hu",
+        "ro" => "ro",
+        "uk" => "ua",
+        "vi" => "vn",
+        "fa" => "ir",
+        "ms" => "my",
+        "tl" => "ph",
+        "bn" => "bd",
+        "ar" => "sa",
+        "is" => "is",
+        "et" => "ee",
+        "lv" => "lv",
+        "lt" => "lt",
+        "sk" => "sk",
+        "sl" => "si",
+        "hr" => "hr",
+        "sr" => "rs",
+        "bg" => "bg",
+        _ => return None,
+    };
+    Some(cc)
+}
+
+/// Flag image for a title's main language, or `None` if the language has no
+/// mapped flag (the caller then falls back to a text badge).
+pub fn flag_for_lang(code: &str) -> Option<&'static RgbaImage> {
+    flag_country_for_lang(code).and_then(|cc| FLAGS.get(cc))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -201,5 +312,45 @@ mod tests {
         assert!(std::ptr::eq(official_icon_for_badge(&hot), &*OFF_RT_AUDIENCE_VERIFIED_HOT_IMG));
         assert!(std::ptr::eq(official_icon_for_badge(&pos), &*OFF_RT_AUDIENCE_POSITIVE_IMG));
         assert!(std::ptr::eq(official_icon_for_badge(&neg), &*OFF_RT_AUDIENCE_NEGATIVE_IMG));
+    }
+
+    #[test]
+    fn every_quality_tier_has_a_logo() {
+        for tier in [
+            QualityTier::Uhd4k,
+            QualityTier::P1080,
+            QualityTier::P720,
+            QualityTier::Hdr,
+            QualityTier::Dv,
+        ] {
+            let img = quality_logo_for(tier).unwrap_or_else(|| panic!("missing logo for {tier:?}"));
+            assert!(img.width() > 0 && img.height() > 0, "empty logo for {tier:?}");
+        }
+    }
+
+    #[test]
+    fn all_bundled_flags_decode() {
+        for (cc, _) in FLAG_BYTES {
+            let img = FLAGS.get(cc).unwrap_or_else(|| panic!("missing flag {cc}"));
+            assert!(img.width() > 0 && img.height() > 0, "empty flag {cc}");
+        }
+    }
+
+    #[test]
+    fn flag_for_lang_maps_and_falls_back() {
+        // Known languages resolve to a bundled flag.
+        assert_eq!(flag_country_for_lang("en"), Some("gb")); // English → Union Jack
+        assert!(flag_for_lang("en").is_some());
+        assert!(flag_for_lang("ja").is_some());
+        // Region suffixes are stripped before mapping.
+        assert!(std::ptr::eq(flag_for_lang("pt-BR").unwrap(), flag_for_lang("pt").unwrap()));
+        // TMDB alias `cn` canonicalizes to `zh` → the China flag.
+        assert_eq!(flag_country_for_lang("cn"), Some("cn"));
+        assert!(std::ptr::eq(flag_for_lang("cn").unwrap(), flag_for_lang("zh").unwrap()));
+        // "No language" sentinel → None (caller falls back to text/omits).
+        assert!(flag_country_for_lang("xx").is_none());
+        assert!(flag_for_lang("xx").is_none());
+        // Unmapped language → None (caller falls back to text).
+        assert!(flag_country_for_lang("zz").is_none());
     }
 }

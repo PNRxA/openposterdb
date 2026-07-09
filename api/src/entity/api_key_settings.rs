@@ -49,6 +49,26 @@ pub struct Model {
     /// Distance (percent of height, 0–50) to inset backdrop ratings from the
     /// anchored vertical edge (top or bottom). Ignored for centered positions.
     pub backdrop_edge_inset_y: i32,
+    /// How the quality overlay badge renders: `text` or `logo`.
+    pub quality_style: String,
+    /// Whether/how the main-language overlay badge renders on posters: `off`, `flag`, `text`.
+    pub poster_lang_icon: String,
+    /// Main-language overlay badge on logos: `off`, `flag`, `text`.
+    pub logo_lang_icon: String,
+    /// Main-language overlay badge on backdrops: `off`, `flag`, `text`.
+    pub backdrop_lang_icon: String,
+    /// Comma-separated languages to exclude from the language badge (e.g. `en`).
+    pub lang_exclude: String,
+    /// Poster anchor for the quality overlay badge (e.g. `tr`).
+    pub poster_quality_position: String,
+    /// Backdrop anchor for the quality overlay badge (e.g. `tl`).
+    pub backdrop_quality_position: String,
+    /// Layout direction for stacked quality badges (`d` auto, `h`, `v`).
+    pub quality_direction: String,
+    /// Poster anchor for the main-language overlay badge (e.g. `tl`).
+    pub poster_lang_position: String,
+    /// Backdrop anchor for the main-language overlay badge (e.g. `bl`).
+    pub backdrop_lang_position: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

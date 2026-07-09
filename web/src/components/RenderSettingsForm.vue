@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/select'
 import RatingsOrderList from '@/components/RatingsOrderList.vue'
 import type { SaveSettingsPayload } from '@/lib/api'
-import { LANGUAGES, ALL_RATING_SOURCES, parseRatingsOrder, parseRatingsExclude } from '@/lib/constants'
+import { LANGUAGES, ALL_RATING_SOURCES, LANG_ICON_LABELS, parseRatingsOrder, parseRatingsExclude } from '@/lib/constants'
 
 export interface RenderSettings {
   image_source: string
@@ -59,6 +59,16 @@ export interface RenderSettings {
   logo_badge_background: string
   backdrop_badge_background: string
   episode_badge_background: string
+  quality_style: string
+  quality_direction: string
+  poster_lang_icon: string
+  logo_lang_icon: string
+  backdrop_lang_icon: string
+  lang_exclude: string
+  poster_quality_position: string
+  backdrop_quality_position: string
+  poster_lang_position: string
+  backdrop_lang_position: string
 }
 
 const props = defineProps<{
@@ -116,6 +126,16 @@ const editPosterBadgeBackground = ref(props.settings.poster_badge_background || 
 const editLogoBadgeBackground = ref(props.settings.logo_badge_background || 'd')
 const editBackdropBadgeBackground = ref(props.settings.backdrop_badge_background || 'd')
 const editEpisodeBadgeBackground = ref(props.settings.episode_badge_background || 'd')
+const editQualityStyle = ref(props.settings.quality_style || 'text')
+const editQualityDirection = ref(props.settings.quality_direction || 'd')
+const editPosterLangIcon = ref(props.settings.poster_lang_icon || 'off')
+const editLogoLangIcon = ref(props.settings.logo_lang_icon || 'off')
+const editBackdropLangIcon = ref(props.settings.backdrop_lang_icon || 'off')
+const editLangExclude = ref(props.settings.lang_exclude || '')
+const editPosterQualityPosition = ref(props.settings.poster_quality_position || 'tr')
+const editBackdropQualityPosition = ref(props.settings.backdrop_quality_position || 'tl')
+const editPosterLangPosition = ref(props.settings.poster_lang_position || 'tl')
+const editBackdropLangPosition = ref(props.settings.backdrop_lang_position || 'bl')
 
 // Which edges the current backdrop position anchors to. The horizontal inset
 // only applies to left/right positions and the vertical inset only to top/bottom
@@ -170,6 +190,16 @@ function applySettings(s: RenderSettings) {
   editLogoBadgeBackground.value = s.logo_badge_background || 'd'
   editBackdropBadgeBackground.value = s.backdrop_badge_background || 'd'
   editEpisodeBadgeBackground.value = s.episode_badge_background || 'd'
+  editQualityStyle.value = s.quality_style || 'text'
+  editQualityDirection.value = s.quality_direction || 'd'
+  editPosterLangIcon.value = s.poster_lang_icon || 'off'
+  editLogoLangIcon.value = s.logo_lang_icon || 'off'
+  editBackdropLangIcon.value = s.backdrop_lang_icon || 'off'
+  editLangExclude.value = s.lang_exclude || ''
+  editPosterQualityPosition.value = s.poster_quality_position || 'tr'
+  editBackdropQualityPosition.value = s.backdrop_quality_position || 'tl'
+  editPosterLangPosition.value = s.poster_lang_position || 'tl'
+  editBackdropLangPosition.value = s.backdrop_lang_position || 'bl'
 }
 const currentSettings = ref<RenderSettings>(props.settings)
 const saving = ref(false)
@@ -253,6 +283,16 @@ async function autoSave() {
       logo_badge_background: editLogoBadgeBackground.value,
       backdrop_badge_background: editBackdropBadgeBackground.value,
       episode_badge_background: editEpisodeBadgeBackground.value,
+      quality_style: editQualityStyle.value,
+      quality_direction: editQualityDirection.value,
+      poster_lang_icon: editPosterLangIcon.value,
+      logo_lang_icon: editLogoLangIcon.value,
+      backdrop_lang_icon: editBackdropLangIcon.value,
+      lang_exclude: editLangExclude.value.trim(),
+      poster_quality_position: editPosterQualityPosition.value,
+      backdrop_quality_position: editBackdropQualityPosition.value,
+      poster_lang_position: editPosterLangPosition.value,
+      backdrop_lang_position: editBackdropLangPosition.value,
     })
     if (err) {
       error.value = err
@@ -279,7 +319,7 @@ async function autoSave() {
 
 // Auto-save on any setting change
 watch(
-  [editSource, editLang, editTextless, editRatingsLimit, editRatingsOrder, editRatingsExclude, editPosterPosition, editLogoRatingsLimit, editBackdropRatingsLimit, editPosterBadgeStyle, editLogoBadgeStyle, editBackdropBadgeStyle, editPosterLabelStyle, editLogoLabelStyle, editBackdropLabelStyle, editPosterBadgeDirection, editPosterBadgeSplit, editPosterFit, editPosterBadgeSize, editLogoBadgeSize, editBackdropBadgeSize, editBackdropPosition, editBackdropBadgeDirection, editBackdropEdgeInsetX, editBackdropEdgeInsetY, editEpisodeRatingsLimit, editEpisodeBadgeStyle, editEpisodeLabelStyle, editEpisodeBadgeSize, editEpisodePosition, editEpisodeBadgeDirection, editEpisodeBlur, editPosterBadgeShape, editLogoBadgeShape, editBackdropBadgeShape, editEpisodeBadgeShape, editPosterBadgeBackground, editLogoBadgeBackground, editBackdropBadgeBackground, editEpisodeBadgeBackground],
+  [editSource, editLang, editTextless, editRatingsLimit, editRatingsOrder, editRatingsExclude, editPosterPosition, editLogoRatingsLimit, editBackdropRatingsLimit, editPosterBadgeStyle, editLogoBadgeStyle, editBackdropBadgeStyle, editPosterLabelStyle, editLogoLabelStyle, editBackdropLabelStyle, editPosterBadgeDirection, editPosterBadgeSplit, editPosterFit, editPosterBadgeSize, editLogoBadgeSize, editBackdropBadgeSize, editBackdropPosition, editBackdropBadgeDirection, editBackdropEdgeInsetX, editBackdropEdgeInsetY, editEpisodeRatingsLimit, editEpisodeBadgeStyle, editEpisodeLabelStyle, editEpisodeBadgeSize, editEpisodePosition, editEpisodeBadgeDirection, editEpisodeBlur, editPosterBadgeShape, editLogoBadgeShape, editBackdropBadgeShape, editEpisodeBadgeShape, editPosterBadgeBackground, editLogoBadgeBackground, editBackdropBadgeBackground, editEpisodeBadgeBackground, editQualityStyle, editQualityDirection, editPosterLangIcon, editLogoLangIcon, editBackdropLangIcon, editLangExclude, editPosterQualityPosition, editBackdropQualityPosition, editPosterLangPosition, editBackdropLangPosition],
   () => {
     if (syncing) return
     autoSave()
@@ -514,6 +554,140 @@ function toggleExclude(key: string, checked: boolean) {
       </div>
     </template>
 
+    <!-- Overlay badges: quality + main-language. Style/direction/icon are global,
+         but the anchor positions are per image type (poster vs backdrop). Quality
+         tiers and a language-code override are per-request query params only, so
+         they live in the "Try it out" card, not here. -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg pt-1">
+      <div class="space-y-2">
+        <Label :for="inputId('quality-style')">Quality badge style</Label>
+        <Select
+          :model-value="editQualityStyle"
+          @update:model-value="editQualityStyle = $event as string"
+        >
+          <SelectTrigger :id="inputId('quality-style')" class="max-w-xs" data-testid="quality-style-select">
+            <SelectValue placeholder="Select style" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="text">Text</SelectItem>
+            <SelectItem value="logo">Logo</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div class="space-y-2">
+        <Label :for="inputId('quality-direction')">Quality badge direction</Label>
+        <Select
+          :model-value="editQualityDirection"
+          @update:model-value="editQualityDirection = $event as string"
+        >
+          <SelectTrigger :id="inputId('quality-direction')" class="max-w-xs" data-testid="quality-direction-select">
+            <SelectValue placeholder="Select direction" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="d">Default</SelectItem>
+            <SelectItem value="h">Horizontal</SelectItem>
+            <SelectItem value="v">Vertical</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div class="space-y-2">
+        <Label :for="inputId('lang-exclude')">Exclude languages</Label>
+        <Input
+          :id="inputId('lang-exclude')"
+          v-model.trim="editLangExclude"
+          type="text"
+          placeholder="e.g. en,es"
+          class="max-w-xs"
+          data-testid="lang-exclude-input"
+        />
+        <p class="text-xs text-muted-foreground">Hide the main-language badge for these languages (comma-separated ISO 639-1 codes).</p>
+      </div>
+      <div class="space-y-2">
+        <Label :for="inputId('poster-quality-position')">Quality position (poster)</Label>
+        <Select
+          :model-value="editPosterQualityPosition"
+          @update:model-value="editPosterQualityPosition = $event as string"
+        >
+          <SelectTrigger :id="inputId('poster-quality-position')" class="max-w-xs" data-testid="poster-quality-position-select">
+            <SelectValue placeholder="Select position" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="bc">Bottom Center</SelectItem>
+            <SelectItem value="tc">Top Center</SelectItem>
+            <SelectItem value="l">Left</SelectItem>
+            <SelectItem value="r">Right</SelectItem>
+            <SelectItem value="tl">Top Left</SelectItem>
+            <SelectItem value="tr">Top Right</SelectItem>
+            <SelectItem value="bl">Bottom Left</SelectItem>
+            <SelectItem value="br">Bottom Right</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div class="space-y-2">
+        <Label :for="inputId('backdrop-quality-position')">Quality position (backdrop)</Label>
+        <Select
+          :model-value="editBackdropQualityPosition"
+          @update:model-value="editBackdropQualityPosition = $event as string"
+        >
+          <SelectTrigger :id="inputId('backdrop-quality-position')" class="max-w-xs" data-testid="backdrop-quality-position-select">
+            <SelectValue placeholder="Select position" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="bc">Bottom Center</SelectItem>
+            <SelectItem value="tc">Top Center</SelectItem>
+            <SelectItem value="l">Left</SelectItem>
+            <SelectItem value="r">Right</SelectItem>
+            <SelectItem value="tl">Top Left</SelectItem>
+            <SelectItem value="tr">Top Right</SelectItem>
+            <SelectItem value="bl">Bottom Left</SelectItem>
+            <SelectItem value="br">Bottom Right</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div class="space-y-2">
+        <Label :for="inputId('poster-lang-position')">Main-language position (poster)</Label>
+        <Select
+          :model-value="editPosterLangPosition"
+          @update:model-value="editPosterLangPosition = $event as string"
+        >
+          <SelectTrigger :id="inputId('poster-lang-position')" class="max-w-xs" data-testid="poster-lang-position-select">
+            <SelectValue placeholder="Select position" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="bc">Bottom Center</SelectItem>
+            <SelectItem value="tc">Top Center</SelectItem>
+            <SelectItem value="l">Left</SelectItem>
+            <SelectItem value="r">Right</SelectItem>
+            <SelectItem value="tl">Top Left</SelectItem>
+            <SelectItem value="tr">Top Right</SelectItem>
+            <SelectItem value="bl">Bottom Left</SelectItem>
+            <SelectItem value="br">Bottom Right</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div class="space-y-2">
+        <Label :for="inputId('backdrop-lang-position')">Main-language position (backdrop)</Label>
+        <Select
+          :model-value="editBackdropLangPosition"
+          @update:model-value="editBackdropLangPosition = $event as string"
+        >
+          <SelectTrigger :id="inputId('backdrop-lang-position')" class="max-w-xs" data-testid="backdrop-lang-position-select">
+            <SelectValue placeholder="Select position" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="bc">Bottom Center</SelectItem>
+            <SelectItem value="tc">Top Center</SelectItem>
+            <SelectItem value="l">Left</SelectItem>
+            <SelectItem value="r">Right</SelectItem>
+            <SelectItem value="tl">Top Left</SelectItem>
+            <SelectItem value="tr">Top Right</SelectItem>
+            <SelectItem value="bl">Bottom Left</SelectItem>
+            <SelectItem value="br">Bottom Right</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+
     <div class="space-y-2 pt-2">
       <p class="text-sm font-semibold">Rating Display</p>
 
@@ -688,6 +862,20 @@ function toggleExclude(key: string, checked: boolean) {
             </Select>
           </div>
           <div class="space-y-2">
+            <Label :for="inputId('poster-lang-icon')">Main-language icon</Label>
+            <Select
+              :model-value="editPosterLangIcon"
+              @update:model-value="editPosterLangIcon = $event as string"
+            >
+              <SelectTrigger :id="inputId('poster-lang-icon')" class="max-w-xs" data-testid="poster-lang-icon-select">
+                <SelectValue placeholder="Select icon" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="(label, value) in LANG_ICON_LABELS" :key="value" :value="value">{{ label }}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="space-y-2">
             <Label :for="inputId('poster-fit')">Aspect ratio</Label>
             <Select
               :model-value="editPosterFit"
@@ -849,6 +1037,20 @@ function toggleExclude(key: string, checked: boolean) {
               </SelectContent>
             </Select>
           </div>
+          <div class="space-y-2">
+            <Label :for="inputId('logo-lang-icon')">Main-language icon</Label>
+            <Select
+              :model-value="editLogoLangIcon"
+              @update:model-value="editLogoLangIcon = $event as string"
+            >
+              <SelectTrigger :id="inputId('logo-lang-icon')" class="max-w-xs" data-testid="logo-lang-icon-select">
+                <SelectValue placeholder="Select icon" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="(label, value) in LANG_ICON_LABELS" :key="value" :value="value">{{ label }}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div class="space-y-1">
             <div class="flex items-center gap-3">
               <Label :for="inputId('logo-ratings-limit')">Max ratings</Label>
@@ -965,6 +1167,20 @@ function toggleExclude(key: string, checked: boolean) {
                 <SelectItem value="k">Dark</SelectItem>
                 <SelectItem value="t">Transparent</SelectItem>
                 <SelectItem value="n">None</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="space-y-2">
+            <Label :for="inputId('backdrop-lang-icon')">Main-language icon</Label>
+            <Select
+              :model-value="editBackdropLangIcon"
+              @update:model-value="editBackdropLangIcon = $event as string"
+            >
+              <SelectTrigger :id="inputId('backdrop-lang-icon')" class="max-w-xs" data-testid="backdrop-lang-icon-select">
+                <SelectValue placeholder="Select icon" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="(label, value) in LANG_ICON_LABELS" :key="value" :value="value">{{ label }}</SelectItem>
               </SelectContent>
             </Select>
           </div>
