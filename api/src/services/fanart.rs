@@ -13,10 +13,27 @@ pub struct FanartClient {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct FanartPoster {
+    #[serde(default)]
     pub id: String,
+    #[serde(default)]
     pub url: String,
+    #[serde(default)]
     pub lang: String,
+    #[serde(default)]
     pub likes: String,
+}
+
+/// Deserialize a `Vec<FanartPoster>`, skipping individual entries that fail
+/// to parse rather than failing the whole array.
+fn deserialize_lenient_posters<'de, D>(deserializer: D) -> Result<Vec<FanartPoster>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let raw: Vec<serde_json::Value> = Vec::deserialize(deserializer)?;
+    Ok(raw
+        .into_iter()
+        .filter_map(|v| serde_json::from_value(v).ok())
+        .collect())
 }
 
 /// All image types fetched from fanart.tv in a single API call.
@@ -29,21 +46,21 @@ pub struct FanartImages {
 
 #[derive(Debug, Deserialize)]
 struct MovieImages {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_lenient_posters")]
     movieposter: Vec<FanartPoster>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_lenient_posters")]
     hdmovielogo: Vec<FanartPoster>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_lenient_posters")]
     moviebackground: Vec<FanartPoster>,
 }
 
 #[derive(Debug, Deserialize)]
 struct TvImages {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_lenient_posters")]
     tvposter: Vec<FanartPoster>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_lenient_posters")]
     hdtvlogo: Vec<FanartPoster>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_lenient_posters")]
     showbackground: Vec<FanartPoster>,
 }
 

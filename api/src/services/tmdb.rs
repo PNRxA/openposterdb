@@ -191,6 +191,7 @@ pub struct TmdbImage {
     pub iso_639_1: Option<String>,
     #[serde(default)]
     pub iso_3166_1: Option<String>,
+    #[serde(default)]
     pub vote_average: f64,
     /// Source aspect ratio (width/height) as reported by TMDB. Defaults to 0.0
     /// when absent, which the poster selector treats as "unknown" (never
@@ -199,13 +200,28 @@ pub struct TmdbImage {
     pub aspect_ratio: f64,
 }
 
+/// Deserialize a `Vec<TmdbImage>`, skipping individual entries that fail
+/// to parse rather than failing the whole array. TMDB can return large payloads
+/// with occasional malformed entries; a single bad entry must not drop all images.
+fn deserialize_lenient_images<'de, D>(deserializer: D) -> Result<Vec<TmdbImage>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    let raw: Vec<serde_json::Value> = Vec::deserialize(deserializer)?;
+    Ok(raw
+        .into_iter()
+        .filter_map(|v| serde_json::from_value(v).ok())
+        .collect())
+}
+
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct TmdbImagesResponse {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_lenient_images")]
     pub backdrops: Vec<TmdbImage>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_lenient_images")]
     pub logos: Vec<TmdbImage>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_lenient_images")]
     pub posters: Vec<TmdbImage>,
 }
 

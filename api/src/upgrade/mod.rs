@@ -1,6 +1,7 @@
 mod v001_backdrop_cache_keys;
 mod v002_backdrop_position_direction_cache;
 mod v003_badge_shape_background_cache;
+mod v004_csm_settings;
 
 use sea_orm::{ConnectionTrait, DatabaseConnection};
 
@@ -29,6 +30,9 @@ pub async fn run(
     run_once(db, "v003_badge_shape_background_cache", || {
         v003_badge_shape_background_cache::run(db, cache_dir, external_cache_only)
     })
+    .await?;
+
+    run_once(db, "v004_csm_settings", || v004_csm_settings::run(db))
     .await?;
 
     Ok(())

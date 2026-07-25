@@ -786,7 +786,113 @@ mod tests {
     }
 }
 
-/// Round the four outer corners of the full image to radius `r` by clearing
+// --- CSM age-rating pill ---
+
+/// Base dimensions for the CSM age-rating pill at 1× scale.
+const BASE_CSM_PILL_HEIGHT: u32 = 58;
+const BASE_CSM_PILL_PADDING_H: u32 = 20;
+/// Dark semi-transparent background — 65% opacity (0.65 × 255 ≈ 166).
+const CSM_PILL_BG: Rgba<u8> = Rgba([0, 0, 0, 166]);
+
+/// Render a CSM age-rating pill badge: a dark semi-transparent rounded pill
+/// with white bold text (e.g. "12+"). Width scales to the text length;
+/// height is fixed at `BASE_CSM_PILL_HEIGHT * badge_scale`.
+///
+/// Returns `None` when `label` is empty.
+pub fn draw_csm_pill(label: &str, font: &FontArc, badge_scale: f32) -> Option<RgbaImage> {
+    if label.is_empty() {
+        return None;
+    }
+
+    let pill_h = (BASE_CSM_PILL_HEIGHT as f32 * badge_scale).round() as u32;
+    let padding_h = (BASE_CSM_PILL_PADDING_H as f32 * badge_scale).round() as u32;
+    let font_size = BASE_FONT_SIZE * badge_scale;
+    let scale = PxScale::from(font_size);
+    let scaled_font = font.as_scaled(scale);
+
+    let text_w = text_width(label, &scaled_font);
+    let pill_w = text_w + padding_h * 2;
+
+    let mut img = RgbaImage::new(pill_w, pill_h);
+
+    // Fill the pill background.
+    draw_filled_rect_mut(&mut img, Rect::at(0, 0).of_size(pill_w, pill_h), CSM_PILL_BG);
+    // Fully rounded caps (radius = half the height → stadium / pill shape).
+    round_corners(&mut img, pill_h / 2);
+
+    // Centre the text vertically and horizontally.
+    let text_x = ((pill_w.saturating_sub(text_w)) / 2) as i32;
+    let text_y = (pill_h as i32 - font_size as i32) / 2;
+    draw_text_mut(&mut img, Rgba([255, 255, 255, 255]), text_x, text_y, scale, font, label);
+
+    Some(img)
+}
+
+#[cfg(test)]
+mod csm_tests {
+    use super::*;
+
+    fn test_font() -> FontArc {
+        FontArc::try_from_slice(crate::FONT_BYTES).unwrap()
+    }
+
+    #[test]
+    fn draw_csm_pill_basic() {
+        let font = test_font();
+        let img = draw_csm_pill("12+", &font, 1.0).expect("should produce image");
+        assert_eq!(img.height(), BASE_CSM_PILL_HEIGHT);
+        assert!(img.width() > 0);
+    }
+
+    #[test]
+    fn draw_csm_pill_empty_returns_none() {
+        let font = test_font();
+        assert!(draw_csm_pill("", &font, 1.0).is_none());
+    }
+
+    #[test]
+    fn draw_csm_pill_wider_text_produces_wider_pill() {
+        let font = test_font();
+        let short = draw_csm_pill("7+", &font, 1.0).unwrap();
+        let long = draw_csm_pill("18+", &font, 1.0).unwrap();
+        assert!(long.width() > short.width());
+    }
+
+    #[test]
+    fn draw_csm_pill_scaled_2x_doubles_height() {
+        let font = test_font();
+        let img = draw_csm_pill("12+", &font, 2.0).unwrap();
+        assert_eq!(img.height(), BASE_CSM_PILL_HEIGHT * 2);
+    }
+
+    #[test]
+    fn draw_csm_pill_has_correct_opacity() {
+        // Sample a pixel in the centre of the pill — it should be the dark
+        // semi-transparent background (alpha ≈ 166, never fully opaque).
+        let font = test_font();
+        let img = draw_csm_pill("12+", &font, 1.0).unwrap();
+        let cx = img.width() / 2;
+        let cy = img.height() / 2;
+        // The centre pixel may be over text (white) — check the left edge padding
+        // area which is definitely background.
+        let bg_px = img.get_pixel(4, cy);
+        assert!(bg_px[3] > 0, "background should be visible");
+        assert!(bg_px[3] <= 200, "background should not be fully opaque");
+    }
+
+    #[test]
+    fn draw_csm_pill_corners_are_transparent() {
+        let font = test_font();
+        let img = draw_csm_pill("12+", &font, 1.0).unwrap();
+        // Corners should be cleared by round_corners.
+        assert_eq!(img.get_pixel(0, 0)[3], 0, "top-left corner should be transparent");
+        assert_eq!(img.get_pixel(img.width() - 1, 0)[3], 0, "top-right corner should be transparent");
+        assert_eq!(img.get_pixel(0, img.height() - 1)[3], 0, "bottom-left corner should be transparent");
+        assert_eq!(img.get_pixel(img.width() - 1, img.height() - 1)[3], 0, "bottom-right corner should be transparent");
+    }
+}
+
+
 /// pixels outside each corner arc to transparent. `r` is clamped so the arcs
 /// never overlap, so passing `r` = half the short axis yields a pill / stadium
 /// shape. The badge image spans exactly one badge, so its corners are the
