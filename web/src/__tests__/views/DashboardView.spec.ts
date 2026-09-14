@@ -39,6 +39,10 @@ function mountView() {
         CardContent: { template: '<div><slot /></div>' },
         Skeleton: { template: '<div data-testid="skeleton" />' },
         RefreshCw: { template: '<span />' },
+        ClearCacheButton: {
+          template: '<button @click="$emit(\'cleared\', \'Cache cleared — removed 42 cached images.\')">Clear cache</button>',
+          emits: ['cleared'],
+        },
       },
     },
   })
@@ -105,5 +109,26 @@ describe('DashboardView', () => {
 
     expect(mockAdminApi.getStats).toHaveBeenCalled()
     expect(wrapper.text()).toContain('99')
+  })
+
+  it('shows a message and refetches stats when the cache is cleared', async () => {
+    mockAdminApi.getStats.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(sampleStats),
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    mockAdminApi.getStats.mockClear()
+
+    // ClearCacheButton owns the confirm flow; here it emits `cleared` on click.
+    const clearButton = wrapper.findAll('button').find((b) => b.text().includes('Clear cache'))
+    expect(clearButton).toBeDefined()
+    await clearButton!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Cache cleared')
+    expect(mockAdminApi.getStats).toHaveBeenCalled() // refetched after clear
   })
 })

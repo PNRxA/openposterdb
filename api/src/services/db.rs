@@ -1938,6 +1938,117 @@ pub async fn list_image_meta_by_kind(
     Ok((items, total))
 }
 
+/// Delete every `image_meta` row for one logical title of a given kind.
+///
+/// `cache_key` is `{id_type}/{id_value}{variant}{suffix}`, so we coarse-filter
+/// with a `LIKE '{id_type}/{id_value}%'` prefilter (which may over-match because
+/// SQLite `LIKE` is case-insensitive and treats `_`/`%` as wildcards) and then
+/// narrow precisely in Rust with [`crate::cache::title_file_match`] before
+/// deleting the exact keys. Returns the number of rows removed.
+pub async fn delete_image_meta_for_title(
+    db: &impl ConnectionTrait,
+    image_type: crate::cache::ImageType,
+    id_type: &str,
+    id_value: &str,
+) -> Result<u64, AppError> {
+    use crate::entity::image_meta;
+    use sea_orm::{ColumnTrait, QueryFilter};
+
+    let prefix = format!("{id_type}/{id_value}");
+    let candidates = image_meta::Entity::find()
+        .filter(image_meta::Column::ImageType.eq(image_type.db_value()))
+        .filter(image_meta::Column::CacheKey.starts_with(prefix.as_str()))
+        .all(db)
+        .await
+        .map_err(|e| AppError::DbError(e.to_string()))?;
+
+    let keys: Vec<String> = candidates
+        .into_iter()
+        .map(|m| m.cache_key)
+        .filter(|k| crate::cache::title_file_match(k, &prefix))
+        .collect();
+
+    if keys.is_empty() {
+        return Ok(0);
+    }
+
+    let result = image_meta::Entity::delete_many()
+        .filter(image_meta::Column::CacheKey.is_in(keys))
+        .exec(db)
+        .await
+        .map_err(|e| AppError::DbError(e.to_string()))?;
+    Ok(result.rows_affected)
+}
+
+/// Delete a single `image_meta` row by its exact cache_key (single-variant
+/// purge), scoped to the given image kind so a kind-mismatched request can't
+/// touch another kind's row. Returns the number of rows removed (0 or 1).
+pub async fn delete_image_meta_exact(
+    db: &impl ConnectionTrait,
+    image_type: crate::cache::ImageType,
+    cache_key: &str,
+) -> Result<u64, AppError> {
+    use crate::entity::image_meta;
+    use sea_orm::{ColumnTrait, QueryFilter};
+    let result = image_meta::Entity::delete_many()
+        .filter(image_meta::Column::CacheKey.eq(cache_key))
+        .filter(image_meta::Column::ImageType.eq(image_type.db_value()))
+        .exec(db)
+        .await
+        .map_err(|e| AppError::DbError(e.to_string()))?;
+    Ok(result.rows_affected)
+}
+
+/// Delete the `available_ratings` index row for one title (`id_key` =
+/// `{id_type}/{id_value}`). Returns the number of rows removed (0 or 1).
+pub async fn delete_available_ratings(
+    db: &impl ConnectionTrait,
+    id_key: &str,
+) -> Result<u64, AppError> {
+    use crate::entity::available_ratings;
+    let result = available_ratings::Entity::delete_by_id(id_key.to_string())
+        .exec(db)
+        .await
+        .map_err(|e| AppError::DbError(e.to_string()))?;
+    Ok(result.rows_affected)
+}
+
+/// Delete all `image_meta` rows of one image kind (clear-by-kind purge).
+/// Returns the number of rows removed.
+pub async fn delete_image_meta_by_kind(
+    db: &impl ConnectionTrait,
+    image_type: crate::cache::ImageType,
+) -> Result<u64, AppError> {
+    use crate::entity::image_meta;
+    use sea_orm::{ColumnTrait, QueryFilter};
+    let result = image_meta::Entity::delete_many()
+        .filter(image_meta::Column::ImageType.eq(image_type.db_value()))
+        .exec(db)
+        .await
+        .map_err(|e| AppError::DbError(e.to_string()))?;
+    Ok(result.rows_affected)
+}
+
+/// Delete all `image_meta` rows (clear-all purge). Returns the number removed.
+pub async fn delete_all_image_meta(db: &impl ConnectionTrait) -> Result<u64, AppError> {
+    use crate::entity::image_meta;
+    let result = image_meta::Entity::delete_many()
+        .exec(db)
+        .await
+        .map_err(|e| AppError::DbError(e.to_string()))?;
+    Ok(result.rows_affected)
+}
+
+/// Delete all `available_ratings` rows (clear-all purge). Returns the number removed.
+pub async fn delete_all_available_ratings(db: &impl ConnectionTrait) -> Result<u64, AppError> {
+    use crate::entity::available_ratings;
+    let result = available_ratings::Entity::delete_many()
+        .exec(db)
+        .await
+        .map_err(|e| AppError::DbError(e.to_string()))?;
+    Ok(result.rows_affected)
+}
+
 pub async fn batch_update_last_used(
     db: &impl ConnectionTrait,
     ids: &[i32],

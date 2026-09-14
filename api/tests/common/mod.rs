@@ -86,6 +86,8 @@ async fn _setup_test_app(cors_origin: Option<String>, secure_cookies: bool, enab
     let image_inflight = moka::future::Cache::builder()
         .max_capacity(100)
         .time_to_live(Duration::from_secs(30))
+        // Mirror production so per-title purge can evict in-flight render results.
+        .support_invalidation_closures()
         .build();
     let id_cache = moka::future::Cache::builder()
         .max_capacity(100)
@@ -98,6 +100,9 @@ async fn _setup_test_app(cors_origin: Option<String>, secure_cookies: bool, enab
     let image_mem_cache = moka::future::Cache::builder()
         .max_capacity(1024 * 1024)
         .time_to_live(Duration::from_secs(3600))
+        // Mirror the production builder so per-title purge tests can exercise
+        // `invalidate_entries_if` (see api/src/main.rs).
+        .support_invalidation_closures()
         .build();
     let refresh_locks = moka::sync::Cache::builder()
         .max_capacity(100)

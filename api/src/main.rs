@@ -108,6 +108,16 @@ async fn main() {
         tokio::fs::create_dir_all(&config.cache_dir)
             .await
             .expect("failed to create cache dir");
+        // Sweep cache dirs left renamed-aside by a clear-all that was interrupted
+        // (crash/restart) before its background removal finished. Run it off the
+        // boot path so a large leftover can't delay the server coming up — the
+        // staged dirs are inert (never served) until removed.
+        let staged_cache_dir = config.cache_dir.clone();
+        tokio::spawn(async move {
+            if let Err(e) = openposterdb_api::cache::cleanup_staged_dirs(&staged_cache_dir).await {
+                tracing::warn!(error = %e, "failed to sweep leftover staged cache dirs at startup");
+            }
+        });
     }
     tokio::fs::create_dir_all(&config.db_dir)
         .await
@@ -196,6 +206,10 @@ async fn main() {
     let image_inflight = moka::future::Cache::builder()
         .max_capacity(1_000)
         .time_to_live(Duration::from_secs(30))
+        // A per-title purge must also drop any just-completed render held here, or
+        // `try_get_with` would re-serve the stale bytes (and re-promote them into
+        // image_mem_cache) for up to the 30s TTL. Needs invalidation-closure support.
+        .support_invalidation_closures()
         .build();
 
     let id_cache = moka::future::Cache::builder()
@@ -216,6 +230,10 @@ async fn main() {
         .max_capacity(config.image_mem_cache_mb * 1024 * 1024)
         .time_to_live(Duration::from_secs(3600))
         .time_to_idle(Duration::from_secs(1800))
+        // Required so a per-title cache purge can evict every rendered variant
+        // of a title via `invalidate_entries_if` (prefix predicate). Without
+        // this opt-in moka returns `PredicateError::InvalidationClosuresDisabled`.
+        .support_invalidation_closures()
         .build();
 
     // Refresh locks use a moka cache with TTL so entries auto-expire if a task panics

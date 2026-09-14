@@ -30,6 +30,8 @@ function makeMocks() {
     listFn: vi.fn(),
     imageFn: vi.fn(),
     fetchFn: vi.fn(),
+    deleteFn: vi.fn(),
+    clearAllFn: vi.fn(),
   }
 }
 
@@ -47,13 +49,16 @@ function mountView(mocks: ReturnType<typeof makeMocks>, kind: 'poster' | 'logo' 
       listFn: mocks.listFn,
       imageFn: mocks.imageFn,
       fetchFn: mocks.fetchFn,
+      deleteFn: mocks.deleteFn,
+      clearAllFn: mocks.clearAllFn,
     },
     global: {
       plugins: [createPinia(), router, [VueQueryPlugin, { queryClient }]],
       stubs: {
         Button: {
-          template: '<button @click="$emit(\'click\')" :disabled="disabled"><slot /></button>',
+          template: '<button @click="$emit(\'click\', $event)" :disabled="disabled"><slot /></button>',
           props: ['disabled', 'variant', 'size', 'type'],
+          emits: ['click'],
         },
         Skeleton: { template: '<div data-testid="skeleton" />' },
         Table: { template: '<table><slot /></table>' },
@@ -79,6 +84,7 @@ function mountView(mocks: ReturnType<typeof makeMocks>, kind: 'poster' | 'logo' 
         Download: { template: '<span />' },
         Loader2: { template: '<span />' },
         Eye: { template: '<span />' },
+        Trash2: { template: '<span />' },
       },
     },
   })
@@ -225,5 +231,114 @@ describe('ImageListView', () => {
     await flushPromises()
 
     expect(mocks.fetchFn).toHaveBeenCalledWith('imdb', 'tt0111161')
+  })
+
+  async function openPurgeDialog(mocks: ReturnType<typeof makeMocks>) {
+    mocks.listFn.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        items: [{ cache_key: 'imdb/tt0111161_t_de@imc', release_date: null, created_at: 1710000000, updated_at: 1710000000 }],
+        total: 1,
+        page: 1,
+        page_size: 50,
+      }),
+    })
+    mocks.deleteFn.mockResolvedValue({ ok: true, json: () => Promise.resolve({ ok: true }) })
+
+    const wrapper = mountView(mocks)
+    await flushPromises()
+
+    // Confirm dialog is not shown until the row's purge button is clicked.
+    expect(wrapper.text()).not.toContain('Purge poster')
+
+    const purgeButton = wrapper.findAll('button').find((b) => b.attributes('aria-label') === 'Purge poster')
+    expect(purgeButton).toBeDefined()
+    await purgeButton!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Purge poster')
+    return wrapper
+  }
+
+  it('purges the whole title via the "Entire title" button (bare title id)', async () => {
+    const mocks = makeMocks()
+    const wrapper = await openPurgeDialog(mocks)
+
+    const titleButton = wrapper.findAll('button').find((b) => b.text().trim() === 'Entire title')
+    await titleButton!.trigger('click')
+    await flushPromises()
+
+    // The full cache value carries a variant + ratings suffix; the title purge
+    // targets the bare title id.
+    expect(mocks.deleteFn).toHaveBeenCalledWith('imdb', 'tt0111161', 'title')
+  })
+
+  it('purges a single variant via the "This variant" button (full cache value)', async () => {
+    const mocks = makeMocks()
+    const wrapper = await openPurgeDialog(mocks)
+
+    const variantButton = wrapper.findAll('button').find((b) => b.text().trim() === 'This variant')
+    await variantButton!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.deleteFn).toHaveBeenCalledWith('imdb', 'tt0111161_t_de@imc', 'variant')
+  })
+
+  it('clears every image of the kind via the header "Clear" button', async () => {
+    const mocks = makeMocks()
+    mocks.listFn.mockResolvedValue({ ok: true, json: () => Promise.resolve(sampleResponse) })
+    mocks.clearAllFn.mockResolvedValue({ ok: true, json: () => Promise.resolve({ ok: true, meta_deleted: 2 }) })
+
+    const wrapper = mountView(mocks)
+    await flushPromises()
+
+    // The header button opens the confirm dialog (which adds a second "Clear posters" button).
+    const trigger = wrapper.findAll('button').find((b) => b.text().trim() === 'Clear posters')
+    expect(trigger).toBeDefined()
+    await trigger!.trigger('click')
+    await flushPromises()
+
+    const confirmButtons = wrapper.findAll('button').filter((b) => b.text().trim() === 'Clear posters')
+    expect(confirmButtons.length).toBe(2)
+    await confirmButtons[confirmButtons.length - 1]!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.clearAllFn).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).toContain('Cleared 2 cached posters')
+  })
+
+  it('uses the singular noun when one image is cleared', async () => {
+    const mocks = makeMocks()
+    mocks.listFn.mockResolvedValue({ ok: true, json: () => Promise.resolve(sampleResponse) })
+    mocks.clearAllFn.mockResolvedValue({ ok: true, json: () => Promise.resolve({ ok: true, meta_deleted: 1 }) })
+
+    const wrapper = mountView(mocks)
+    await flushPromises()
+    await wrapper.findAll('button').find((b) => b.text().trim() === 'Clear posters')!.trigger('click')
+    await flushPromises()
+    const confirm = wrapper.findAll('button').filter((b) => b.text().trim() === 'Clear posters')
+    await confirm[confirm.length - 1]!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Cleared 1 cached poster.')
+  })
+
+  it('shows an error and keeps the dialog open when clear fails', async () => {
+    const mocks = makeMocks()
+    mocks.listFn.mockResolvedValue({ ok: true, json: () => Promise.resolve(sampleResponse) })
+    mocks.clearAllFn.mockResolvedValue({ ok: false, status: 500, text: () => Promise.resolve(JSON.stringify({ error: 'boom' })) })
+
+    const wrapper = mountView(mocks)
+    await flushPromises()
+    await wrapper.findAll('button').find((b) => b.text().trim() === 'Clear posters')!.trigger('click')
+    await flushPromises()
+    const confirm = wrapper.findAll('button').filter((b) => b.text().trim() === 'Clear posters')
+    await confirm[confirm.length - 1]!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.clearAllFn).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).toContain('boom')
+    // Dialog stays open (the confirm button is still present).
+    expect(wrapper.findAll('button').filter((b) => b.text().trim() === 'Clear posters').length).toBe(2)
   })
 })

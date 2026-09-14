@@ -192,6 +192,61 @@ describe('api', () => {
     expect(url).toBe('/api/admin/posters/tmdb/550/fetch')
   })
 
+  it('adminApi.purgeAll calls POST /api/admin/cache/purge', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.purgeAll()
+
+    const [url, options] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/admin/cache/purge')
+    expect(options.method).toBe('POST')
+  })
+
+  it('adminApi.clearPosters calls DELETE on the posters collection', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.clearPosters()
+
+    const [url, options] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/admin/posters')
+    expect(options.method).toBe('DELETE')
+  })
+
+  it('adminApi.purgePoster calls DELETE with the title id', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.purgePoster('imdb', 'tt0111161')
+
+    const [url, options] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/admin/posters/imdb/tt0111161')
+    expect(options.method).toBe('DELETE')
+  })
+
+  it('adminApi.purgeEpisode encodes the id value', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.purgeEpisode('tmdb', 'episode-1396-S1E1')
+
+    const [url, options] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/admin/episodes/tmdb/episode-1396-S1E1')
+    expect(options.method).toBe('DELETE')
+  })
+
+  it('adminApi.purgePoster with variant scope encodes the cache value and adds ?scope=variant', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.purgePoster('imdb', 'tt0111161_t_de@imc', 'variant')
+
+    const [url, options] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/admin/posters/imdb/tt0111161_t_de%40imc?scope=variant')
+    expect(options.method).toBe('DELETE')
+  })
+
   it('adminApi.previewPoster calls GET with correct URL and params', async () => {
     const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
     vi.stubGlobal('fetch', fetchMock)

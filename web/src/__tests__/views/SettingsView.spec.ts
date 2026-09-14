@@ -76,6 +76,10 @@ function mountView() {
           template: '<button @click="$emit(\'refresh\')">Refresh</button>',
           props: ['fetching'],
         },
+        ClearCacheButton: {
+          template: '<button @click="$emit(\'cleared\', \'Cache cleared — removed 7 cached images.\')">Clear cache</button>',
+          emits: ['cleared'],
+        },
       },
     },
   })
@@ -481,5 +485,19 @@ describe('SettingsView', () => {
         backdrop_edge_inset_y: 7,
       }),
     )
+  })
+
+  it('has a Cache section that shows a message after clearing', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Cache')
+    const clearButton = wrapper.findAll('button').find((b) => b.text().includes('Clear cache'))
+    expect(clearButton).toBeDefined()
+
+    await clearButton!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Cache cleared')
   })
 })

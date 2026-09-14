@@ -627,3 +627,314 @@ async fn fetch_logo_backdrop_image(
         bytes,
     ).into_response())
 }
+
+// --- Cache purge ---
+
+#[derive(Serialize)]
+pub struct PurgeTitleResponse {
+    pub ok: bool,
+    /// When true there are no rendered files on disk (CDN-backed); the cached
+    /// CDN copies cannot be purged from here, so the purge is partial.
+    pub external_cache_only: bool,
+    pub files_deleted: u64,
+    pub meta_deleted: u64,
+    pub ratings_deleted: u64,
+}
+
+#[derive(Serialize)]
+pub struct PurgeAllResponse {
+    pub ok: bool,
+    pub external_cache_only: bool,
+    /// Number of on-disk cache subdirectories cleared (renamed aside for
+    /// background removal). 0 under `EXTERNAL_CACHE_ONLY`.
+    pub dirs_cleared: u64,
+    pub meta_deleted: u64,
+    pub ratings_deleted: u64,
+}
+
+/// Scope of a `DELETE` purge: an entire logical title (all rendered variants of
+/// one image kind — the default) or a single rendered variant (one exact cache
+/// key, i.e. one row in the admin list).
+#[derive(Deserialize, Default, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum PurgeScope {
+    #[default]
+    Title,
+    Variant,
+}
+
+#[derive(Deserialize)]
+pub struct PurgeQuery {
+    #[serde(default)]
+    pub scope: PurgeScope,
+}
+
+/// Purge every cached variant of one logical title for a single image kind,
+/// across all cache layers: on-disk rendered files, SQLite metadata
+/// (`image_meta` + the shared `available_ratings` index), and the in-memory
+/// moka caches (`image_mem_cache` by prefix, plus the exact-keyed `id_cache`
+/// and `available_ratings_cache`).
+async fn purge_title(
+    state: &AppState,
+    image_type: cache::ImageType,
+    id_type: &str,
+    id_value: &str,
+) -> Result<Json<PurgeTitleResponse>, AppError> {
+    // Reject unknown id types and path-traversal / empty id values up front.
+    crate::id::IdType::parse(id_type)?;
+    cache::validate_id_value(id_value)?;
+
+    let id_key = format!("{id_type}/{id_value}");
+
+    // 1. On-disk rendered variants. Skipped under EXTERNAL_CACHE_ONLY (no files
+    //    exist on disk — images are served from a CDN we can't purge from here).
+    let files_deleted = if state.config.external_cache_only {
+        0
+    } else {
+        cache::purge_title_files(&state.config.cache_dir, image_type, id_type, id_value).await?
+    };
+
+    // 2. SQLite: this kind's rendered-variant rows, plus the title's shared
+    //    available-ratings index row so the next request re-resolves sources.
+    let meta_deleted = db::delete_image_meta_for_title(&state.db, image_type, id_type, id_value).await?;
+    let ratings_deleted = db::delete_available_ratings(&state.db, &id_key).await?;
+
+    // 3. In-memory caches keyed by the full cache_key. Evict every variant via a
+    //    delimiter-anchored prefix predicate (a bare prefix would let `tt123`
+    //    capture `tt1234567`). Both builders opt into `support_invalidation_closures()`
+    //    (see api/src/main.rs). This is intentionally cross-kind: it also drops the
+    //    title's logos/backdrops from memory, which simply re-render from the
+    //    still-intact per-kind disk/DB layers on the next request.
+    let exact = id_key.clone();
+    let prefix_underscore = format!("{id_key}_");
+    let prefix_at = format!("{id_key}@");
+    {
+        let (exact, prefix_underscore, prefix_at) =
+            (exact.clone(), prefix_underscore.clone(), prefix_at.clone());
+        if let Err(e) = state.image_mem_cache.invalidate_entries_if(move |k, _v| {
+            *k == exact || k.starts_with(&prefix_underscore) || k.starts_with(&prefix_at)
+        }) {
+            tracing::warn!(error = %e, key = %id_key, "image_mem_cache purge predicate rejected");
+        }
+    }
+    // image_inflight briefly holds the just-completed render result; drop it too,
+    // or `try_get_with` would re-serve the stale bytes (and re-promote them into
+    // image_mem_cache) within its 30s TTL.
+    if let Err(e) = state.image_inflight.invalidate_entries_if(move |k, _v| {
+        *k == exact || k.starts_with(&prefix_underscore) || k.starts_with(&prefix_at)
+    }) {
+        tracing::warn!(error = %e, key = %id_key, "image_inflight purge predicate rejected");
+    }
+    // Resolution / fast-path index caches are keyed by the exact id_key.
+    state.id_cache.invalidate(&id_key).await;
+    state.available_ratings_cache.invalidate(&id_key).await;
+
+    Ok(Json(PurgeTitleResponse {
+        ok: true,
+        external_cache_only: state.config.external_cache_only,
+        files_deleted,
+        meta_deleted,
+        ratings_deleted,
+    }))
+}
+
+/// Purge a single rendered variant — one exact cache key (one row in the admin
+/// list) — without disturbing the rest of the title. Clears just that file, its
+/// `image_meta` row, and its `image_mem_cache` / `image_inflight` entries; the
+/// title's shared `available_ratings` index and resolution caches are left intact.
+///
+/// `cache_value` is the full `{id_value}{variant}{suffix}` form (the value the
+/// admin list shows as the row's "ID Value"), so the matching cache key is
+/// `{id_type}/{cache_value}` and the file is `{subdir}/{id_type}/{cache_value}.{ext}`.
+async fn purge_variant(
+    state: &AppState,
+    image_type: cache::ImageType,
+    id_type: &str,
+    cache_value: &str,
+) -> Result<Json<PurgeTitleResponse>, AppError> {
+    crate::id::IdType::parse(id_type)?;
+    cache::validate_id_value(cache_value)?;
+
+    let cache_key = format!("{id_type}/{cache_value}");
+
+    let files_deleted = if state.config.external_cache_only {
+        0
+    } else {
+        cache::purge_variant_file(&state.config.cache_dir, image_type, id_type, cache_value).await?
+    };
+
+    let meta_deleted = db::delete_image_meta_exact(&state.db, image_type, &cache_key).await?;
+
+    state.image_mem_cache.invalidate(&cache_key).await;
+    state.image_inflight.invalidate(&cache_key).await;
+
+    Ok(Json(PurgeTitleResponse {
+        ok: true,
+        external_cache_only: state.config.external_cache_only,
+        files_deleted,
+        meta_deleted,
+        ratings_deleted: 0,
+    }))
+}
+
+/// Route a `DELETE` purge to the title-wide or single-variant path by `?scope=`.
+async fn purge_dispatch(
+    state: &AppState,
+    image_type: cache::ImageType,
+    id_type: &str,
+    id_value: &str,
+    scope: PurgeScope,
+) -> Result<Json<PurgeTitleResponse>, AppError> {
+    match scope {
+        PurgeScope::Title => purge_title(state, image_type, id_type, id_value).await,
+        PurgeScope::Variant => purge_variant(state, image_type, id_type, id_value).await,
+    }
+}
+
+pub async fn purge_poster(
+    State(state): State<Arc<AppState>>,
+    Path((id_type, id_value)): Path<(String, String)>,
+    Query(q): Query<PurgeQuery>,
+) -> Result<Json<PurgeTitleResponse>, AppError> {
+    purge_dispatch(&state, cache::ImageType::Poster, &id_type, &id_value, q.scope).await
+}
+
+pub async fn purge_logo(
+    State(state): State<Arc<AppState>>,
+    Path((id_type, id_value)): Path<(String, String)>,
+    Query(q): Query<PurgeQuery>,
+) -> Result<Json<PurgeTitleResponse>, AppError> {
+    purge_dispatch(&state, cache::ImageType::Logo, &id_type, &id_value, q.scope).await
+}
+
+pub async fn purge_backdrop(
+    State(state): State<Arc<AppState>>,
+    Path((id_type, id_value)): Path<(String, String)>,
+    Query(q): Query<PurgeQuery>,
+) -> Result<Json<PurgeTitleResponse>, AppError> {
+    purge_dispatch(&state, cache::ImageType::Backdrop, &id_type, &id_value, q.scope).await
+}
+
+pub async fn purge_episode(
+    State(state): State<Arc<AppState>>,
+    Path((id_type, id_value)): Path<(String, String)>,
+    Query(q): Query<PurgeQuery>,
+) -> Result<Json<PurgeTitleResponse>, AppError> {
+    purge_dispatch(&state, cache::ImageType::Episode, &id_type, &id_value, q.scope).await
+}
+
+#[derive(Serialize)]
+pub struct PurgeKindResponse {
+    pub ok: bool,
+    pub external_cache_only: bool,
+    /// Whether the kind's on-disk rendered directory was cleared (false under
+    /// `EXTERNAL_CACHE_ONLY`, or if nothing was cached yet).
+    pub dir_cleared: bool,
+    pub meta_deleted: u64,
+}
+
+/// Clear every cached image of one kind (e.g. all posters). Stages that kind's
+/// rendered directory aside for instant clearing + background removal, deletes
+/// its `image_meta` rows, and drops the in-memory render caches.
+///
+/// The render caches (`image_mem_cache` / `image_inflight`) are keyed by the
+/// full cache key, which has no clean per-kind marker for posters/episodes, so
+/// they're cleared wholesale rather than by a fragile predicate — the other
+/// kinds simply re-render from their still-intact disk/DB layers (the in-memory
+/// cache is a size-bounded hot path, capped by `IMAGE_MEM_CACHE_MB`). The shared
+/// `available_ratings` index and upstream source caches are left untouched.
+async fn clear_kind(
+    state: &AppState,
+    image_type: cache::ImageType,
+) -> Result<Json<PurgeKindResponse>, AppError> {
+    let dir_cleared = if state.config.external_cache_only {
+        false
+    } else {
+        match cache::stage_dir_for_clear(&state.config.cache_dir, image_type.subdir()).await? {
+            Some(staged) => {
+                tokio::spawn(cache::remove_staged_dirs(vec![staged]));
+                true
+            }
+            None => false,
+        }
+    };
+
+    let meta_deleted = db::delete_image_meta_by_kind(&state.db, image_type).await?;
+
+    state.image_mem_cache.invalidate_all();
+    state.image_inflight.invalidate_all();
+    state.image_mem_cache.run_pending_tasks().await;
+
+    Ok(Json(PurgeKindResponse {
+        ok: true,
+        external_cache_only: state.config.external_cache_only,
+        dir_cleared,
+        meta_deleted,
+    }))
+}
+
+pub async fn clear_posters(State(state): State<Arc<AppState>>) -> Result<Json<PurgeKindResponse>, AppError> {
+    clear_kind(&state, cache::ImageType::Poster).await
+}
+
+pub async fn clear_logos(State(state): State<Arc<AppState>>) -> Result<Json<PurgeKindResponse>, AppError> {
+    clear_kind(&state, cache::ImageType::Logo).await
+}
+
+pub async fn clear_backdrops(State(state): State<Arc<AppState>>) -> Result<Json<PurgeKindResponse>, AppError> {
+    clear_kind(&state, cache::ImageType::Backdrop).await
+}
+
+pub async fn clear_episodes(State(state): State<Arc<AppState>>) -> Result<Json<PurgeKindResponse>, AppError> {
+    clear_kind(&state, cache::ImageType::Episode).await
+}
+
+/// Clear the entire image cache: all rendered files + raw downloads on disk,
+/// all `image_meta` / `available_ratings` rows, and every image-related
+/// in-memory cache. Auth and settings caches are intentionally left intact.
+pub async fn purge_all(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<PurgeAllResponse>, AppError> {
+    // Rename the cache subdirs aside (O(1) regardless of file count) so the cache
+    // is cleared instantly, then delete the staged dirs on a background task — a
+    // huge cache (hundreds of thousands of files) must not block the request. Any
+    // staged dir left by a crash mid-delete is swept on the next startup.
+    let dirs_cleared = if state.config.external_cache_only {
+        0
+    } else {
+        let staged = cache::stage_cache_for_clear(&state.config.cache_dir).await?;
+        let count = staged.len() as u64;
+        if !staged.is_empty() {
+            tokio::spawn(cache::remove_staged_dirs(staged));
+        }
+        count
+    };
+
+    let meta_deleted = db::delete_all_image_meta(&state.db).await?;
+    let ratings_deleted = db::delete_all_available_ratings(&state.db).await?;
+
+    state.image_mem_cache.invalidate_all();
+    state.image_inflight.invalidate_all();
+    state.id_cache.invalidate_all();
+    state.ratings_cache.invalidate_all();
+    state.available_ratings_cache.invalidate_all();
+    state.fanart_cache.invalidate_all();
+    state.fanart_negative.invalidate_all();
+    state.tmdb_images_cache.invalidate_all();
+    state.preview_cache.invalidate_all();
+
+    // `invalidate_all` is lazy. Flush the caches whose entry counts feed the stats
+    // endpoint so the dashboard's immediate post-purge refetch shows zeroed counts
+    // rather than stale ones. (Only on this rare admin action, never on stats polls.)
+    state.image_mem_cache.run_pending_tasks().await;
+    state.id_cache.run_pending_tasks().await;
+    state.ratings_cache.run_pending_tasks().await;
+
+    Ok(Json(PurgeAllResponse {
+        ok: true,
+        external_cache_only: state.config.external_cache_only,
+        dirs_cleared,
+        meta_deleted,
+        ratings_deleted,
+    }))
+}

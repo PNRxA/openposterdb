@@ -5,6 +5,7 @@ import { adminApi, type SaveSettingsPayload } from '@/lib/api'
 import { FREE_API_KEY } from '@/lib/constants'
 import RefreshButton from '@/components/RefreshButton.vue'
 import RenderSettingsForm from '@/components/RenderSettingsForm.vue'
+import ClearCacheButton from '@/components/ClearCacheButton.vue'
 import type { RenderSettings } from '@/components/RenderSettingsForm.vue'
 
 type SettingsResponse = RenderSettings & { free_api_key_enabled: boolean; free_api_key_locked: boolean }
@@ -12,6 +13,7 @@ type SettingsResponse = RenderSettings & { free_api_key_enabled: boolean; free_a
 const freeApiKeyEnabled = ref(false)
 const freeKeyLoading = ref(false)
 const freeKeyError = ref('')
+const cacheMessage = ref('')
 
 const {
   data: settings,
@@ -103,6 +105,16 @@ async function toggleFreeApiKey() {
         <p v-if="settings?.free_api_key_locked" class="text-sm text-muted-foreground">
           Controlled by <code class="font-mono text-xs bg-muted px-1 py-0.5 rounded">FREE_KEY_ENABLED</code> environment variable.
         </p>
+      </div>
+
+      <div class="rounded-lg border p-6 space-y-4">
+        <h2 class="text-lg font-semibold">Cache</h2>
+        <p class="text-sm text-muted-foreground">
+          Clear all cached images (posters, logos, backdrops, episodes). They are
+          regenerated on the next request, so the first load of each title is slower.
+        </p>
+        <ClearCacheButton @cleared="(m: string) => (cacheMessage = m)" />
+        <p v-if="cacheMessage" class="text-sm text-muted-foreground">{{ cacheMessage }}</p>
       </div>
 
       <div class="rounded-lg border p-6 space-y-4">

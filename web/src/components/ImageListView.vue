@@ -2,7 +2,8 @@
 import { ref, computed, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
-import { Eye, Loader2, Download } from 'lucide-vue-next'
+import { Eye, Loader2, Download, Trash2 } from 'lucide-vue-next'
+import { titleIdFromCacheValue } from '@/lib/utils'
 import RefreshButton from '@/components/RefreshButton.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -49,6 +50,8 @@ const props = defineProps<{
   listFn: (page: number, pageSize: number) => Promise<Response>
   imageFn: (key: string) => Promise<Response>
   fetchFn: (idType: string, idValue: string) => Promise<Response>
+  deleteFn: (idType: string, idValue: string, scope: 'title' | 'variant') => Promise<Response>
+  clearAllFn: () => Promise<Response>
 }>()
 
 const route = useRoute()
@@ -151,6 +154,80 @@ function openFetchModal() {
   fetchModalOpen.value = true
 }
 
+// --- Purge: this exact variant (the row) or every variant of the title ---
+const deleteOpen = ref(false)
+const deleteTarget = ref<{ idType: string; cacheValue: string; titleId: string } | null>(null)
+const deleteLoading = ref<'' | 'title' | 'variant'>('')
+const deleteError = ref('')
+
+function openDelete(cacheKey: string) {
+  const { idType, idValue } = parseKey(cacheKey)
+  deleteTarget.value = { idType, cacheValue: idValue, titleId: titleIdFromCacheValue(idValue) }
+  deleteError.value = ''
+  deleteOpen.value = true
+}
+
+async function confirmDelete(scope: 'title' | 'variant') {
+  const target = deleteTarget.value
+  if (!target || deleteLoading.value) return
+
+  deleteLoading.value = scope
+  deleteError.value = ''
+
+  try {
+    const idValue = scope === 'variant' ? target.cacheValue : target.titleId
+    const res = await props.deleteFn(target.idType, idValue, scope)
+    if (!res.ok) {
+      const text = await res.text()
+      try { deleteError.value = JSON.parse(text).error || text } catch { deleteError.value = text || `Error ${res.status}` }
+      return
+    }
+    deleteOpen.value = false
+    deleteTarget.value = null
+    refetch()
+  } catch (e) {
+    deleteError.value = e instanceof Error ? e.message : 'Purge failed'
+  } finally {
+    deleteLoading.value = ''
+  }
+}
+
+// --- Clear every cached image of this kind ---
+const clearAllOpen = ref(false)
+const clearAllLoading = ref(false)
+const clearAllError = ref('')
+const clearAllMessage = ref('')
+
+function openClearAll() {
+  clearAllError.value = ''
+  clearAllMessage.value = ''
+  clearAllOpen.value = true
+}
+
+async function confirmClearAll() {
+  clearAllLoading.value = true
+  clearAllError.value = ''
+
+  try {
+    const res = await props.clearAllFn()
+    if (!res.ok) {
+      const text = await res.text()
+      try { clearAllError.value = JSON.parse(text).error || text } catch { clearAllError.value = text || `Error ${res.status}` }
+      return
+    }
+    const body = await res.json().catch(() => ({}))
+    const n = body.meta_deleted ?? 0
+    clearAllMessage.value = `Cleared ${n} cached ${n === 1 ? kindLabel.value : kindLabelPlural.value}.`
+    clearAllOpen.value = false
+    page.value = 1
+    refetch()
+  } catch (e) {
+    clearAllError.value = e instanceof Error ? e.message : 'Clear failed'
+  } finally {
+    clearAllLoading.value = false
+  }
+}
+
 function parseKey(cacheKey: string) {
   const idx = cacheKey.indexOf('/')
   if (idx === -1) return { idType: cacheKey, idValue: '' }
@@ -202,8 +279,13 @@ const skeletonClass = computed(() => {
         <Download class="size-4 mr-1" />
         Fetch
       </Button>
+      <Button variant="outline" size="sm" class="text-destructive hover:text-destructive" @click="openClearAll">
+        <Trash2 class="size-4 mr-1" />
+        Clear {{ kindLabelPlural }}
+      </Button>
       <RefreshButton :fetching="isFetching" @refresh="refetch()" />
     </div>
+    <p v-if="clearAllMessage" class="text-sm text-muted-foreground text-right">{{ clearAllMessage }}</p>
     <div v-if="isPending" class="space-y-3">
       <Skeleton v-for="i in 5" :key="i" class="h-10 w-full" />
     </div>
@@ -217,11 +299,12 @@ const skeletonClass = computed(() => {
             <TableHead>Release Date</TableHead>
             <TableHead>Last Updated</TableHead>
             <TableHead>Created</TableHead>
+            <TableHead class="w-10 text-right"><span class="sr-only">Actions</span></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           <TableRow v-if="data.items.length === 0">
-            <TableCell colspan="6" class="text-center text-muted-foreground">No {{ kindLabelPlural }} cached yet.</TableCell>
+            <TableCell colspan="7" class="text-center text-muted-foreground">No {{ kindLabelPlural }} cached yet.</TableCell>
           </TableRow>
           <TableRow v-for="item in data.items" :key="item.cache_key" class="cursor-pointer" @click="openPreview(item.cache_key)">
             <TableCell>
@@ -232,6 +315,18 @@ const skeletonClass = computed(() => {
             <TableCell>{{ item.release_date || '—' }}</TableCell>
             <TableCell>{{ relativeTime(item.updated_at) }}</TableCell>
             <TableCell>{{ formatDate(item.created_at) }}</TableCell>
+            <TableCell class="text-right">
+              <Button
+                variant="ghost"
+                size="icon"
+                class="size-8 text-muted-foreground hover:text-destructive"
+                :aria-label="`Purge ${kindLabel}`"
+                :title="`Purge cached ${kindLabel}`"
+                @click.stop="openDelete(item.cache_key)"
+              >
+                <Trash2 class="size-4" />
+              </Button>
+            </TableCell>
           </TableRow>
         </TableBody>
       </Table>
@@ -278,6 +373,58 @@ const skeletonClass = computed(() => {
             </Button>
           </div>
         </form>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="clearAllOpen" @update:open="(v: boolean) => { if (!v) clearAllOpen = false }">
+      <DialogContent class="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Clear {{ kindLabelPlural }}</DialogTitle>
+        </DialogHeader>
+        <div class="space-y-4">
+          <p class="text-sm text-muted-foreground">
+            Remove <strong>all</strong> cached {{ kindLabelPlural }}<span v-if="data"> ({{ data.total }} title{{ data.total === 1 ? '' : 's' }})</span>?
+            Other image types are unaffected. They regenerate on the next request.
+          </p>
+          <p v-if="clearAllError" class="text-sm text-destructive">{{ clearAllError }}</p>
+          <div class="flex justify-end gap-2">
+            <Button variant="outline" :disabled="clearAllLoading" @click="clearAllOpen = false">Cancel</Button>
+            <Button variant="destructive" :disabled="clearAllLoading" @click="confirmClearAll">
+              <Loader2 v-if="clearAllLoading" class="size-4 animate-spin mr-1" />
+              Clear {{ kindLabelPlural }}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="deleteOpen" @update:open="(v: boolean) => { if (!v) { deleteOpen = false; deleteTarget = null } }">
+      <DialogContent class="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Purge {{ kindLabel }}</DialogTitle>
+        </DialogHeader>
+        <div class="space-y-4">
+          <p class="text-sm text-muted-foreground">
+            Remove just this one cached {{ kindLabel }} variant, or every variant of
+            this title? Anything removed is regenerated on the next request.
+          </p>
+          <div class="space-y-1 rounded-md border bg-muted/40 p-2 text-xs font-mono break-all">
+            <p><span class="text-muted-foreground">this variant: </span>{{ deleteTarget?.idType }}/{{ deleteTarget?.cacheValue }}</p>
+            <p><span class="text-muted-foreground">entire title: </span>{{ deleteTarget?.idType }}/{{ deleteTarget?.titleId }}</p>
+          </div>
+          <p v-if="deleteError" class="text-sm text-destructive">{{ deleteError }}</p>
+          <div class="flex flex-wrap justify-end gap-2">
+            <Button variant="outline" :disabled="!!deleteLoading" @click="deleteOpen = false">Cancel</Button>
+            <Button variant="outline" class="text-destructive hover:text-destructive" :disabled="!!deleteLoading" @click="confirmDelete('variant')">
+              <Loader2 v-if="deleteLoading === 'variant'" class="size-4 animate-spin mr-1" />
+              This variant
+            </Button>
+            <Button variant="destructive" :disabled="!!deleteLoading" @click="confirmDelete('title')">
+              <Loader2 v-if="deleteLoading === 'title'" class="size-4 animate-spin mr-1" />
+              Entire title
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
 

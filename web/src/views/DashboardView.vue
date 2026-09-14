@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { adminApi } from '@/lib/api'
 import RefreshButton from '@/components/RefreshButton.vue'
+import ClearCacheButton from '@/components/ClearCacheButton.vue'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -31,13 +33,21 @@ const cards = [
   { key: 'ratings_cache_entries', label: 'Ratings Cache Entries' },
   { key: 'image_mem_cache_mb', label: 'Image Cache (MB)' },
 ] as const
+
+const clearMessage = ref('')
+function onCleared(message: string) {
+  clearMessage.value = message
+  refetch()
+}
 </script>
 
 <template>
   <div class="space-y-4">
-    <div class="flex justify-end">
+    <div class="flex items-center justify-end gap-2">
+      <ClearCacheButton @cleared="onCleared" />
       <RefreshButton :fetching="isFetching" @refresh="refetch()" />
     </div>
+    <p v-if="clearMessage" class="text-sm text-muted-foreground text-right">{{ clearMessage }}</p>
     <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
     <Card v-for="card in cards" :key="card.key">
       <CardHeader class="pb-2">

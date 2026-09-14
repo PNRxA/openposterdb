@@ -129,8 +129,25 @@ function buildUrl(path: string, params: Record<string, string | number | undefin
 
 // --- Typed API service layer ---
 
+/** Purge scope: a whole logical title (all variants) or a single rendered variant. */
+export type PurgeScope = 'title' | 'variant'
+
+/**
+ * Build a per-title / per-variant purge URL. For `title` scope `idValue` is the
+ * bare title id; for `variant` scope it's the full cache value (one row's key).
+ */
+function purgeUrl(kind: string, idType: string, idValue: string, scope: PurgeScope): string {
+  const path = `/api/admin/${kind}/${idType}/${encodeURIComponent(idValue)}`
+  return scope === 'variant' ? `${path}?scope=variant` : path
+}
+
 export const adminApi = {
   getStats: (): Promise<Response> => get('/api/admin/stats'),
+  purgeAll: (): Promise<Response> => post('/api/admin/cache/purge'),
+  clearPosters: (): Promise<Response> => del('/api/admin/posters'),
+  clearLogos: (): Promise<Response> => del('/api/admin/logos'),
+  clearBackdrops: (): Promise<Response> => del('/api/admin/backdrops'),
+  clearEpisodes: (): Promise<Response> => del('/api/admin/episodes'),
   getPosters: (page: number, pageSize: number): Promise<Response> =>
     get(`/api/admin/posters?page=${page}&page_size=${pageSize}`),
   getPosterImage: (key: string): Promise<Response> =>
@@ -139,24 +156,32 @@ export const adminApi = {
   updateSettings: (settings: Partial<SaveSettingsPayload> & { image_source: string; free_api_key_enabled?: boolean }): Promise<Response> => put('/api/admin/settings', settings),
   fetchPoster: (idType: string, idValue: string): Promise<Response> =>
     post(`/api/admin/posters/${idType}/${idValue}/fetch`),
+  purgePoster: (idType: string, idValue: string, scope: PurgeScope = 'title'): Promise<Response> =>
+    del(purgeUrl('posters', idType, idValue, scope)),
   getLogos: (page: number, pageSize: number): Promise<Response> =>
     get(`/api/admin/logos?page=${page}&page_size=${pageSize}`),
   getLogoImage: (key: string): Promise<Response> =>
     get(`/api/admin/logos/${key}`),
   fetchLogo: (idType: string, idValue: string): Promise<Response> =>
     post(`/api/admin/logos/${idType}/${idValue}/fetch`),
+  purgeLogo: (idType: string, idValue: string, scope: PurgeScope = 'title'): Promise<Response> =>
+    del(purgeUrl('logos', idType, idValue, scope)),
   getBackdrops: (page: number, pageSize: number): Promise<Response> =>
     get(`/api/admin/backdrops?page=${page}&page_size=${pageSize}`),
   getBackdropImage: (key: string): Promise<Response> =>
     get(`/api/admin/backdrops/${key}`),
   fetchBackdrop: (idType: string, idValue: string): Promise<Response> =>
     post(`/api/admin/backdrops/${idType}/${idValue}/fetch`),
+  purgeBackdrop: (idType: string, idValue: string, scope: PurgeScope = 'title'): Promise<Response> =>
+    del(purgeUrl('backdrops', idType, idValue, scope)),
   getEpisodes: (page: number, pageSize: number): Promise<Response> =>
     get(`/api/admin/episodes?page=${page}&page_size=${pageSize}`),
   getEpisodeImage: (key: string): Promise<Response> =>
     get(`/api/admin/episodes/${key}/image`),
   fetchEpisode: (idType: string, idValue: string): Promise<Response> =>
     post(`/api/admin/episodes/${idType}/${idValue}/fetch`),
+  purgeEpisode: (idType: string, idValue: string, scope: PurgeScope = 'title'): Promise<Response> =>
+    del(purgeUrl('episodes', idType, idValue, scope)),
   getSeasons: (page: number, pageSize: number): Promise<Response> =>
     get(`/api/admin/seasons?page=${page}&page_size=${pageSize}`),
   getSeasonImage: (key: string): Promise<Response> =>
