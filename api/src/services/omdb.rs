@@ -23,9 +23,9 @@ pub struct OmdbResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct OmdbRating {
-    #[serde(rename = "Source")]
+    #[serde(rename = "Source", default)]
     pub source: String,
-    #[serde(rename = "Value")]
+    #[serde(rename = "Value", default)]
     pub value: String,
 }
 

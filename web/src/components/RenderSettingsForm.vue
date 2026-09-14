@@ -59,6 +59,9 @@ export interface RenderSettings {
   logo_badge_background: string
   backdrop_badge_background: string
   episode_badge_background: string
+  csm_enabled: boolean
+  csm_position: string
+  csm_size: string
 }
 
 const props = defineProps<{
@@ -67,7 +70,7 @@ const props = defineProps<{
   loadSettings: () => Promise<RenderSettings | null>
   saveSettings: (s: SaveSettingsPayload) => Promise<string | null>
   resetSettings?: () => Promise<boolean>
-  fetchPreview: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string, badgeSize?: string, ratingsExclude?: string, posterSplit?: boolean, badgeShape?: string, badgeBackground?: string, posterFit?: string) => Promise<Response>
+  fetchPreview: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string, badgeSize?: string, ratingsExclude?: string, posterSplit?: boolean, badgeShape?: string, badgeBackground?: string, posterFit?: string, csmEnabled?: boolean, csmPosition?: string, csmSize?: string) => Promise<Response>
   fetchLogoPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, ratingsExclude?: string, badgeShape?: string, badgeBackground?: string) => Promise<Response>
   fetchBackdropPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, ratingsExclude?: string, badgeShape?: string, badgeBackground?: string, edgeInsetX?: number, edgeInsetY?: number) => Promise<Response>
   fetchEpisodePreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, blur?: boolean, ratingsExclude?: string, badgeShape?: string, badgeBackground?: string) => Promise<Response>
@@ -116,6 +119,9 @@ const editPosterBadgeBackground = ref(props.settings.poster_badge_background || 
 const editLogoBadgeBackground = ref(props.settings.logo_badge_background || 'd')
 const editBackdropBadgeBackground = ref(props.settings.backdrop_badge_background || 'd')
 const editEpisodeBadgeBackground = ref(props.settings.episode_badge_background || 'd')
+const editCsmEnabled = ref(props.settings.csm_enabled ?? false)
+const editCsmPosition = ref(props.settings.csm_position || 'tr')
+const editCsmSize = ref(props.settings.csm_size || 'm')
 
 // Which edges the current backdrop position anchors to. The horizontal inset
 // only applies to left/right positions and the vertical inset only to top/bottom
@@ -170,6 +176,9 @@ function applySettings(s: RenderSettings) {
   editLogoBadgeBackground.value = s.logo_badge_background || 'd'
   editBackdropBadgeBackground.value = s.backdrop_badge_background || 'd'
   editEpisodeBadgeBackground.value = s.episode_badge_background || 'd'
+  editCsmEnabled.value = s.csm_enabled ?? false
+  editCsmPosition.value = s.csm_position || 'tr'
+  editCsmSize.value = s.csm_size || 'm'
 }
 const currentSettings = ref<RenderSettings>(props.settings)
 const saving = ref(false)
@@ -253,6 +262,9 @@ async function autoSave() {
       logo_badge_background: editLogoBadgeBackground.value,
       backdrop_badge_background: editBackdropBadgeBackground.value,
       episode_badge_background: editEpisodeBadgeBackground.value,
+      csm_enabled: editCsmEnabled.value,
+      csm_position: editCsmPosition.value,
+      csm_size: editCsmSize.value,
     })
     if (err) {
       error.value = err
@@ -279,7 +291,7 @@ async function autoSave() {
 
 // Auto-save on any setting change
 watch(
-  [editSource, editLang, editTextless, editRatingsLimit, editRatingsOrder, editRatingsExclude, editPosterPosition, editLogoRatingsLimit, editBackdropRatingsLimit, editPosterBadgeStyle, editLogoBadgeStyle, editBackdropBadgeStyle, editPosterLabelStyle, editLogoLabelStyle, editBackdropLabelStyle, editPosterBadgeDirection, editPosterBadgeSplit, editPosterFit, editPosterBadgeSize, editLogoBadgeSize, editBackdropBadgeSize, editBackdropPosition, editBackdropBadgeDirection, editBackdropEdgeInsetX, editBackdropEdgeInsetY, editEpisodeRatingsLimit, editEpisodeBadgeStyle, editEpisodeLabelStyle, editEpisodeBadgeSize, editEpisodePosition, editEpisodeBadgeDirection, editEpisodeBlur, editPosterBadgeShape, editLogoBadgeShape, editBackdropBadgeShape, editEpisodeBadgeShape, editPosterBadgeBackground, editLogoBadgeBackground, editBackdropBadgeBackground, editEpisodeBadgeBackground],
+  [editSource, editLang, editTextless, editRatingsLimit, editRatingsOrder, editRatingsExclude, editPosterPosition, editLogoRatingsLimit, editBackdropRatingsLimit, editPosterBadgeStyle, editLogoBadgeStyle, editBackdropBadgeStyle, editPosterLabelStyle, editLogoLabelStyle, editBackdropLabelStyle, editPosterBadgeDirection, editPosterBadgeSplit, editPosterFit, editPosterBadgeSize, editLogoBadgeSize, editBackdropBadgeSize, editBackdropPosition, editBackdropBadgeDirection, editBackdropEdgeInsetX, editBackdropEdgeInsetY, editEpisodeRatingsLimit, editEpisodeBadgeStyle, editEpisodeLabelStyle, editEpisodeBadgeSize, editEpisodePosition, editEpisodeBadgeDirection, editEpisodeBlur, editPosterBadgeShape, editLogoBadgeShape, editBackdropBadgeShape, editEpisodeBadgeShape, editPosterBadgeBackground, editLogoBadgeBackground, editBackdropBadgeBackground, editEpisodeBadgeBackground, editCsmEnabled, editCsmPosition, editCsmSize],
   () => {
     if (syncing) return
     autoSave()
@@ -370,7 +382,7 @@ let backdropPreviewTimer: ReturnType<typeof setTimeout> | null = null
 let episodePreviewTimer: ReturnType<typeof setTimeout> | null = null
 
 function updatePosterPreview() {
-  fetchPreviewImage(posterPreview.value, (_limit, order) => props.fetchPreview(editRatingsLimit.value, order, editPosterPosition.value, editPosterBadgeStyle.value, editPosterLabelStyle.value, editPosterBadgeDirection.value, editPosterBadgeSize.value, editRatingsExclude.value.join(','), editPosterBadgeSplit.value, editPosterBadgeShape.value, editPosterBadgeBackground.value, editPosterFit.value))
+  fetchPreviewImage(posterPreview.value, (_limit, order) => props.fetchPreview(editRatingsLimit.value, order, editPosterPosition.value, editPosterBadgeStyle.value, editPosterLabelStyle.value, editPosterBadgeDirection.value, editPosterBadgeSize.value, editRatingsExclude.value.join(','), editPosterBadgeSplit.value, editPosterBadgeShape.value, editPosterBadgeBackground.value, editPosterFit.value, editCsmEnabled.value, editCsmPosition.value, editCsmSize.value))
 }
 
 function updateLogoPreview() {
@@ -412,7 +424,7 @@ watch([editRatingsOrder, editRatingsExclude], () => {
 }, { deep: true })
 
 // Poster-only settings
-watch([editRatingsLimit, editPosterPosition, editPosterBadgeStyle, editPosterLabelStyle, editPosterBadgeDirection, editPosterBadgeSplit, editPosterFit, editPosterBadgeSize, editPosterBadgeShape, editPosterBadgeBackground], () => {
+watch([editRatingsLimit, editPosterPosition, editPosterBadgeStyle, editPosterLabelStyle, editPosterBadgeDirection, editPosterBadgeSplit, editPosterFit, editPosterBadgeSize, editPosterBadgeShape, editPosterBadgeBackground, editCsmEnabled, editCsmPosition, editCsmSize], () => {
   if (syncing) return
   if (posterPreviewTimer) clearTimeout(posterPreviewTimer)
   posterPreviewTimer = setTimeout(updatePosterPreview, 500)
@@ -745,6 +757,63 @@ function toggleExclude(key: string, checked: boolean) {
         <p class="text-xs text-muted-foreground">
           Splits badges across two opposite sides — left/right for a vertical layout, top/bottom for horizontal rows.
         </p>
+      </div>
+
+      <!-- CSM age-rating badge -->
+      <div class="space-y-1">
+        <div class="flex items-center gap-2">
+          <Checkbox
+            :id="inputId('csm-enabled')"
+            :model-value="editCsmEnabled"
+            data-testid="csm-enabled-checkbox"
+            @update:model-value="(v) => editCsmEnabled = !!v"
+          />
+          <Label :for="inputId('csm-enabled')">Show age rating badge (CommonSense Media)</Label>
+        </div>
+        <p class="text-xs text-muted-foreground">
+          Overlays a dark pill badge with the CSM age rating (e.g. "12+") sourced from MDBList. Requires MDBList to be configured.
+        </p>
+      </div>
+      <div v-if="editCsmEnabled" class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg pl-6">
+        <div class="space-y-2">
+          <Label :for="inputId('csm-position')">Age badge position</Label>
+          <Select
+            :model-value="editCsmPosition"
+            @update:model-value="editCsmPosition = $event as string"
+          >
+            <SelectTrigger :id="inputId('csm-position')" class="max-w-xs" data-testid="csm-position-select">
+              <SelectValue placeholder="Select position" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="bc">Bottom Center</SelectItem>
+              <SelectItem value="tc">Top Center</SelectItem>
+              <SelectItem value="l">Left</SelectItem>
+              <SelectItem value="r">Right</SelectItem>
+              <SelectItem value="tl">Top Left</SelectItem>
+              <SelectItem value="tr">Top Right</SelectItem>
+              <SelectItem value="bl">Bottom Left</SelectItem>
+              <SelectItem value="br">Bottom Right</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div class="space-y-2">
+          <Label :for="inputId('csm-size')">Age badge size</Label>
+          <Select
+            :model-value="editCsmSize"
+            @update:model-value="editCsmSize = $event as string"
+          >
+            <SelectTrigger :id="inputId('csm-size')" class="max-w-xs" data-testid="csm-size-select">
+              <SelectValue placeholder="Select size" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="xs">Extra Small</SelectItem>
+              <SelectItem value="s">Small</SelectItem>
+              <SelectItem value="m">Medium</SelectItem>
+              <SelectItem value="l">Large</SelectItem>
+              <SelectItem value="xl">Extra Large</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
     </div>
 

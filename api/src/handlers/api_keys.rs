@@ -135,6 +135,9 @@ pub struct RenderSettingsResponse {
     pub logo_badge_background: BadgeBackground,
     pub backdrop_badge_background: BadgeBackground,
     pub episode_badge_background: BadgeBackground,
+    pub csm_enabled: bool,
+    pub csm_position: BadgePosition,
+    pub csm_size: BadgeSize,
 }
 
 pub async fn get_settings(
@@ -192,6 +195,9 @@ fn settings_to_response(settings: &db::RenderSettings, fanart_available: bool) -
         logo_badge_background: settings.logo_badge_background,
         backdrop_badge_background: settings.backdrop_badge_background,
         episode_badge_background: settings.episode_badge_background,
+        csm_enabled: settings.csm_enabled,
+        csm_position: settings.csm_position,
+        csm_size: settings.csm_size,
     }
 }
 
@@ -277,6 +283,12 @@ pub struct UpdateSettingsRequest {
     pub backdrop_badge_background: BadgeBackground,
     #[serde(default = "db::default_badge_background")]
     pub episode_badge_background: BadgeBackground,
+    #[serde(default)]
+    pub csm_enabled: bool,
+    #[serde(default = "db::default_csm_position")]
+    pub csm_position: BadgePosition,
+    #[serde(default = "db::default_csm_size")]
+    pub csm_size: BadgeSize,
 }
 
 fn build_upsert(id: i32, req: &UpdateSettingsRequest) -> db::UpsertApiKeySettings<'_> {
@@ -322,6 +334,9 @@ fn build_upsert(id: i32, req: &UpdateSettingsRequest) -> db::UpsertApiKeySetting
         episode_badge_background: req.episode_badge_background.as_str(),
         backdrop_edge_inset_x: db::clamp_edge_inset(req.backdrop_edge_inset_x),
         backdrop_edge_inset_y: db::clamp_edge_inset(req.backdrop_edge_inset_y),
+        csm_enabled: req.csm_enabled,
+        csm_position: req.csm_position.as_str(),
+        csm_size: req.csm_size.as_str(),
     }
 }
 

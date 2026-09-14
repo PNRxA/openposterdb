@@ -234,6 +234,9 @@ pub fn settings_cache_suffix_with_ratings(
         logo_badge_background: _,
         backdrop_badge_background: _,
         episode_badge_background: _,
+        csm_enabled: _,
+        csm_position: _,
+        csm_size: _,
     } = settings;
 
     let resolved_size = resolve_image_size(image_size);
@@ -258,10 +261,18 @@ pub fn settings_cache_suffix_with_ratings(
             // pre-feature poster cache keys — all native — stay valid and the
             // default reuses them. Opting into cover/pad/blur emits a token.
             let fit = settings.poster_fit.cache_suffix();
+            // CSM badge — only tokenized when enabled (default off keeps existing
+            // cache keys unchanged). Position and size are included so changing
+            // them busts the cache correctly.
+            let csm = if settings.csm_enabled {
+                format!(".csm{}{}", settings.csm_position.as_str(), settings.csm_size.cache_suffix())
+            } else {
+                String::new()
+            };
             // Shape/background sit immediately after badge size (before the
             // optional split token) so the v003 cache-key migration can insert
             // their defaults with a single uniform rule across all image types.
-            format!("{rs}{ps}{bs}{ls}{bd}{bsz}{shp}{bgd}{split}{fit}{is_suffix}")
+            format!("{rs}{ps}{bs}{ls}{bd}{bsz}{shp}{bgd}{split}{fit}{csm}{is_suffix}")
         }
         cache::ImageType::Logo => {
             let bs = badge_style_cache_suffix(settings.logo_badge_style.for_shape(settings.logo_badge_shape).as_str());
@@ -494,6 +505,9 @@ struct CrossIdInfo {
     media_type: MediaType,
     release_date: Option<String>,
     episode: Option<id::EpisodeInfo>,
+    /// CSM age rating string sourced from MDBList (e.g. "12+"), passed through
+    /// to `ImageParams` for conditional overlay on the rendered poster.
+    csm_age: Option<String>,
 }
 
 impl CrossIdInfo {
@@ -506,6 +520,7 @@ impl CrossIdInfo {
             media_type: resolved.media_type,
             release_date: resolved.release_date.clone(),
             episode: resolved.episode.clone(),
+            csm_age: ratings.csm_age.clone(),
         }
     }
 }
@@ -1408,6 +1423,10 @@ async fn generate_poster_with_source(
         badge_size: settings.poster_badge_size,
         tmdb_size,
         external_cache_only: state.config.external_cache_only,
+        csm_enabled: settings.csm_enabled,
+        csm_age: cross_ids.csm_age.clone(),
+        csm_position: settings.csm_position,
+        csm_size: settings.csm_size,
     })
     .await?;
 

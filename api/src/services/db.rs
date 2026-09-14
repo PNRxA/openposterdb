@@ -680,6 +680,14 @@ pub fn default_badge_size() -> BadgeSize {
     BadgeSize::Medium
 }
 
+pub fn default_csm_position() -> BadgePosition {
+    BadgePosition::TopRight
+}
+
+pub fn default_csm_size() -> BadgeSize {
+    BadgeSize::Medium
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BadgeSize {
     ExtraSmall,
@@ -715,11 +723,11 @@ impl BadgeSize {
 
     pub fn scale_factor(self) -> f32 {
         match self {
-            Self::ExtraSmall => 0.5,
-            Self::Small => 0.75,
-            Self::Medium => 1.0,
-            Self::Large => 1.25,
-            Self::ExtraLarge => 1.5,
+            Self::ExtraSmall => 0.75,
+            Self::Small => 1.0,
+            Self::Medium => 1.5,
+            Self::Large => 1.75,
+            Self::ExtraLarge => 2.25,
         }
     }
 
@@ -2131,6 +2139,9 @@ pub struct UpsertApiKeySettings<'a> {
     pub episode_badge_background: &'a str,
     pub backdrop_edge_inset_x: i32,
     pub backdrop_edge_inset_y: i32,
+    pub csm_enabled: bool,
+    pub csm_position: &'a str,
+    pub csm_size: &'a str,
 }
 
 pub async fn upsert_api_key_settings(
@@ -2179,6 +2190,9 @@ pub async fn upsert_api_key_settings(
         episode_badge_background: Set(params.episode_badge_background.to_string()),
         backdrop_edge_inset_x: Set(params.backdrop_edge_inset_x),
         backdrop_edge_inset_y: Set(params.backdrop_edge_inset_y),
+        csm_enabled: Set(params.csm_enabled),
+        csm_position: Set(params.csm_position.to_string()),
+        csm_size: Set(params.csm_size.to_string()),
     };
     api_key_settings::Entity::insert(model)
         .on_conflict(
@@ -2224,6 +2238,9 @@ pub async fn upsert_api_key_settings(
                     api_key_settings::Column::EpisodeBadgeBackground,
                     api_key_settings::Column::BackdropEdgeInsetX,
                     api_key_settings::Column::BackdropEdgeInsetY,
+                    api_key_settings::Column::CsmEnabled,
+                    api_key_settings::Column::CsmPosition,
+                    api_key_settings::Column::CsmSize,
                 ])
                 .to_owned(),
         )
@@ -2296,6 +2313,12 @@ pub struct RenderSettings {
     pub logo_badge_background: BadgeBackground,
     pub backdrop_badge_background: BadgeBackground,
     pub episode_badge_background: BadgeBackground,
+    /// Whether to overlay a CSM age-rating badge on posters.
+    pub csm_enabled: bool,
+    /// Corner of the poster where the CSM badge is anchored.
+    pub csm_position: BadgePosition,
+    /// Size of the CSM badge.
+    pub csm_size: BadgeSize,
 }
 
 impl RenderSettings {
@@ -2361,6 +2384,9 @@ impl Default for RenderSettings {
             logo_badge_background: default_badge_background(),
             backdrop_badge_background: default_badge_background(),
             episode_badge_background: default_badge_background(),
+            csm_enabled: false,
+            csm_position: default_csm_position(),
+            csm_size: default_csm_size(),
         }
     }
 }
@@ -2449,6 +2475,12 @@ pub fn parse_global_render_settings(globals: &HashMap<String, String>) -> Render
         logo_badge_background: global_or(globals, "logo_badge_background", BadgeBackground::parse, defaults.logo_badge_background),
         backdrop_badge_background: global_or(globals, "backdrop_badge_background", BadgeBackground::parse, defaults.backdrop_badge_background),
         episode_badge_background: global_or(globals, "episode_badge_background", BadgeBackground::parse, defaults.episode_badge_background),
+        csm_enabled: globals
+            .get("csm_enabled")
+            .map(|v| v == "true")
+            .unwrap_or(defaults.csm_enabled),
+        csm_position: global_or(globals, "csm_position", BadgePosition::parse, defaults.csm_position),
+        csm_size: global_or(globals, "csm_size", BadgeSize::parse, defaults.csm_size),
     }
 }
 
@@ -2502,6 +2534,9 @@ pub async fn get_effective_render_settings(
                 logo_badge_background: parse_setting_or_default(&s.logo_badge_background, "logo_badge_background", BadgeBackground::parse, default_badge_background()),
                 backdrop_badge_background: parse_setting_or_default(&s.backdrop_badge_background, "backdrop_badge_background", BadgeBackground::parse, default_badge_background()),
                 episode_badge_background: parse_setting_or_default(&s.episode_badge_background, "episode_badge_background", BadgeBackground::parse, default_badge_background()),
+                csm_enabled: s.csm_enabled,
+                csm_position: parse_setting_or_default(&s.csm_position, "csm_position", BadgePosition::parse, default_csm_position()),
+                csm_size: parse_setting_or_default(&s.csm_size, "csm_size", BadgeSize::parse, default_csm_size()),
             };
         }
         Ok(None) => {} // no per-key override, fall through

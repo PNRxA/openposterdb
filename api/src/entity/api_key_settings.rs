@@ -49,6 +49,12 @@ pub struct Model {
     /// Distance (percent of height, 0–50) to inset backdrop ratings from the
     /// anchored vertical edge (top or bottom). Ignored for centered positions.
     pub backdrop_edge_inset_y: i32,
+    /// Whether to overlay a CSM age-rating badge on posters.
+    pub csm_enabled: bool,
+    /// Corner of the poster where the CSM badge is anchored (e.g. "TopRight").
+    pub csm_position: String,
+    /// Size of the CSM badge (e.g. "Medium").
+    pub csm_size: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

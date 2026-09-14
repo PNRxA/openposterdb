@@ -128,6 +128,18 @@ pub struct ImageQuery {
     #[serde(default)]
     #[param(value_type = Option<i32>)]
     pub edge_inset_y: Option<i32>,
+    /// Override the CSM badge toggle for this request (poster only).
+    #[serde(default)]
+    #[param(value_type = Option<bool>)]
+    pub csm_enabled: Option<bool>,
+    /// Override the CSM badge corner position for this request (poster only): `bc`, `tc`, `tl`, `tr`, `bl`, `br`.
+    #[serde(default)]
+    #[param(value_type = Option<String>)]
+    pub csm_position: Option<BadgePosition>,
+    /// Override the CSM badge size for this request (poster only): `xs`, `s`, `m`, `l`, `xl`.
+    #[serde(default)]
+    #[param(value_type = Option<String>)]
+    pub csm_size: Option<BadgeSize>,
 }
 
 impl ImageQuery {
@@ -150,6 +162,9 @@ impl ImageQuery {
             || self.fit.is_some()
             || self.edge_inset_x.is_some()
             || self.edge_inset_y.is_some()
+            || self.csm_enabled.is_some()
+            || self.csm_position.is_some()
+            || self.csm_size.is_some()
     }
 }
 
@@ -458,6 +473,15 @@ fn apply_query_overrides(
         }
         if let Some(fit) = query.fit {
             s.poster_fit = fit;
+        }
+        if let Some(enabled) = query.csm_enabled {
+            s.csm_enabled = enabled;
+        }
+        if let Some(pos) = query.csm_position {
+            s.csm_position = pos;
+        }
+        if let Some(size) = query.csm_size {
+            s.csm_size = size;
         }
     }
     if kind == cache::ImageType::Backdrop {
@@ -900,6 +924,9 @@ mod tests {
             fit: None,
             edge_inset_x: None,
             edge_inset_y: None,
+            csm_enabled: None,
+            csm_position: None,
+            csm_size: None,
         }
     }
 
