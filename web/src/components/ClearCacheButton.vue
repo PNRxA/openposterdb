@@ -60,7 +60,7 @@ function openDialog() {
       </DialogHeader>
       <div class="space-y-4">
         <p class="text-sm text-muted-foreground">
-          This removes every cached poster, logo, backdrop, and episode — rendered
+          This removes every cached poster, logo, backdrop, episode, and season — rendered
           images, raw downloads, and in-memory caches. Images are regenerated on the
           next request, so the first load of each title will be slower.
         </p>

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
+import type { SaveSettingsPayload } from '@/lib/api'
 
 const mockAuthStore = {
   token: null as string | null,
@@ -380,7 +381,7 @@ describe('selfApi', () => {
       season_badge_size: 'm',
       season_position: 'bc',
       season_badge_direction: 'd',
-    })
+    } as SaveSettingsPayload)
 
     const [, options] = fetchMock.mock.calls[0]
     const body = JSON.parse(options.body)

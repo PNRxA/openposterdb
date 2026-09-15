@@ -514,6 +514,23 @@ async fn season_endpoint_rejects_non_season_id() {
     assert_ne!(res.status(), StatusCode::OK, "non-season id must not serve a 200 on the season endpoint");
 }
 
+// A malformed season id (`season-{id}` with no `-S{n}`) is rejected by the id
+// parser before any TMDB call, so this asserts a real 400 without network.
+#[tokio::test]
+async fn season_endpoint_rejects_malformed_season_id() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    for id in ["season-1396", "season-1396-S", "season-1396-S1E1", "season--S2"] {
+        let req = Request::builder()
+            .uri(format!("/{api_key}/tmdb/season-default/{id}.jpg"))
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST, "{id} should be rejected as a malformed season id");
+    }
+}
+
 // --- Season query overrides ---
 //
 // Seasons mirror the poster controls (badge_style, ratings_limit, badge_size,

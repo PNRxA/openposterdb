@@ -1181,6 +1181,16 @@ mod tests {
         assert_eq!(mdblist_lookup_for(&without_imdb), None);
     }
 
+    #[test]
+    fn mdblist_lookup_none_for_seasons() {
+        // MDBList has no season-level ratings either; the show's imdb id must not
+        // trigger a lookup that `mdblist_kind` would reject anyway.
+        let with_imdb = resolved(Some("tt0903747"), 1396, MediaType::Season);
+        let without_imdb = resolved(None, 1396, MediaType::Season);
+        assert_eq!(mdblist_lookup_for(&with_imdb), None);
+        assert_eq!(mdblist_lookup_for(&without_imdb), None);
+    }
+
 }
 
 /// Which MDBList endpoint to use for a resolved title.
@@ -1199,7 +1209,8 @@ enum MdblistLookup<'a> {
 
 fn mdblist_lookup_for(resolved: &ResolvedId) -> Option<MdblistLookup<'_>> {
     // mdblist only supports movie/show level ratings, not individual episodes
-    if resolved.media_type == MediaType::Episode {
+    // or seasons (`mdblist_kind` rejects both), so skip the lookup entirely.
+    if matches!(resolved.media_type, MediaType::Episode | MediaType::Season) {
         return None;
     }
     // Treat an empty imdb_id as absent. Resolved ids are normalised at the source

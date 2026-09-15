@@ -823,3 +823,106 @@ async fn preview_episode_requires_auth() {
     let res = app.oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 }
+
+// --- Season preview tests ---
+
+#[tokio::test]
+async fn preview_season_returns_jpeg() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    let res = app.clone().oneshot(authed_get("/api/admin/preview/season", &token)).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(res.headers().get("content-type").unwrap(), "image/jpeg");
+
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    assert!(body.len() > 100, "JPEG should have substantial content");
+    assert_eq!(body[0], 0xFF);
+    assert_eq!(body[1], 0xD8);
+}
+
+#[tokio::test]
+async fn preview_season_accepts_all_settings() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    let res = app.clone().oneshot(authed_get(
+        "/api/admin/preview/season?ratings_limit=3&ratings_order=imdb,tmdb,rt&position=tl&badge_style=h&label_style=i&badge_direction=h&badge_size=m&badge_shape=p&badge_background=k",
+        &token
+    )).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    assert_eq!(body[0], 0xFF);
+    assert_eq!(body[1], 0xD8);
+}
+
+#[tokio::test]
+async fn preview_season_position_produces_different_images() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    let res_bc = app.clone().oneshot(authed_get("/api/admin/preview/season?position=bc", &token)).await.unwrap();
+    let res_tr = app.clone().oneshot(authed_get("/api/admin/preview/season?position=tr", &token)).await.unwrap();
+    assert_eq!(res_bc.status(), StatusCode::OK);
+    assert_eq!(res_tr.status(), StatusCode::OK);
+    let body_bc = res_bc.into_body().collect().await.unwrap().to_bytes();
+    let body_tr = res_tr.into_body().collect().await.unwrap().to_bytes();
+    assert_ne!(body_bc, body_tr, "different season positions should render differently");
+}
+
+#[tokio::test]
+async fn preview_season_self_serve() {
+    let (app, _state) = common::setup_test_app().await;
+    let api_key_token = common::setup_api_key_session(&app).await;
+
+    let req = Request::builder()
+        .uri("/api/key/me/preview/season?badge_size=s&position=tr")
+        .header("authorization", format!("Bearer {api_key_token}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(res.headers().get("content-type").unwrap(), "image/jpeg");
+}
+
+#[tokio::test]
+async fn preview_season_rejects_invalid_badge_style() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    let res = app.clone().oneshot(authed_get("/api/admin/preview/season?badge_style=z", &token)).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn preview_season_rejects_invalid_position() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    let res = app.clone().oneshot(authed_get("/api/admin/preview/season?position=invalid", &token)).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn preview_season_rejects_invalid_ratings_limit() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    let res = app.clone().oneshot(authed_get("/api/admin/preview/season?ratings_limit=99", &token)).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn preview_season_requires_auth() {
+    let (app, _state) = common::setup_test_app().await;
+
+    let req = Request::builder()
+        .uri("/api/admin/preview/season")
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+}
