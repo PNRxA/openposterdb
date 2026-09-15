@@ -1,6 +1,6 @@
 # Connecting a Media Server
 
-OpenPosterDB serves rating-badged posters, backdrops, logos, and episode stills to any client that can fetch images by URL. Replace `{base_url}` with your instance URL (e.g. `http://localhost:3000` or `https://openposterdb.com`) and `{api_key}` with your API key throughout.
+OpenPosterDB serves rating-badged posters, backdrops, logos, episode stills, and season posters to any client that can fetch images by URL. Replace `{base_url}` with your instance URL (e.g. `http://localhost:3000` or `https://openposterdb.com`) and `{api_key}` with your API key throughout.
 
 - [aiometadata](#aiometadata)
 - [Jellyfin](#jellyfin)
@@ -25,6 +25,16 @@ TMDB and TVDB IDs also work for episodes:
 | TVDB | `{base_url}/{api_key}/tvdb/episode-default/episode-{tvdb_id}-S{season}E{episode}.jpg` |
 
 The episode endpoint accepts a series-level ID combined with season/episode numbers — no episode-specific ID is needed.
+
+Season posters (a TV season's own poster art) use the `season-default` endpoint with a `season-{id}-S{season}` ID:
+
+| ID type | Season URL template |
+|---|---|
+| IMDb | `{base_url}/{api_key}/imdb/season-default/season-{imdb_id}-S{season}.jpg` |
+| TMDB | `{base_url}/{api_key}/tmdb/season-default/season-{tmdb_id}-S{season}.jpg` |
+| TVDB | `{base_url}/{api_key}/tvdb/season-default/season-{tvdb_id}-S{season}.jpg` |
+
+The ID is the **series** ID (IMDb/TMDB/TVDB) combined with the season number.
 
 ## Jellyfin
 

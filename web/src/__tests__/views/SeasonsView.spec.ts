@@ -9,6 +9,8 @@ vi.mock('@/lib/api', () => ({
     getSeasons: vi.fn(),
     getSeasonImage: vi.fn(),
     fetchSeason: vi.fn(),
+    purgeSeason: vi.fn(),
+    clearSeasons: vi.fn(),
   },
 }))
 
@@ -28,5 +30,7 @@ describe('SeasonsView', () => {
     expect(imageList.props('listFn')).toBe(adminApi.getSeasons)
     expect(imageList.props('imageFn')).toBe(adminApi.getSeasonImage)
     expect(imageList.props('fetchFn')).toBe(adminApi.fetchSeason)
+    expect(imageList.props('deleteFn')).toBe(adminApi.purgeSeason)
+    expect(imageList.props('clearAllFn')).toBe(adminApi.clearSeasons)
   })
 })

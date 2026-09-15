@@ -9,5 +9,7 @@ import ImageListView from '@/components/ImageListView.vue'
     :list-fn="adminApi.getSeasons"
     :image-fn="adminApi.getSeasonImage"
     :fetch-fn="adminApi.fetchSeason"
+    :delete-fn="adminApi.purgeSeason"
+    :clear-all-fn="adminApi.clearSeasons"
   />
 </template>

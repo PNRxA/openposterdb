@@ -203,6 +203,17 @@ describe('api', () => {
     expect(options.method).toBe('POST')
   })
 
+  it('adminApi.clearSeasons calls DELETE on the seasons collection', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.clearSeasons()
+
+    const [url, options] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/admin/seasons')
+    expect(options.method).toBe('DELETE')
+  })
+
   it('adminApi.clearPosters calls DELETE on the posters collection', async () => {
     const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
     vi.stubGlobal('fetch', fetchMock)
@@ -233,6 +244,28 @@ describe('api', () => {
 
     const [url, options] = fetchMock.mock.calls[0]
     expect(url).toBe('/api/admin/episodes/tmdb/episode-1396-S1E1')
+    expect(options.method).toBe('DELETE')
+  })
+
+  it('adminApi.purgeSeason calls DELETE on the season title', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.purgeSeason('tmdb', 'season-1396-S2')
+
+    const [url, options] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/admin/seasons/tmdb/season-1396-S2')
+    expect(options.method).toBe('DELETE')
+  })
+
+  it('adminApi.purgeSeason with variant scope encodes the cache value and adds ?scope=variant', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.purgeSeason('tmdb', 'season-1396-S2_s@imc', 'variant')
+
+    const [url, options] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/admin/seasons/tmdb/season-1396-S2_s%40imc?scope=variant')
     expect(options.method).toBe('DELETE')
   })
 

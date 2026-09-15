@@ -148,6 +148,7 @@ export const adminApi = {
   clearLogos: (): Promise<Response> => del('/api/admin/logos'),
   clearBackdrops: (): Promise<Response> => del('/api/admin/backdrops'),
   clearEpisodes: (): Promise<Response> => del('/api/admin/episodes'),
+  clearSeasons: (): Promise<Response> => del('/api/admin/seasons'),
   getPosters: (page: number, pageSize: number): Promise<Response> =>
     get(`/api/admin/posters?page=${page}&page_size=${pageSize}`),
   getPosterImage: (key: string): Promise<Response> =>
@@ -188,6 +189,8 @@ export const adminApi = {
     get(`/api/admin/seasons/${key}/image`),
   fetchSeason: (idType: string, idValue: string): Promise<Response> =>
     post(`/api/admin/seasons/${idType}/${idValue}/fetch`),
+  purgeSeason: (idType: string, idValue: string, scope: PurgeScope = 'title'): Promise<Response> =>
+    del(purgeUrl('seasons', idType, idValue, scope)),
   previewPoster: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string, badgeSize?: string, ratingsExclude?: string, posterSplit?: boolean, badgeShape?: string, badgeBackground?: string, posterFit?: string): Promise<Response> =>
     get(buildUrl('/api/admin/preview/poster', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, ratings_exclude: ratingsExclude, position: posterPosition, badge_style: badgeStyle, label_style: labelStyle, badge_direction: badgeDirection, badge_size: badgeSize, split: posterSplit ? 'true' : undefined, badge_shape: badgeShape, badge_background: badgeBackground, fit: posterFit })),
   previewLogo: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, ratingsExclude?: string, badgeShape?: string, badgeBackground?: string): Promise<Response> =>

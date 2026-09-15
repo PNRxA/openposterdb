@@ -823,6 +823,16 @@ pub async fn purge_episode(
     purge_dispatch(&state, cache::ImageType::Episode, &id_type, &id_value, q.scope).await
 }
 
+/// Season purges key on the `season-{id}-S{n}` id (one show season), so purging
+/// season 2 leaves the show's poster and its other seasons untouched.
+pub async fn purge_season(
+    State(state): State<Arc<AppState>>,
+    Path((id_type, id_value)): Path<(String, String)>,
+    Query(q): Query<PurgeQuery>,
+) -> Result<Json<PurgeTitleResponse>, AppError> {
+    purge_dispatch(&state, cache::ImageType::Season, &id_type, &id_value, q.scope).await
+}
+
 #[derive(Serialize)]
 pub struct PurgeKindResponse {
     pub ok: bool,
@@ -887,6 +897,10 @@ pub async fn clear_backdrops(State(state): State<Arc<AppState>>) -> Result<Json<
 
 pub async fn clear_episodes(State(state): State<Arc<AppState>>) -> Result<Json<PurgeKindResponse>, AppError> {
     clear_kind(&state, cache::ImageType::Episode).await
+}
+
+pub async fn clear_seasons(State(state): State<Arc<AppState>>) -> Result<Json<PurgeKindResponse>, AppError> {
+    clear_kind(&state, cache::ImageType::Season).await
 }
 
 /// Clear the entire image cache: all rendered files + raw downloads on disk,
