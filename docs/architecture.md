@@ -26,6 +26,7 @@ Images are cached in three layers: in-memory (moka), filesystem, and SQLite meta
 ├── logos/{id_type}/       # Rendered logo PNGs
 ├── backdrops/{id_type}/   # Rendered backdrop JPEGs
 ├── episodes/{id_type}/   # Rendered episode JPEGs
+├── seasons/{id_type}/    # Rendered season poster JPEGs
 └── preview/{subdir}/      # Preview images for the settings UI
 ```
 
@@ -72,7 +73,7 @@ Cache keys uniquely identify a rendered image. They are used as keys in the in-m
 
 ### Image kind prefixes
 
-Logos, backdrops, and episodes include a kind prefix in their cache keys to distinguish them from posters:
+Logos, backdrops, episodes, and seasons include a kind prefix in their cache keys to distinguish them from posters:
 
 | Kind | Prefix |
 |---|---|
@@ -80,6 +81,7 @@ Logos, backdrops, and episodes include a kind prefix in their cache keys to dist
 | Logo | `_l` |
 | Backdrop | `_b` |
 | Episode | `_e` |
+| Season | `_s` |
 
 ### Source variant markers
 
@@ -107,6 +109,7 @@ The `image_meta` table tracks metadata for cached images:
 | `image_type` | `l` | Logo |
 | `image_type` | `b` | Backdrop |
 | `image_type` | `e` | Episode |
+| `image_type` | `s` | Season |
 
 ### Settings short values
 
@@ -208,9 +211,9 @@ When `EXTERNAL_CACHE_ONLY=true`, the server skips image file writes to disk (ren
 The admin panel can purge cached images without touching the database volume or restarting the container — useful when a poster rendered from a bad source image, when global render settings changed and left orphaned variants behind, or for general cache hygiene.
 
 - **Clear everything** — the **Clear cache** button on the dashboard (and on the **Settings** page) wipes all rendered images, raw downloads, and settings-preview thumbnails on disk, every `image_meta` / `available_ratings` row, and every in-memory image cache (including the settings-preview cache and the upstream TMDB/Fanart.tv image-list and ratings caches). Images regenerate from scratch on the next request, so the first load of each title afterwards is slower. This is the path that guarantees a fully clean re-fetch. The on-disk wipe is **instant regardless of cache size** — the cache directories are atomically renamed aside and the (potentially slow) recursive delete runs in the background — so the request returns immediately even with hundreds of thousands of files, and an interrupted delete is swept on the next startup.
-- **Clear one image type** — the **Clear posters / logos / backdrops / episodes** button at the top of each list view removes all cached images of just that kind (its rendered directory + `image_meta` rows), leaving the other kinds and the shared `available_ratings` index untouched. Like clear-all, the on-disk wipe is staged aside and removed in the background.
-- **Purge one title, or one variant** — the trash button on a row in the poster/logo/backdrop/episode lists opens a dialog with two choices:
-  - **Entire title** removes *every* cached variant of that title for that image kind. One title maps to many cache entries (the key encodes ratings, position, style, size, language, …), so this prefix-matches the title id rather than deleting a single key.
+- **Clear one image type** — the **Clear posters / logos / backdrops / episodes / seasons** button at the top of each list view removes all cached images of just that kind (its rendered directory + `image_meta` rows), leaving the other kinds and the shared `available_ratings` index untouched. Like clear-all, the on-disk wipe is staged aside and removed in the background.
+- **Purge one title, or one variant** — the trash button on a row in the poster/logo/backdrop/episode/season lists opens a dialog with two choices:
+  - **Entire title** removes *every* cached variant of that title for that image kind. One title maps to many cache entries (the key encodes ratings, position, style, size, language, …), so this prefix-matches the title id rather than deleting a single key. For seasons the title is one season (`season-{id}-S{n}`), so purging season 2 leaves the show's poster and its other seasons alone.
   - **This variant** removes only the single rendered entry the row represents (one exact cache key), leaving the title's other variants and its shared `available_ratings` index untouched.
 
 Each purge clears the relevant layers consistently: the in-memory render caches, the rendered files on disk, and the SQLite metadata (`image_meta` plus the title's `available_ratings` index, so the next request re-resolves its sources).
@@ -220,6 +223,6 @@ A per-title purge is scoped to **rendered output**. A couple of things it delibe
 - **Upstream source caches** (the TMDB/Fanart.tv image lists and aggregated ratings) are keyed by the resolved TMDB id and expire on their own short TTL (~30–60 min). A re-render right after a per-title purge may briefly reuse them, so for an immediate clean re-fetch of changed upstream art/ratings use **Clear cache** instead.
 - **Cross-ID copies** — the same title cached under a different id form (e.g. an `imdb` request and a `tmdb` request resolving to the same movie) live under a different `id_type`. A purge targets the id form you pass; the alternate copy regenerates or expires on its own.
 
-The matching API endpoints (behind the admin auth middleware) are `POST /api/admin/cache/purge` (clear everything), `DELETE /api/admin/{posters,logos,backdrops,episodes}` (clear one kind), and `DELETE /api/admin/{posters,logos,backdrops,episodes}/{id_type}/{id_value}` (purge one title — or a single variant with `?scope=variant`, in which case `{id_value}` is the full cache value rather than the bare title id).
+The matching API endpoints (behind the admin auth middleware) are `POST /api/admin/cache/purge` (clear everything), `DELETE /api/admin/{posters,logos,backdrops,episodes,seasons}` (clear one kind), and `DELETE /api/admin/{posters,logos,backdrops,episodes,seasons}/{id_type}/{id_value}` (purge one title — or a single variant with `?scope=variant`, in which case `{id_value}` is the full cache value rather than the bare title id).
 
 Under `EXTERNAL_CACHE_ONLY`, there are no files on disk to remove and the CDN's cached copies cannot be purged from here, so a purge clears only the in-memory caches and SQLite metadata. The admin UI surfaces this as a partial purge.

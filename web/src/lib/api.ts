@@ -97,14 +97,22 @@ export interface SaveSettingsPayload {
   episode_position: string
   episode_badge_direction: string
   episode_blur: boolean
+  season_ratings_limit: number
+  season_badge_style: string
+  season_label_style: string
+  season_badge_size: string
+  season_position: string
+  season_badge_direction: string
   poster_badge_shape: string
   logo_badge_shape: string
   backdrop_badge_shape: string
   episode_badge_shape: string
+  season_badge_shape: string
   poster_badge_background: string
   logo_badge_background: string
   backdrop_badge_background: string
   episode_badge_background: string
+  season_badge_background: string
 }
 
 /** Build a URL path with query parameters, omitting entries with nullish values. */
@@ -140,6 +148,7 @@ export const adminApi = {
   clearLogos: (): Promise<Response> => del('/api/admin/logos'),
   clearBackdrops: (): Promise<Response> => del('/api/admin/backdrops'),
   clearEpisodes: (): Promise<Response> => del('/api/admin/episodes'),
+  clearSeasons: (): Promise<Response> => del('/api/admin/seasons'),
   getPosters: (page: number, pageSize: number): Promise<Response> =>
     get(`/api/admin/posters?page=${page}&page_size=${pageSize}`),
   getPosterImage: (key: string): Promise<Response> =>
@@ -174,6 +183,14 @@ export const adminApi = {
     post(`/api/admin/episodes/${idType}/${idValue}/fetch`),
   purgeEpisode: (idType: string, idValue: string, scope: PurgeScope = 'title'): Promise<Response> =>
     del(purgeUrl('episodes', idType, idValue, scope)),
+  getSeasons: (page: number, pageSize: number): Promise<Response> =>
+    get(`/api/admin/seasons?page=${page}&page_size=${pageSize}`),
+  getSeasonImage: (key: string): Promise<Response> =>
+    get(`/api/admin/seasons/${key}/image`),
+  fetchSeason: (idType: string, idValue: string): Promise<Response> =>
+    post(`/api/admin/seasons/${idType}/${idValue}/fetch`),
+  purgeSeason: (idType: string, idValue: string, scope: PurgeScope = 'title'): Promise<Response> =>
+    del(purgeUrl('seasons', idType, idValue, scope)),
   previewPoster: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string, badgeSize?: string, ratingsExclude?: string, posterSplit?: boolean, badgeShape?: string, badgeBackground?: string, posterFit?: string): Promise<Response> =>
     get(buildUrl('/api/admin/preview/poster', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, ratings_exclude: ratingsExclude, position: posterPosition, badge_style: badgeStyle, label_style: labelStyle, badge_direction: badgeDirection, badge_size: badgeSize, split: posterSplit ? 'true' : undefined, badge_shape: badgeShape, badge_background: badgeBackground, fit: posterFit })),
   previewLogo: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, ratingsExclude?: string, badgeShape?: string, badgeBackground?: string): Promise<Response> =>
@@ -182,6 +199,8 @@ export const adminApi = {
     get(buildUrl('/api/admin/preview/backdrop', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, ratings_exclude: ratingsExclude, badge_style: badgeStyle, label_style: labelStyle, badge_size: badgeSize, position, badge_direction: badgeDirection, badge_shape: badgeShape, badge_background: badgeBackground, edge_inset_x: edgeInsetX, edge_inset_y: edgeInsetY })),
   previewEpisode: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, blur?: boolean, ratingsExclude?: string, badgeShape?: string, badgeBackground?: string): Promise<Response> =>
     get(buildUrl('/api/admin/preview/episode', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, ratings_exclude: ratingsExclude, badge_style: badgeStyle, label_style: labelStyle, badge_size: badgeSize, position, badge_direction: badgeDirection, blur: blur ? 'true' : undefined, badge_shape: badgeShape, badge_background: badgeBackground })),
+  previewSeason: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, ratingsExclude?: string, badgeShape?: string, badgeBackground?: string): Promise<Response> =>
+    get(buildUrl('/api/admin/preview/season', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, ratings_exclude: ratingsExclude, badge_style: badgeStyle, label_style: labelStyle, badge_size: badgeSize, position, badge_direction: badgeDirection, badge_shape: badgeShape, badge_background: badgeBackground })),
 }
 
 // --- Self-service API (API key session JWT auth) ---
@@ -221,6 +240,8 @@ export const selfApi = {
     keyRequest(buildUrl('/api/key/me/preview/backdrop', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, ratings_exclude: ratingsExclude, badge_style: badgeStyle, label_style: labelStyle, badge_size: badgeSize, position, badge_direction: badgeDirection, badge_shape: badgeShape, badge_background: badgeBackground, edge_inset_x: edgeInsetX, edge_inset_y: edgeInsetY })),
   previewEpisode: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, blur?: boolean, ratingsExclude?: string, badgeShape?: string, badgeBackground?: string): Promise<Response> =>
     keyRequest(buildUrl('/api/key/me/preview/episode', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, ratings_exclude: ratingsExclude, badge_style: badgeStyle, label_style: labelStyle, badge_size: badgeSize, position, badge_direction: badgeDirection, blur: blur ? 'true' : undefined, badge_shape: badgeShape, badge_background: badgeBackground })),
+  previewSeason: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, ratingsExclude?: string, badgeShape?: string, badgeBackground?: string): Promise<Response> =>
+    keyRequest(buildUrl('/api/key/me/preview/season', { ratings_limit: ratingsLimit, ratings_order: ratingsOrder, ratings_exclude: ratingsExclude, badge_style: badgeStyle, label_style: labelStyle, badge_size: badgeSize, position, badge_direction: badgeDirection, badge_shape: badgeShape, badge_background: badgeBackground })),
 }
 
 export const keysApi = {

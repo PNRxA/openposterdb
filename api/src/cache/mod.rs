@@ -38,6 +38,7 @@ pub enum ImageType {
     Logo,
     Backdrop,
     Episode,
+    Season,
 }
 
 impl ImageType {
@@ -47,12 +48,13 @@ impl ImageType {
             ImageType::Logo => "logos",
             ImageType::Backdrop => "backdrops",
             ImageType::Episode => "episodes",
+            ImageType::Season => "seasons",
         }
     }
 
     pub fn ext(self) -> &'static str {
         match self {
-            ImageType::Poster | ImageType::Backdrop | ImageType::Episode => "jpg",
+            ImageType::Poster | ImageType::Backdrop | ImageType::Episode | ImageType::Season => "jpg",
             ImageType::Logo => "png",
         }
     }
@@ -63,6 +65,7 @@ impl ImageType {
             ImageType::Logo => "l",
             ImageType::Backdrop => "b",
             ImageType::Episode => "e",
+            ImageType::Season => "s",
         }
     }
 
@@ -73,13 +76,14 @@ impl ImageType {
             ImageType::Logo => "_l",
             ImageType::Backdrop => "_b",
             ImageType::Episode => "_e",
+            ImageType::Season => "_s",
         }
     }
 
     /// Strip the file extension matching this image type from a string.
     pub fn strip_ext(self, s: &str) -> &str {
         match self {
-            ImageType::Poster | ImageType::Backdrop | ImageType::Episode => s.strip_suffix(".jpg").unwrap_or(s),
+            ImageType::Poster | ImageType::Backdrop | ImageType::Episode | ImageType::Season => s.strip_suffix(".jpg").unwrap_or(s),
             ImageType::Logo => s.strip_suffix(".png").unwrap_or(s),
         }
     }
@@ -91,12 +95,13 @@ impl ImageType {
             ImageType::Logo => "logo",
             ImageType::Backdrop => "backdrop",
             ImageType::Episode => "episode",
+            ImageType::Season => "season",
         }
     }
 
     pub fn content_type(self) -> &'static str {
         match self {
-            ImageType::Poster | ImageType::Backdrop | ImageType::Episode => "image/jpeg",
+            ImageType::Poster | ImageType::Backdrop | ImageType::Episode | ImageType::Season => "image/jpeg",
             ImageType::Logo => "image/png",
         }
     }
@@ -264,9 +269,9 @@ pub async fn purge_variant_file(
 }
 
 /// Top-level cache subdirectories holding purgeable contents: rendered images
-/// (posters/logos/backdrops/episodes), raw downloads under `base/`, and admin
-/// preview thumbnails. All are recreated lazily by [`write`].
-const CACHE_SUBDIRS: [&str; 6] = ["posters", "logos", "backdrops", "episodes", "base", "preview"];
+/// (posters/logos/backdrops/episodes/seasons), raw downloads under `base/`, and
+/// admin preview thumbnails. All are recreated lazily by [`write`].
+const CACHE_SUBDIRS: [&str; 7] = ["posters", "logos", "backdrops", "episodes", "seasons", "base", "preview"];
 
 /// Filename prefix for cache subdirs that have been renamed aside by
 /// [`stage_cache_for_clear`] and are awaiting background removal. The leading
@@ -770,6 +775,9 @@ mod tests {
         assert!(title_file_match("tt123_f_tl@imc", "tt123"));
         assert!(title_file_match("tt123_l_t_en@i", "tt123"));
         assert!(title_file_match("tt123_b_t@i.p1", "tt123"));
+        // Season renders carry the `_s` kind prefix after the season id.
+        assert!(title_file_match("season-tt123-S2_s@imc", "season-tt123-S2"));
+        assert!(title_file_match("season-1396-S2_s_t_de@imc.zl", "season-1396-S2"));
         // Bare value (no suffix) — never produced in practice, but allowed.
         assert!(title_file_match("tt123", "tt123"));
     }
@@ -780,6 +788,10 @@ mod tests {
         assert!(!title_file_match("tt1234567@imc", "tt123"));
         assert!(!title_file_match("movie-123@i", "movie-12"));
         assert!(!title_file_match("tt124@imc", "tt123"));
+        // Season 2 must not capture seasons 20–29 of the same show, nor the
+        // show's own poster capture its seasons.
+        assert!(!title_file_match("season-1396-S20_s@imc", "season-1396-S2"));
+        assert!(!title_file_match("season-1396-S2_s@imc", "series-1396"));
         // Unrelated value.
         assert!(!title_file_match("tt999@imc", "tt123"));
     }

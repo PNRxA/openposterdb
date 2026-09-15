@@ -110,7 +110,7 @@ async function toggleFreeApiKey() {
       <div class="rounded-lg border p-6 space-y-4">
         <h2 class="text-lg font-semibold">Cache</h2>
         <p class="text-sm text-muted-foreground">
-          Clear all cached images (posters, logos, backdrops, episodes). They are
+          Clear all cached images (posters, logos, backdrops, episodes, seasons). They are
           regenerated on the next request, so the first load of each title is slower.
         </p>
         <ClearCacheButton @cleared="(m: string) => (cacheMessage = m)" />
@@ -133,6 +133,7 @@ async function toggleFreeApiKey() {
           :fetch-logo-preview="adminApi.previewLogo"
           :fetch-backdrop-preview="adminApi.previewBackdrop"
           :fetch-episode-preview="adminApi.previewEpisode"
+          :fetch-season-preview="adminApi.previewSeason"
         />
       </div>
     </div>

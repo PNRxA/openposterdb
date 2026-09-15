@@ -11,6 +11,8 @@ describe('titleIdFromCacheValue', () => {
     expect(titleIdFromCacheValue('tt0111161_t_de@imc')).toBe('tt0111161')
     expect(titleIdFromCacheValue('tt0111161_f_tl@imc')).toBe('tt0111161')
     expect(titleIdFromCacheValue('tt0111161_l_t_en@i')).toBe('tt0111161')
+    expect(titleIdFromCacheValue('season-1396-S2_s@imc')).toBe('season-1396-S2')
+    expect(titleIdFromCacheValue('season-tt0903747-S2_s_t_de@imc.zl')).toBe('season-tt0903747-S2')
   })
 
   it('keeps hyphenated tmdb ids intact', () => {

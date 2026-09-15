@@ -109,6 +109,7 @@ function handleLogout() {
           :fetch-logo-preview="selfApi.previewLogo"
           :fetch-backdrop-preview="selfApi.previewBackdrop"
           :fetch-episode-preview="selfApi.previewEpisode"
+          :fetch-season-preview="selfApi.previewSeason"
         />
       </div>
     </div>

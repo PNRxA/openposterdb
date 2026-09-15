@@ -45,6 +45,7 @@ fn mdblist_kind(media_type: &MediaType) -> Result<&'static str, AppError> {
         MediaType::Movie => Ok("movie"),
         MediaType::Tv => Ok("show"),
         MediaType::Episode => Err(AppError::Other("mdblist does not support episode ratings".into())),
+        MediaType::Season => Err(AppError::Other("mdblist does not support season ratings".into())),
     }
 }
 

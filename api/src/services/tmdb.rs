@@ -75,14 +75,23 @@ impl TmdbClient {
     }
 
     pub async fn get_images(&self, media_type: &str, tmdb_id: u64, lang: &str) -> Result<TmdbImagesResponse, AppError> {
-        let path = format!("/{media_type}/{tmdb_id}/images");
+        self.get_images_at(&format!("/{media_type}/{tmdb_id}/images"), lang).await
+    }
+
+    /// Fetch a TV season's own image list (`/tv/{show}/season/{n}/images`).
+    /// Season image responses only carry `posters`; the other lists stay empty.
+    pub async fn get_season_images(&self, show_tmdb_id: u64, season_number: u32, lang: &str) -> Result<TmdbImagesResponse, AppError> {
+        self.get_images_at(&format!("/tv/{show_tmdb_id}/season/{season_number}/images"), lang).await
+    }
+
+    async fn get_images_at(&self, path: &str, lang: &str) -> Result<TmdbImagesResponse, AppError> {
         let base = lang_base(lang);
         let include_lang = if base.is_empty() {
             "null".to_string()
         } else {
             format!("{base},null")
         };
-        self.get(&path, &[("include_image_language", &include_lang)]).await
+        self.get(path, &[("include_image_language", &include_lang)]).await
     }
 
     /// Select the best image from a list of TMDB images.

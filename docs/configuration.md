@@ -11,9 +11,9 @@ At minimum you need a **TMDB key** (for artwork), a **JWT secret** (for auth), a
 | `TMDB_API_KEY` | *required* | [TMDB](https://www.themoviedb.org/settings/api) API v3 key |
 | `JWT_SECRET` | *required* | 32-byte hex string (`openssl rand -hex 32`) |
 | `MDBLIST_API_KEY` | — | [MDBList](https://mdblist.com/preferences/) key — preferred, covers all 9 rating sources (IMDb, RT Critics, RT Audience, Metacritic, Trakt, Letterboxd, MAL, MDBList score, Roger Ebert) |
-| `OMDB_API_KEY` | — | [OMDb](https://www.omdbapi.com/apikey.aspx) key (IMDb, RT Critics, Metacritic only). Also required for IMDB episode ratings |
-| `TRAKT_CLIENT_ID` | — | [Trakt](https://trakt.tv/oauth/applications) Client ID — Trakt community ratings for movies, shows, and episodes |
-| `FANART_API_KEY` | — | [Fanart.tv](https://fanart.tv/get-an-api-key/) key — enables Fanart.tv as an alternative or preferred image source for posters, logos, and backdrops |
+| `OMDB_API_KEY` | — | [OMDb](https://www.omdbapi.com/apikey.aspx) key (IMDb, RT Critics, Metacritic only). Also required for IMDb/RT/Metacritic ratings on episodes and seasons (MDBList has no episode- or season-level ratings) |
+| `TRAKT_CLIENT_ID` | — | [Trakt](https://trakt.tv/oauth/applications) Client ID — Trakt community ratings for movies, shows, seasons, and episodes |
+| `FANART_API_KEY` | — | [Fanart.tv](https://fanart.tv/get-an-api-key/) key — enables Fanart.tv as an alternative or preferred image source for posters, season posters, logos, and backdrops |
 
 ## Server & storage
 

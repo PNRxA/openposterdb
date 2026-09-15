@@ -38,14 +38,22 @@ export interface FreeKeyDefaults {
   episode_position: string
   episode_badge_direction: string
   episode_blur: boolean
+  season_ratings_limit: number
+  season_badge_style: string
+  season_label_style: string
+  season_badge_size: string
+  season_position: string
+  season_badge_direction: string
   poster_badge_shape: string
   logo_badge_shape: string
   backdrop_badge_shape: string
   episode_badge_shape: string
+  season_badge_shape: string
   poster_badge_background: string
   logo_badge_background: string
   backdrop_badge_background: string
   episode_badge_background: string
+  season_badge_background: string
 }
 
 export const authApi = {

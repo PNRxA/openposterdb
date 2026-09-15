@@ -135,6 +135,14 @@ pub struct RenderSettingsResponse {
     pub logo_badge_background: BadgeBackground,
     pub backdrop_badge_background: BadgeBackground,
     pub episode_badge_background: BadgeBackground,
+    pub season_ratings_limit: i32,
+    pub season_badge_style: BadgeStyle,
+    pub season_label_style: LabelStyle,
+    pub season_badge_size: BadgeSize,
+    pub season_position: BadgePosition,
+    pub season_badge_direction: BadgeDirection,
+    pub season_badge_shape: BadgeShape,
+    pub season_badge_background: BadgeBackground,
 }
 
 pub async fn get_settings(
@@ -192,6 +200,14 @@ fn settings_to_response(settings: &db::RenderSettings, fanart_available: bool) -
         logo_badge_background: settings.logo_badge_background,
         backdrop_badge_background: settings.backdrop_badge_background,
         episode_badge_background: settings.episode_badge_background,
+        season_ratings_limit: settings.season_ratings_limit,
+        season_badge_style: settings.season_badge_style,
+        season_label_style: settings.season_label_style,
+        season_badge_size: settings.season_badge_size,
+        season_position: settings.season_position,
+        season_badge_direction: settings.season_badge_direction,
+        season_badge_shape: settings.season_badge_shape,
+        season_badge_background: settings.season_badge_background,
     }
 }
 
@@ -277,6 +293,22 @@ pub struct UpdateSettingsRequest {
     pub backdrop_badge_background: BadgeBackground,
     #[serde(default = "db::default_badge_background")]
     pub episode_badge_background: BadgeBackground,
+    #[serde(default = "db::default_season_ratings_limit")]
+    pub season_ratings_limit: i32,
+    #[serde(default = "db::default_season_badge_style")]
+    pub season_badge_style: BadgeStyle,
+    #[serde(default = "db::default_label_style")]
+    pub season_label_style: LabelStyle,
+    #[serde(default = "db::default_season_badge_size")]
+    pub season_badge_size: BadgeSize,
+    #[serde(default = "db::default_season_position")]
+    pub season_position: BadgePosition,
+    #[serde(default = "db::default_season_badge_direction")]
+    pub season_badge_direction: BadgeDirection,
+    #[serde(default = "db::default_badge_shape")]
+    pub season_badge_shape: BadgeShape,
+    #[serde(default = "db::default_badge_background")]
+    pub season_badge_background: BadgeBackground,
 }
 
 fn build_upsert(id: i32, req: &UpdateSettingsRequest) -> db::UpsertApiKeySettings<'_> {
@@ -322,6 +354,14 @@ fn build_upsert(id: i32, req: &UpdateSettingsRequest) -> db::UpsertApiKeySetting
         episode_badge_background: req.episode_badge_background.as_str(),
         backdrop_edge_inset_x: db::clamp_edge_inset(req.backdrop_edge_inset_x),
         backdrop_edge_inset_y: db::clamp_edge_inset(req.backdrop_edge_inset_y),
+        season_ratings_limit: req.season_ratings_limit,
+        season_badge_style: req.season_badge_style.as_str(),
+        season_label_style: req.season_label_style.as_str(),
+        season_badge_size: req.season_badge_size.as_str(),
+        season_position: req.season_position.as_str(),
+        season_badge_direction: req.season_badge_direction.as_str(),
+        season_badge_shape: req.season_badge_shape.as_str(),
+        season_badge_background: req.season_badge_background.as_str(),
     }
 }
 
@@ -333,7 +373,7 @@ pub async fn update_settings(
     db::find_api_key_by_id(&state.db, id)
         .await?
         .ok_or_else(|| AppError::IdNotFound(format!("API key {id} not found")))?;
-    db::validate_render_settings(&req.lang, req.ratings_limit, &req.ratings_order, &req.ratings_exclude, req.logo_ratings_limit, req.backdrop_ratings_limit, req.episode_ratings_limit)?;
+    db::validate_render_settings(&req.lang, req.ratings_limit, &req.ratings_order, &req.ratings_exclude, req.logo_ratings_limit, req.backdrop_ratings_limit, req.episode_ratings_limit, req.season_ratings_limit)?;
     db::upsert_api_key_settings(&state.db, build_upsert(id, &req)).await?;
     state.settings_cache.invalidate(&id).await;
     Ok(Json(json!({ "ok": true })))
@@ -381,7 +421,7 @@ pub async fn update_own_settings(
     Json(req): Json<UpdateSettingsRequest>,
 ) -> Result<Json<Value>, AppError> {
     let id = api_key_user.key_id;
-    db::validate_render_settings(&req.lang, req.ratings_limit, &req.ratings_order, &req.ratings_exclude, req.logo_ratings_limit, req.backdrop_ratings_limit, req.episode_ratings_limit)?;
+    db::validate_render_settings(&req.lang, req.ratings_limit, &req.ratings_order, &req.ratings_exclude, req.logo_ratings_limit, req.backdrop_ratings_limit, req.episode_ratings_limit, req.season_ratings_limit)?;
     db::upsert_api_key_settings(&state.db, build_upsert(id, &req)).await?;
     state.settings_cache.invalidate(&id).await;
     Ok(Json(json!({ "ok": true })))

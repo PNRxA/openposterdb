@@ -662,10 +662,12 @@ async fn purge_endpoints_require_auth() {
         ("DELETE", "/api/admin/logos"),
         ("DELETE", "/api/admin/backdrops"),
         ("DELETE", "/api/admin/episodes"),
+        ("DELETE", "/api/admin/seasons"),
         ("DELETE", "/api/admin/posters/imdb/tt0111161"),
         ("DELETE", "/api/admin/logos/imdb/tt0111161"),
         ("DELETE", "/api/admin/backdrops/imdb/tt0111161"),
         ("DELETE", "/api/admin/episodes/imdb/tt0111161"),
+        ("DELETE", "/api/admin/seasons/tmdb/season-1396-S2"),
     ];
 
     for (method, uri) in cases {
@@ -1088,6 +1090,188 @@ async fn clear_posters_removes_only_posters() {
     assert!(image_meta::Entity::find_by_id("imdb/tt1@i").one(&state.db).await.unwrap().is_none());
     assert!(image_meta::Entity::find_by_id("imdb/tt2@i").one(&state.db).await.unwrap().is_none());
     assert!(image_meta::Entity::find_by_id("imdb/tt1_l@i").one(&state.db).await.unwrap().is_some());
+
+    let _ = std::fs::remove_dir_all(&cache_dir);
+}
+
+#[tokio::test]
+async fn purge_season_clears_one_season_and_spares_show_and_other_seasons() {
+    use openposterdb_api::cache::{self, ImageType, MemCacheEntry};
+    use openposterdb_api::entity::{available_ratings, image_meta};
+    use sea_orm::EntityTrait;
+    use std::time::Instant;
+
+    let cache_dir = std::env::temp_dir()
+        .join(format!("opdb-purge-season-test-{}", std::process::id()))
+        .to_string_lossy()
+        .to_string();
+    let _ = std::fs::remove_dir_all(&cache_dir);
+
+    let (app, state) = common::setup_test_app_with_options(common::TestAppOptions {
+        cache_dir_override: Some(cache_dir.clone()),
+        ..Default::default()
+    })
+    .await;
+    let token = common::setup_admin(&app).await;
+
+    // Two rendered variants of season 2, plus season 20 (a longer id sharing the
+    // `season-1396-S2` prefix) and the show's own poster — both must survive.
+    let target_keys = ["tmdb/season-1396-S2_s@imc", "tmdb/season-1396-S2_s_t_de@imc.zl"];
+    let sibling_season_key = "tmdb/season-1396-S20_s@imc";
+    let show_poster_key = "tmdb/series-1396@imc";
+
+    for value in ["season-1396-S2_s@imc", "season-1396-S2_s_t_de@imc.zl", "season-1396-S20_s@imc"] {
+        let p = cache::typed_cache_path(&cache_dir, ImageType::Season, "tmdb", value).unwrap();
+        cache::write(&p, b"x").await.unwrap();
+    }
+    let show_path = cache::typed_cache_path(&cache_dir, ImageType::Poster, "tmdb", "series-1396@imc").unwrap();
+    cache::write(&show_path, b"x").await.unwrap();
+
+    for k in target_keys {
+        cache::upsert_meta_db(&state.db, k, None, ImageType::Season).await.unwrap();
+    }
+    cache::upsert_meta_db(&state.db, sibling_season_key, None, ImageType::Season).await.unwrap();
+    cache::upsert_meta_db(&state.db, show_poster_key, None, ImageType::Poster).await.unwrap();
+    cache::upsert_available_ratings(&state.db, "tmdb/season-1396-S2", "imc", None).await.unwrap();
+    cache::upsert_available_ratings(&state.db, "tmdb/series-1396", "imc", None).await.unwrap();
+
+    for k in target_keys.iter().chain([&sibling_season_key, &show_poster_key]) {
+        state
+            .image_mem_cache
+            .insert(k.to_string(), MemCacheEntry { bytes: vec![0u8; 4].into(), last_checked: Instant::now() })
+            .await;
+        state.image_inflight.insert(k.to_string(), vec![0u8; 4].into()).await;
+    }
+    state.image_mem_cache.run_pending_tasks().await;
+    state.image_inflight.run_pending_tasks().await;
+
+    let req = Request::builder()
+        .method("DELETE")
+        .uri("/api/admin/seasons/tmdb/season-1396-S2")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["files_deleted"], 2);
+    assert_eq!(json["meta_deleted"], 2);
+    assert_eq!(json["ratings_deleted"], 1);
+
+    // Disk: season 2 variants gone; season 20 + the show poster intact.
+    let root = std::path::Path::new(&cache_dir);
+    assert!(!root.join("seasons/tmdb/season-1396-S2_s@imc.jpg").exists());
+    assert!(!root.join("seasons/tmdb/season-1396-S2_s_t_de@imc.zl.jpg").exists());
+    assert!(root.join("seasons/tmdb/season-1396-S20_s@imc.jpg").exists());
+    assert!(root.join("posters/tmdb/series-1396@imc.jpg").exists());
+
+    // DB: same split; the show's available_ratings row is untouched.
+    for k in target_keys {
+        assert!(image_meta::Entity::find_by_id(k).one(&state.db).await.unwrap().is_none());
+    }
+    assert!(image_meta::Entity::find_by_id(sibling_season_key).one(&state.db).await.unwrap().is_some());
+    assert!(image_meta::Entity::find_by_id(show_poster_key).one(&state.db).await.unwrap().is_some());
+    assert!(available_ratings::Entity::find_by_id("tmdb/season-1396-S2").one(&state.db).await.unwrap().is_none());
+    assert!(available_ratings::Entity::find_by_id("tmdb/series-1396").one(&state.db).await.unwrap().is_some());
+
+    // Memory: same split in both the render and in-flight caches.
+    state.image_mem_cache.run_pending_tasks().await;
+    state.image_inflight.run_pending_tasks().await;
+    for k in target_keys {
+        assert!(state.image_mem_cache.get(k).await.is_none());
+        assert!(state.image_inflight.get(k).await.is_none());
+    }
+    assert!(state.image_mem_cache.get(sibling_season_key).await.is_some());
+    assert!(state.image_mem_cache.get(show_poster_key).await.is_some());
+    assert!(state.image_inflight.get(sibling_season_key).await.is_some());
+
+    let _ = std::fs::remove_dir_all(&cache_dir);
+}
+
+#[tokio::test]
+async fn clear_seasons_removes_only_seasons() {
+    use openposterdb_api::cache::{self, ImageType};
+    use openposterdb_api::entity::image_meta;
+    use sea_orm::EntityTrait;
+
+    let cache_dir = std::env::temp_dir()
+        .join(format!("opdb-clear-seasons-test-{}", std::process::id()))
+        .to_string_lossy()
+        .to_string();
+    let _ = std::fs::remove_dir_all(&cache_dir);
+
+    let (app, state) = common::setup_test_app_with_options(common::TestAppOptions {
+        cache_dir_override: Some(cache_dir.clone()),
+        ..Default::default()
+    })
+    .await;
+    let token = common::setup_admin(&app).await;
+
+    for v in ["season-1396-S1_s@i", "season-1396-S2_s@i"] {
+        let p = cache::typed_cache_path(&cache_dir, ImageType::Season, "tmdb", v).unwrap();
+        cache::write(&p, b"x").await.unwrap();
+        cache::upsert_meta_db(&state.db, &format!("tmdb/{v}"), None, ImageType::Season).await.unwrap();
+    }
+    let show_path = cache::typed_cache_path(&cache_dir, ImageType::Poster, "tmdb", "series-1396@i").unwrap();
+    cache::write(&show_path, b"x").await.unwrap();
+    cache::upsert_meta_db(&state.db, "tmdb/series-1396@i", None, ImageType::Poster).await.unwrap();
+
+    let req = Request::builder()
+        .method("DELETE")
+        .uri("/api/admin/seasons")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["dir_cleared"], true);
+    assert_eq!(json["meta_deleted"], 2);
+
+    assert!(!std::path::Path::new(&cache_dir).join("seasons").exists());
+    assert!(std::path::Path::new(&cache_dir).join("posters/tmdb/series-1396@i.jpg").exists());
+    assert!(image_meta::Entity::find_by_id("tmdb/season-1396-S1_s@i").one(&state.db).await.unwrap().is_none());
+    assert!(image_meta::Entity::find_by_id("tmdb/series-1396@i").one(&state.db).await.unwrap().is_some());
+
+    let _ = std::fs::remove_dir_all(&cache_dir);
+}
+
+#[tokio::test]
+async fn purge_all_clears_seasons_dir() {
+    use openposterdb_api::cache::{self, ImageType};
+
+    let cache_dir = std::env::temp_dir()
+        .join(format!("opdb-purge-all-seasons-test-{}", std::process::id()))
+        .to_string_lossy()
+        .to_string();
+    let _ = std::fs::remove_dir_all(&cache_dir);
+
+    let (app, state) = common::setup_test_app_with_options(common::TestAppOptions {
+        cache_dir_override: Some(cache_dir.clone()),
+        ..Default::default()
+    })
+    .await;
+    let token = common::setup_admin(&app).await;
+
+    let p = cache::typed_cache_path(&cache_dir, ImageType::Season, "tmdb", "season-1396-S2_s@i").unwrap();
+    cache::write(&p, b"x").await.unwrap();
+    cache::upsert_meta_db(&state.db, "tmdb/season-1396-S2_s@i", None, ImageType::Season).await.unwrap();
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/admin/cache/purge")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["dirs_cleared"], 1); // only seasons/ existed
+    assert_eq!(json["meta_deleted"], 1);
+    assert!(!std::path::Path::new(&cache_dir).join("seasons").exists());
 
     let _ = std::fs::remove_dir_all(&cache_dir);
 }

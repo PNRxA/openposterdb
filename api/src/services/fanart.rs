@@ -19,12 +19,54 @@ pub struct FanartPoster {
     pub likes: String,
 }
 
+/// A fanart.tv `seasonposter` entry. Identical to `FanartPoster` but carries the
+/// season string (e.g. `"1"`, `"0"`, or `"all"`) it applies to.
+#[derive(Debug, Clone, Deserialize)]
+pub struct FanartSeasonPoster {
+    pub id: String,
+    pub url: String,
+    pub lang: String,
+    pub likes: String,
+    #[serde(default)]
+    pub season: String,
+}
+
 /// All image types fetched from fanart.tv in a single API call.
 #[derive(Debug, Clone)]
 pub struct FanartImages {
     pub posters: Vec<FanartPoster>,
     pub logos: Vec<FanartPoster>,
     pub backdrops: Vec<FanartPoster>,
+    pub season_posters: Vec<FanartSeasonPoster>,
+}
+
+impl FanartImages {
+    /// Posters for a specific season number as plain `FanartPoster`s for the
+    /// shared `select_image` logic. Prefers exact-season art; falls back to
+    /// season-agnostic ("all") posters when the season has none of its own.
+    pub fn season_posters_for(&self, season: u32) -> Vec<FanartPoster> {
+        let season_str = season.to_string();
+        let map = |p: &FanartSeasonPoster| FanartPoster {
+            id: p.id.clone(),
+            url: p.url.clone(),
+            lang: p.lang.clone(),
+            likes: p.likes.clone(),
+        };
+        let exact: Vec<FanartPoster> = self
+            .season_posters
+            .iter()
+            .filter(|p| p.season == season_str)
+            .map(&map)
+            .collect();
+        if !exact.is_empty() {
+            return exact;
+        }
+        self.season_posters
+            .iter()
+            .filter(|p| p.season == "all")
+            .map(&map)
+            .collect()
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -45,6 +87,8 @@ struct TvImages {
     hdtvlogo: Vec<FanartPoster>,
     #[serde(default)]
     showbackground: Vec<FanartPoster>,
+    #[serde(default)]
+    seasonposter: Vec<FanartSeasonPoster>,
 }
 
 /// Which tier the selected poster came from.
@@ -66,7 +110,7 @@ impl FanartClient {
         );
         let resp = retry::send_with_retry(&FANART_RETRY, || self.http.get(&url).send()).await?;
         if resp.status() == reqwest::StatusCode::NOT_FOUND {
-            return Ok(FanartImages { posters: vec![], logos: vec![], backdrops: vec![] });
+            return Ok(FanartImages { posters: vec![], logos: vec![], backdrops: vec![], season_posters: vec![] });
         }
         let resp = resp.error_for_status()?;
         let images: MovieImages = resp.json().await?;
@@ -74,6 +118,7 @@ impl FanartClient {
             posters: images.movieposter,
             logos: images.hdmovielogo,
             backdrops: images.moviebackground,
+            season_posters: vec![],
         })
     }
 
@@ -85,7 +130,7 @@ impl FanartClient {
         );
         let resp = retry::send_with_retry(&FANART_RETRY, || self.http.get(&url).send()).await?;
         if resp.status() == reqwest::StatusCode::NOT_FOUND {
-            return Ok(FanartImages { posters: vec![], logos: vec![], backdrops: vec![] });
+            return Ok(FanartImages { posters: vec![], logos: vec![], backdrops: vec![], season_posters: vec![] });
         }
         let resp = resp.error_for_status()?;
         let images: TvImages = resp.json().await?;
@@ -93,6 +138,7 @@ impl FanartClient {
             posters: images.tvposter,
             logos: images.hdtvlogo,
             backdrops: images.showbackground,
+            season_posters: images.seasonposter,
         })
     }
 
@@ -271,6 +317,66 @@ mod tests {
         let result = FanartClient::select_image(&posters, "zh-CN", false);
         assert!(result.is_some());
         assert_eq!(result.unwrap().0.id, "1");
+    }
+
+    fn sp(id: &str, lang: &str, likes: &str, season: &str) -> FanartSeasonPoster {
+        FanartSeasonPoster {
+            id: id.into(),
+            url: format!("http://{id}"),
+            lang: lang.into(),
+            likes: likes.into(),
+            season: season.into(),
+        }
+    }
+
+    #[test]
+    fn season_posters_for_exact_match_wins_over_all() {
+        let images = FanartImages {
+            posters: vec![],
+            logos: vec![],
+            backdrops: vec![],
+            season_posters: vec![
+                sp("1", "en", "10", "1"),
+                sp("2", "en", "20", "all"),
+                sp("3", "en", "30", "2"),
+            ],
+        };
+        let result = images.season_posters_for(1);
+        // Only the exact season-1 poster, not the "all" fallback.
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, "1");
+    }
+
+    #[test]
+    fn season_posters_for_falls_back_to_all() {
+        let images = FanartImages {
+            posters: vec![],
+            logos: vec![],
+            backdrops: vec![],
+            season_posters: vec![
+                sp("1", "en", "10", "1"),
+                sp("2", "en", "20", "all"),
+                sp("3", "de", "30", "all"),
+            ],
+        };
+        // No season-5 posters → fall back to the two "all" entries.
+        let result = images.season_posters_for(5);
+        assert_eq!(result.len(), 2);
+        let ids: Vec<&str> = result.iter().map(|p| p.id.as_str()).collect();
+        assert!(ids.contains(&"2"));
+        assert!(ids.contains(&"3"));
+    }
+
+    #[test]
+    fn season_posters_for_unknown_season_no_all_is_empty() {
+        let images = FanartImages {
+            posters: vec![],
+            logos: vec![],
+            backdrops: vec![],
+            season_posters: vec![sp("1", "en", "10", "1"), sp("2", "en", "20", "2")],
+        };
+        // No season-9 and no "all" → empty.
+        assert!(images.season_posters_for(9).is_empty());
     }
 
     #[test]

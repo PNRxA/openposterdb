@@ -47,6 +47,14 @@ fn test_upsert(key_id: i32) -> UpsertApiKeySettings<'static> {
         episode_badge_background: "d",
         backdrop_edge_inset_x: 0,
         backdrop_edge_inset_y: 0,
+        season_ratings_limit: 1,
+        season_badge_style: "d",
+        season_label_style: "o",
+        season_badge_size: "m",
+        season_position: "bc",
+        season_badge_direction: "d",
+        season_badge_shape: "r",
+        season_badge_background: "d",
     }
 }
 
@@ -899,4 +907,101 @@ async fn effective_settings_episode_per_key_overrides() {
     assert_eq!(s.episode_position, db::BadgePosition::TopLeft);
     assert_eq!(s.episode_badge_direction, db::BadgeDirection::Horizontal);
     assert!(s.episode_blur);
+}
+
+// --- Season settings ---
+
+#[tokio::test]
+async fn upsert_and_get_season_settings() {
+    let (app, state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    use axum::body::Body;
+    use axum::http::Request;
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/keys")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::from(serde_json::json!({"name": "season-test"}).to_string()))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let key_id = json["id"].as_i64().unwrap() as i32;
+
+    db::upsert_api_key_settings(&state.db, UpsertApiKeySettings {
+        season_ratings_limit: 4,
+        season_badge_style: "h",
+        season_label_style: "t",
+        season_badge_size: "xl",
+        season_position: "bl",
+        season_badge_direction: "h",
+        season_badge_shape: "p",
+        season_badge_background: "k",
+        ..test_upsert(key_id)
+    }).await.unwrap();
+
+    let s = db::get_api_key_settings(&state.db, key_id).await.unwrap().unwrap();
+    assert_eq!(s.season_ratings_limit, 4);
+    assert_eq!(s.season_badge_style, "h");
+    assert_eq!(s.season_label_style, "t");
+    assert_eq!(s.season_badge_size, "xl");
+    assert_eq!(s.season_position, "bl");
+    assert_eq!(s.season_badge_direction, "h");
+    assert_eq!(s.season_badge_shape, "p");
+    assert_eq!(s.season_badge_background, "k");
+}
+
+#[tokio::test]
+async fn effective_settings_season_defaults() {
+    let (_app, state) = common::setup_test_app().await;
+
+    let s = db::get_effective_render_settings(&state.db, 999, None).await;
+    assert_eq!(s.season_ratings_limit, 3);
+    assert_eq!(s.season_badge_style, db::BadgeStyle::Default);
+    assert_eq!(s.season_label_style, db::LabelStyle::Official);
+    assert_eq!(s.season_badge_size, db::BadgeSize::Medium);
+    assert_eq!(s.season_position, db::BadgePosition::BottomCenter);
+    assert_eq!(s.season_badge_direction, db::BadgeDirection::Default);
+    assert_eq!(s.season_badge_shape, db::BadgeShape::Rounded);
+    assert_eq!(s.season_badge_background, db::BadgeBackground::Default);
+}
+
+#[tokio::test]
+async fn effective_settings_season_per_key_overrides() {
+    let (app, state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    use axum::body::Body;
+    use axum::http::Request;
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/keys")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::from(serde_json::json!({"name": "season-eff"}).to_string()))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let key_id = json["id"].as_i64().unwrap() as i32;
+
+    db::upsert_api_key_settings(&state.db, UpsertApiKeySettings {
+        season_ratings_limit: 5,
+        season_badge_style: "h",
+        season_position: "tl",
+        ..test_upsert(key_id)
+    }).await.unwrap();
+
+    let s = db::get_effective_render_settings(&state.db, key_id, None).await;
+    assert_eq!(s.season_ratings_limit, 5);
+    assert_eq!(s.season_badge_style, db::BadgeStyle::Horizontal);
+    assert_eq!(s.season_position, db::BadgePosition::TopLeft);
 }

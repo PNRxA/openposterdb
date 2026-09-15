@@ -192,3 +192,106 @@ async fn backdrop_invalid_image_size_rejected() {
     let res = app.oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
 }
+
+// --- Season imageSize validation ---
+//
+// Seasons accept the poster image-size set; `small` is NOT valid for seasons
+// (returns 400), the same as posters.
+
+#[tokio::test]
+async fn season_valid_image_size_medium_accepted() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    let req = Request::builder()
+        .uri(format!(
+            "/{api_key}/tmdb/season-default/season-1396-S2.jpg?imageSize=medium"
+        ))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    // Should not be 400 — the imageSize is valid.
+    assert_ne!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn season_valid_image_size_large_accepted() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    let req = Request::builder()
+        .uri(format!(
+            "/{api_key}/tmdb/season-default/season-1396-S2.jpg?imageSize=large"
+        ))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_ne!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn season_valid_image_size_very_large_accepted() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    let req = Request::builder()
+        .uri(format!(
+            "/{api_key}/tmdb/season-default/season-1396-S2.jpg?imageSize=very-large"
+        ))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_ne!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn season_small_image_size_rejected() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    let req = Request::builder()
+        .uri(format!(
+            "/{api_key}/tmdb/season-default/season-1396-S2.jpg?imageSize=small"
+        ))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn season_invalid_image_size_rejected() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    let req = Request::builder()
+        .uri(format!(
+            "/{api_key}/tmdb/season-default/season-1396-S2.jpg?imageSize=huge"
+        ))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn season_no_image_size_accepted() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    // Without imageSize param — should default to medium, no 400
+    let req = Request::builder()
+        .uri(format!(
+            "/{api_key}/tmdb/season-default/season-1396-S2.jpg"
+        ))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_ne!(res.status(), StatusCode::BAD_REQUEST);
+}

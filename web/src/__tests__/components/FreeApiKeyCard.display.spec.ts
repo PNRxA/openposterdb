@@ -28,7 +28,10 @@ function makeDefaults(overrides: Partial<FreeKeyDefaults> = {}): FreeKeyDefaults
     backdrop_edge_inset_x: 0, backdrop_edge_inset_y: 0,
     episode_ratings_limit: 3, episode_badge_style: 'v', episode_label_style: 'o',
     episode_badge_size: 'm', episode_position: 'bc', episode_badge_direction: 'd',
-    episode_blur: false, poster_fit: 'native', ...overrides,
+    episode_blur: false, poster_fit: 'native',
+    season_ratings_limit: 3, season_badge_style: 'v', season_label_style: 'o',
+    season_badge_size: 'm', season_position: 'bc', season_badge_direction: 'd',
+    ...overrides,
   }
 }
 
@@ -99,6 +102,16 @@ describe('FreeApiKeyCard trigger display across image-type switches', () => {
     expect(triggerText(wrapper, 'free-badge-style')).toBe('Badge style: default (Vertical)')
 
     await setSelect(wrapper, 'free-image-type', 'backdrop')
+    expect(triggerText(wrapper, 'free-badge-style')).toBe('Badge style: default (Horizontal)')
+  })
+
+  it('updates the badge-style default annotation when switching to season', async () => {
+    // poster_badge_style=v (Vertical), season_badge_style=h (Horizontal)
+    const wrapper = mountReal(makeDefaults({ poster_badge_style: 'v', season_badge_style: 'h' }))
+    await flushPromises()
+    expect(triggerText(wrapper, 'free-badge-style')).toBe('Badge style: default (Vertical)')
+
+    await setSelect(wrapper, 'free-image-type', 'season')
     expect(triggerText(wrapper, 'free-badge-style')).toBe('Badge style: default (Horizontal)')
   })
 

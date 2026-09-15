@@ -1,6 +1,6 @@
 # OpenPosterDB (OPDB)
 
-A self-hosted, drop-in replacement for [RPDB (Rating Poster Database)](https://ratingposterdb.com). It generates movie and TV posters, logos, backdrops, and episode stills with rating badges overlaid on them — pulling artwork from TMDB (or optionally [Fanart.tv](https://fanart.tv)) and aggregating ratings from IMDb, Rotten Tomatoes, Metacritic, Trakt, Letterboxd, MyAnimeList, MDBList, and Roger Ebert.
+A self-hosted, drop-in replacement for [RPDB (Rating Poster Database)](https://ratingposterdb.com). It generates movie and TV posters, logos, backdrops, episode stills, and season posters with rating badges overlaid on them — pulling artwork from TMDB (or optionally [Fanart.tv](https://fanart.tv)) and aggregating ratings from IMDb, Rotten Tomatoes, Metacritic, Trakt, Letterboxd, MyAnimeList, MDBList, and Roger Ebert.
 
 [Website](https://openposterdb.com) · [GitHub](https://github.com/pnrxa/openposterdb) · [Docker Hub](https://hub.docker.com/r/pnrxa/openposterdb) · [GitHub Packages](https://ghcr.io/pnrxa/openposterdb) · [**Documentation**](docs/README.md)
 
@@ -55,7 +55,7 @@ See **[Configuration](docs/configuration.md)** for the full list of environment 
 
 Grab an API key from the admin UI, then point your client at your instance:
 
-- **[aiometadata](docs/media-servers.md#aiometadata)** — poster/backdrop/logo/episode URL templates
+- **[aiometadata](docs/media-servers.md#aiometadata)** — poster/backdrop/logo/episode/season URL templates
 - **[Jellyfin](docs/media-servers.md#jellyfin)** — dedicated remote image provider plugin
 - **[Plex](docs/media-servers.md#plex)** — Custom Metadata Provider (PMS 1.43+)
 

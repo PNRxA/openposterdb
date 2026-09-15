@@ -48,6 +48,20 @@ GET /{api_key}/{id_type}/episode-default/{id_value}.jpg
 - `?blur=true` applies Gaussian blur for spoiler protection (badges remain sharp)
 - IMDB episode ratings require an OMDb API key (MDBList does not support episode-level ratings)
 
+### Season
+
+```
+GET /{api_key}/{id_type}/season-default/{id_value}.jpg
+```
+
+- Returns a JPEG season poster (2:3 portrait) with rating badges — a TV season's own poster art
+- ID format is `season-{id}-S{season}` using the **series** IMDb/TMDB/TVDB ID (e.g. `season-1396-S2` for TMDB, `season-tt0903747-S2` for IMDb, `season-81189-S2` for TVDB)
+- Uses the season's own poster from TMDB (or Fanart.tv season posters), falling back to the series poster when the season has no art of its own
+- Season ratings are season-scoped where the source supports it — TMDB (the season's vote average) and Trakt (the season rating). IMDb/RT/Metacritic fall back to show-level ratings and require an OMDb API key; MDBList has no season-level ratings and is not queried for seasons, so MDBList-only sources (RT Audience, Letterboxd, MAL, MDBList score, Roger Ebert) are unavailable on season posters
+- `?lang=` and `?textless=` select from the season's own TMDB/Fanart.tv image list, falling back to the season's default poster (then the series poster) when no matching season art exists
+- Dedicated season settings: position, direction, badge style/size, label style, shape, background, ratings limit (mirrors the poster controls; no blur, split, or fit)
+- Renders through the same 2:3 poster pipeline, so it accepts the poster image sizes (`small` is not valid)
+
 ### Key validation
 
 ```
@@ -62,9 +76,9 @@ Management endpoints (auth, keys, settings) are under `/api/` and return JSON.
 ## Common parameters
 
 - `id_type`: `imdb`, `tmdb`, `tvdb`
-- `id_value`: e.g. `tt1234567`, `movie-123`, `series-456`, `episode-1396-S1E1`. Episode IMDb IDs (e.g. `tt0959621`), TVDB episode IDs, and series-level IDs with season/episode (e.g. `episode-tt14786934-S1E1`, `episode-81189-S3E5`) are also supported
+- `id_value`: e.g. `tt1234567`, `movie-123`, `series-456`, `episode-1396-S1E1`, `season-1396-S2`. Episode IMDb IDs (e.g. `tt0959621`), TVDB episode IDs, series-level IDs with season/episode (e.g. `episode-tt14786934-S1E1`, `episode-81189-S3E5`), and season IDs (e.g. `season-tt0903747-S2`, `season-81189-S2`) are also supported
 - `?fallback=true`: accepted for RPDB plugin compatibility but ignored as OPDB falls back to TMDB by default
-- `?lang={code}`: override the image language for this request (e.g. `?lang=de` for German, `?lang=pt-BR` for Brazilian Portuguese). Supports regional variants — when a region-specific image exists (e.g. `pt-BR`), it is preferred; otherwise falls back to the base language (`pt`), then English. Applies to posters and logos. Backdrops are language-agnostic and ignore this parameter
+- `?lang={code}`: override the image language for this request (e.g. `?lang=de` for German, `?lang=pt-BR` for Brazilian Portuguese). Supports regional variants — when a region-specific image exists (e.g. `pt-BR`), it is preferred; otherwise falls back to the base language (`pt`), then English. Applies to posters, season posters, and logos. Backdrops are language-agnostic and ignore this parameter
 - `?imageSize={size}`: control output image dimensions. Available sizes vary by image type (see [Image sizes](#image-sizes))
 - `?ratings_limit={0-10}`: maximum number of rating badges to display (0 = no ratings)
 - `?ratings_order={keys}`: comma-separated rating source keys controlling display order. Valid keys: `imdb`, `tmdb`, `rt` (RT Critics), `rta` (RT Audience), `mc` (Metacritic), `trakt`, `lb` (Letterboxd), `mal` (MyAnimeList), `mdblist` (MDBList score), `ebert` (Roger Ebert). Example: `?ratings_order=imdb,tmdb,rt`
@@ -75,9 +89,9 @@ Management endpoints (auth, keys, settings) are under `/api/` and return JSON.
 - `?badge_shape={r|p}`: badge corner shape — `r` (rounded, default), `p` (pill, fully rounded ends). Pills always render as a horizontal icon/label-left, value-right lozenge, even on image types whose default style is vertical (logos, backdrops, episodes)
 - `?badge_background={d|k|t|n}`: badge background — `d` (default: source-coloured label + dark value), `k` (dark: uniformly dark), `t` (transparent: semi-transparent so the artwork shows through), `n` (none: no background, label/value drawn directly on the image with a drop shadow)
 - `?image_source={t|f}`: image source — `t` (TMDB, default), `f` (Fanart.tv). Applies to all image types. The non-selected source is used as fallback
-- `?badge_direction={d|h|v}`: badge stacking direction — `d` (default), `h` (horizontal), `v` (vertical). Applies to poster, backdrop, and episode endpoints
-- `?position={bc|tc|l|r|tl|tr|bl|br}`: badge anchor position. Applies to poster, backdrop, and episode endpoints
-- `?textless={true|false}`: prefer textless images when available (poster only). Works with both TMDB and Fanart.tv sources
+- `?badge_direction={d|h|v}`: badge stacking direction — `d` (default), `h` (horizontal), `v` (vertical). Applies to poster, backdrop, episode, and season endpoints
+- `?position={bc|tc|l|r|tl|tr|bl|br}`: badge anchor position. Applies to poster, backdrop, episode, and season endpoints
+- `?textless={true|false}`: prefer textless images when available (poster and season only). Works with both TMDB and Fanart.tv sources
 - `?blur={true|false}`: apply Gaussian blur for spoiler protection (episode only). Badges remain sharp over the blurred still image
 - `?split={true|false}`: split the badges evenly across two opposite sides of the poster (poster only). The axis follows the badge layout — a vertical layout splits left/right, horizontal rows split top/bottom. With an odd number of badges the configured side gets the extra one (e.g. 4 badges → 2 + 2, 3 badges → 2 + 1)
 - `?fit={native|cover|pad|blur}`: how a poster is fit to the standard 2:3 output frame (poster only). `native` (default) keeps the source aspect ratio; `cover` scales to fill 2:3 and center-crops the overflow; `pad` fits the whole poster inside 2:3 with solid black bars; `blur` fits the whole poster inside 2:3 and fills the bars with a blurred, zoomed copy of the poster. The non-native modes guarantee a uniform 2:3 image so downstream apps that place posters in fixed 2:3 containers don't crop the art
@@ -85,7 +99,7 @@ Management endpoints (auth, keys, settings) are under `/api/` and return JSON.
 
 Old RPDB parameter names `?poster_source=` and `?fanart_textless=` are accepted as aliases.
 
-**Scope notes:** `textless`, `split`, and `fit` are poster-only. `blur` is episode-only. `edge_inset_x`/`edge_inset_y` are backdrop-only. `badge_direction` and `position` are silently ignored on logo endpoints. For shared parameters (`ratings_limit`, `badge_style`, `label_style`, `badge_size`, `badge_shape`, `badge_background`, `image_source`), the override is applied to the correct image-type-specific setting (e.g. `?badge_style=h` on the poster endpoint sets `poster_badge_style`, on the logo endpoint sets `logo_badge_style`).
+**Scope notes:** `split` and `fit` are poster-only; `textless` applies to posters and seasons. `blur` is episode-only. `edge_inset_x`/`edge_inset_y` are backdrop-only. `badge_direction` and `position` are silently ignored on logo endpoints. For shared parameters (`ratings_limit`, `badge_style`, `label_style`, `badge_size`, `badge_shape`, `badge_background`, `image_source`), the override is applied to the correct image-type-specific setting (e.g. `?badge_style=h` on the poster endpoint sets `poster_badge_style`, on the logo endpoint sets `logo_badge_style`).
 
 ## Image sizes
 
@@ -100,6 +114,8 @@ The `?imageSize=` parameter controls the output dimensions. When omitted, `mediu
 | `very-large` / `verylarge` | 2000 × 2962 |
 
 Heights are representative for a standard ~2:3 source under the default `native` fit, which preserves the source aspect ratio (so the exact height varies per poster). The `cover`, `pad`, and `blur` fits instead produce an exact 2:3 frame (580 × 870, 1280 × 1920, 2000 × 3000).
+
+Season posters use the same sizes as posters (they share the 2:3 poster pipeline).
 
 **Logo sizes:**
 
@@ -126,4 +142,4 @@ Heights are representative for a standard ~2:3 source under the default `native`
 | `large` | 1280 × 720 |
 | `very-large` / `verylarge` | 1920 × 1080 |
 
-`small` is only valid for backdrops and episodes — requesting it for posters or logos returns `400 Bad Request`. `verylarge` is accepted as an alias for `very-large` for RPDB compatibility.
+`small` is only valid for backdrops and episodes — requesting it for posters, seasons, or logos returns `400 Bad Request`. `verylarge` is accepted as an alias for `very-large` for RPDB compatibility.

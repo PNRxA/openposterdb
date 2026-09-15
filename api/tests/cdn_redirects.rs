@@ -107,6 +107,73 @@ async fn backdrop_returns_302_when_cdn_enabled() {
     assert!(location.contains("/imdb/backdrop-default/tt0111161.jpg"));
 }
 
+#[tokio::test]
+async fn season_returns_302_when_cdn_enabled() {
+    let (app, _state) = setup_cdn_app().await;
+    let token = common::setup_admin(&app).await;
+    let api_key = create_api_key(&app, &token, "cdn-season").await;
+
+    let req = Request::builder()
+        .uri(format!("/{api_key}/tmdb/season-default/season-1396-S2.jpg"))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::FOUND);
+
+    let location = res.headers().get("location").unwrap().to_str().unwrap();
+    assert!(location.starts_with("/c/"), "redirect should point to /c/ URL: {location}");
+    assert!(location.contains("/tmdb/season-default/season-1396-S2.jpg"), "redirect should preserve path: {location}");
+}
+
+#[tokio::test]
+async fn season_redirect_has_public_cache_control() {
+    let (app, _state) = setup_cdn_app().await;
+    let token = common::setup_admin(&app).await;
+    let api_key = create_api_key(&app, &token, "cdn-season-cc").await;
+
+    let req = Request::builder()
+        .uri(format!("/{api_key}/tmdb/season-default/season-1396-S2.jpg"))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::FOUND);
+    let cc = res.headers().get("cache-control").unwrap().to_str().unwrap();
+    assert!(cc.contains("public"), "redirect cache-control should be public: {cc}");
+    assert!(cc.contains("max-age=300"), "redirect cache-control should have max-age=300: {cc}");
+    assert!(cc.contains("stale-while-revalidate=3600"), "redirect should have stale-while-revalidate: {cc}");
+}
+
+#[tokio::test]
+async fn season_does_not_redirect_when_cdn_disabled() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+    let api_key = create_api_key(&app, &token, "no-cdn-season").await;
+
+    let req = Request::builder()
+        .uri(format!("/{api_key}/tmdb/season-default/season-1396-S2.jpg"))
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    // Should NOT be 302 — should either serve or error, not redirect
+    assert_ne!(res.status(), StatusCode::FOUND, "should not redirect when CDN disabled");
+}
+
+#[tokio::test]
+async fn cdn_season_endpoint_unknown_hash_returns_404() {
+    let (app, _state) = setup_cdn_app().await;
+
+    let req = Request::builder()
+        .uri("/c/deadbeef1234/tmdb/season-default/season-1396-S2.jpg")
+        .body(Body::empty())
+        .unwrap();
+
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+}
+
 // --- Redirect cache headers ---
 
 #[tokio::test]
