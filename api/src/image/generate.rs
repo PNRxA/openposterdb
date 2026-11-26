@@ -856,7 +856,10 @@ mod tests {
     }
 
     #[test]
-    fn poster_font_size_changes_output_and_default_matches_medium() {
+    fn poster_font_size_changes_rendered_output() {
+        // Pixel identity of the default/Medium output with pre-feature renders
+        // is pinned in badge.rs (`default_font_size_is_byte_identical_to_pre_feature_output`);
+        // this test only checks that non-default sizes reach the poster render.
         use crate::services::db::FontSize;
         use crate::services::ratings::{RatingBadge, RatingSource};
 
@@ -873,8 +876,6 @@ mod tests {
         };
         for (style, dir) in [(BadgeStyle::Horizontal, BadgeDirection::Horizontal), (BadgeStyle::Vertical, BadgeDirection::Horizontal), (BadgeStyle::Vertical, BadgeDirection::Vertical)] {
             let m = render(FontSize::Medium, style, dir);
-            let default = render_poster_sync(&png, &badges, &font, 85, BadgePosition::BottomCenter, style, LabelStyle::Official, BadgeAppearance::default(), dir, 580, 1.0, BadgeSize::Medium, false, PosterFit::Native).unwrap();
-            assert_eq!(m, default);
             assert_ne!(m, render(FontSize::ExtraLarge, style, dir), "{style:?}/{dir:?}");
             assert_ne!(m, render(FontSize::ExtraSmall, style, dir), "{style:?}/{dir:?}");
         }

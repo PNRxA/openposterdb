@@ -504,6 +504,8 @@ mod tests {
         FontArc::try_from_slice(crate::FONT_BYTES).unwrap()
     }
 
+    static TEST_FONT: std::sync::LazyLock<FontArc> = std::sync::LazyLock::new(test_font);
+
     #[test]
     fn render_badge_correct_height() {
         let badge = RatingBadge {
@@ -832,22 +834,69 @@ mod tests {
         bb
     }
 
+    /// `WxH:` + the first 8 bytes (hex) of the SHA-256 of the raw RGBA pixels.
+    fn pixel_digest(img: &RgbaImage) -> String {
+        use sha2::{Digest, Sha256};
+        let d = Sha256::digest(img.as_raw());
+        let hex: String = d.iter().take(8).map(|b| format!("{b:02x}")).collect();
+        format!("{}x{}:{hex}", img.width(), img.height())
+    }
+
+    /// Golden pixel digests of default-appearance badges, captured by rendering
+    /// the same inputs with the code at `61803c1` (release v1.3.0, before the
+    /// font-size setting existed) through the public `render_badges_uniform` /
+    /// `render_vertical_badge` API. Columns: shape, label style, badge scale,
+    /// horizontal badge 0 (IMDb "8.5"), horizontal badge 1 (MAL "10.00"; both
+    /// share a uniform width), vertical badge (MAL "10.00").
+    ///
+    /// Rasterisation (ab_glyph outlines, Lanczos icon resizing) is plain f32
+    /// arithmetic with no platform-specific code paths, so the digests are
+    /// expected to be stable across platforms; if a dependency bump changes
+    /// glyph rasterisation these values must be regenerated from a pre-feature
+    /// revision, not from the current code.
+    const PRE_FEATURE_GOLDENS: &[(BadgeShape, LabelStyle, f32, &str, &str, &str)] = &[
+        (BadgeShape::Rounded, LabelStyle::Text, 0.5, "85x29:86d284d16b9e3d97", "85x29:2ff21b9014c52d27", "44x40:0e7bbebca7a3f457"),
+        (BadgeShape::Rounded, LabelStyle::Text, 1.0, "168x58:8f22aef64f63db2a", "168x58:b3a0a55ce14beb53", "88x80:6477d2f4953e0510"),
+        (BadgeShape::Rounded, LabelStyle::Text, 1.25, "208x73:26cf419ac58af07d", "208x73:d603233740d6378f", "110x99:c2b457852334ee8d"),
+        (BadgeShape::Rounded, LabelStyle::Text, 2.2, "366x128:cea9a4f190536017", "366x128:ec78dd6ff2ae9494", "194x176:915b84d4adc5bbac"),
+        (BadgeShape::Rounded, LabelStyle::Official, 0.5, "87x29:183f0c7086e997aa", "87x29:92c6dcd50a5b60ff", "44x51:a0fe9931394faf6d"),
+        (BadgeShape::Rounded, LabelStyle::Official, 1.0, "172x58:2faaabeac9f61551", "172x58:83e8a1b342e7ad59", "88x102:533618a916c1b7ce"),
+        (BadgeShape::Rounded, LabelStyle::Official, 1.25, "215x73:cdcbb51921d3c1e7", "215x73:e0aa1a98bb0e9ab0", "110x127:f18d5e45ba993326"),
+        (BadgeShape::Rounded, LabelStyle::Official, 2.2, "376x128:f3fc6d08ba4d5af8", "376x128:fafe7cc71e2353b0", "194x225:ffea58feb8fd85d9"),
+        (BadgeShape::Pill, LabelStyle::Text, 0.5, "95x32:211d45d5869a23f2", "95x32:b25c07fc08722e67", "44x50:4c0635afdc976ef1"),
+        (BadgeShape::Pill, LabelStyle::Text, 1.0, "188x64:b4fe2ab51349ca7e", "188x64:14e135a2247551c9", "88x100:1882d8f4a36361e9"),
+        (BadgeShape::Pill, LabelStyle::Text, 1.25, "234x81:35e2f563b98e4b1b", "234x81:145c6e038ea54736", "110x125:4c4853b1e8a169bc"),
+        (BadgeShape::Pill, LabelStyle::Text, 2.2, "410x141:6b5b9a27a0863bd6", "410x141:5f9a50e787a587ec", "194x220:fa0a6b46f07cd9fc"),
+        (BadgeShape::Pill, LabelStyle::Official, 0.5, "97x32:47ff8d9557407875", "97x32:153ac726fa3d6dba", "44x61:3f379c566a072119"),
+        (BadgeShape::Pill, LabelStyle::Official, 1.0, "192x64:dc956e173a548f75", "192x64:dc146ac5c83aa762", "88x122:e35080cdf75e129c"),
+        (BadgeShape::Pill, LabelStyle::Official, 1.25, "241x81:0ab6b8e921d9474a", "241x81:3f5879a27008fb40", "110x153:a161d39f7aa746a4"),
+        (BadgeShape::Pill, LabelStyle::Official, 2.2, "420x141:07b006c13b780cb4", "420x141:0c80eedd5e91b893", "194x269:661dc227855baf42"),
+    ];
+
     #[test]
-    fn default_font_size_is_byte_identical_to_original() {
-        // `FontSize::Medium` multiplies every text scale by exactly 1.0, so the
-        // default appearance renders the same pixels as before the setting.
+    fn default_font_size_is_byte_identical_to_pre_feature_output() {
         let font = test_font();
         let badges = vec![
             RatingBadge { source: RatingSource::Imdb, value: "8.5".to_string() },
             RatingBadge { source: RatingSource::Mal, value: "10.00".to_string() },
         ];
-        assert_eq!(BadgeAppearance::default().font_size, FontSize::Medium);
-        for scale in [0.5, 1.0, 1.25, 2.2] {
-            let a = render_badges_uniform(&badges, &font, LabelStyle::Text, BadgeAppearance::default(), scale);
-            assert_eq!(a[0].height(), (BASE_BADGE_HEIGHT as f32 * scale).round() as u32);
-            let v = render_vertical_badge(&badges[0], &font, LabelStyle::Text, BadgeAppearance::default(), scale);
-            assert_eq!(v.width(), (BASE_VERT_BADGE_WIDTH as f32 * scale).round() as u32);
+        // Both the implicit default and an explicit Medium must reproduce the
+        // pre-feature pixels exactly.
+        for font_size in [BadgeAppearance::default().font_size, FontSize::Medium] {
+            for &(shape, label_style, scale, h0, h1, v) in PRE_FEATURE_GOLDENS {
+                let appearance = BadgeAppearance { shape, font_size, ..Default::default() };
+                let ctx = format!("{shape:?}/{label_style:?}/{scale}/{font_size:?}");
+                let hz = render_badges_uniform(&badges, &font, label_style, appearance, scale);
+                assert_eq!(pixel_digest(&hz[0]), h0, "horizontal badge 0: {ctx}");
+                assert_eq!(pixel_digest(&hz[1]), h1, "horizontal badge 1: {ctx}");
+                let vert = render_vertical_badge(&badges[1], &font, label_style, appearance, scale);
+                assert_eq!(pixel_digest(&vert), v, "vertical badge: {ctx}");
+            }
         }
+        // Sanity: a non-default font size does change the pixels.
+        let xl = BadgeAppearance { font_size: FontSize::ExtraLarge, ..Default::default() };
+        let hz = render_badges_uniform(&badges, &font, LabelStyle::Text, xl, 1.0);
+        assert_ne!(pixel_digest(&hz[0]), PRE_FEATURE_GOLDENS[1].3);
     }
 
     #[test]
@@ -921,13 +970,40 @@ mod tests {
 
     #[test]
     fn text_fit_height_never_exceeds_base_height_for_supported_sizes() {
-        // The largest font size still fits in the base badge height, so enlarging
-        // text never changes row heights or vertical anchoring.
-        for scale in [0.5, 1.0, 1.25, 1.5, 3.4] {
-            let base_h = (BASE_BADGE_HEIGHT as f32 * scale).round() as u32;
-            let font_px = BASE_FONT_SIZE * scale * FontSize::ExtraLarge.scale_factor();
-            assert!(text_fit_height(font_px, scale) <= base_h + 1, "scale {scale}");
+        use crate::cache::ImageType;
+        use crate::services::db::{BadgeSize, ImageSize};
+        // Every badge scale production can produce (image size × badge size, in
+        // the same multiplication order as the handlers), combined with every
+        // font size the way `BadgeFonts::new` combines them. The text always
+        // fits in the base badge height, so font size never changes row heights
+        // or vertical anchoring.
+        let kinds = [ImageType::Poster, ImageType::Logo, ImageType::Backdrop, ImageType::Episode];
+        let image_sizes = [ImageSize::Small, ImageSize::Medium, ImageSize::Large, ImageSize::VeryLarge];
+        let badge_sizes = [BadgeSize::ExtraSmall, BadgeSize::Small, BadgeSize::Medium, BadgeSize::Large, BadgeSize::ExtraLarge];
+        let mut checked = 0;
+        for kind in kinds {
+            for image_size in image_sizes {
+                // `Small` is rejected for posters/logos before rendering.
+                if image_size == ImageSize::Small && matches!(kind, ImageType::Poster | ImageType::Logo) {
+                    continue;
+                }
+                for badge_size in badge_sizes {
+                    let badge_scale = image_size.badge_scale(kind) * badge_size.scale_factor();
+                    let base_h = ScaledDims::new(badge_scale).badge_height;
+                    for fs in ALL_FONT_SIZES {
+                        let fonts = BadgeFonts::new(&TEST_FONT, badge_scale * fs.scale_factor());
+                        let font_px = fonts.scale.y.max(fonts.label_scale.y);
+                        assert!(
+                            text_fit_height(font_px, badge_scale) <= base_h,
+                            "{kind:?}/{image_size:?}/{badge_size:?}/{fs:?}: text needs {} > base {base_h}",
+                            text_fit_height(font_px, badge_scale),
+                        );
+                        checked += 1;
+                    }
+                }
+            }
         }
+        assert_eq!(checked, (4 * 4 - 2) * 5 * 5);
         // But an even larger font would grow the badge instead of clipping.
         assert!(text_fit_height(BASE_FONT_SIZE * 2.0, 1.0) > BASE_BADGE_HEIGHT);
     }

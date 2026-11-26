@@ -522,11 +522,54 @@ describe('RenderSettingsForm', () => {
   })
 
   it('defaults a missing font size to medium', async () => {
+    // Settings from a server that predates the font-size fields. Mount directly
+    // (not via mountForm, whose merge with defaultSettings would put 'm' back)
+    // so the form's own fallback is what supplies the value.
+    const {
+      poster_font_size: _p,
+      logo_font_size: _l,
+      backdrop_font_size: _b,
+      episode_font_size: _e,
+      ...legacy
+    } = defaultSettings
+    const settings = legacy as RenderSettings
+    expect('poster_font_size' in settings).toBe(false)
     const fetchPreview = makeFetchPreview()
-    const { poster_font_size: _omit, ...legacy } = defaultSettings
-    mountForm(legacy as Partial<RenderSettings>, fetchPreview)
+    const fetchLogoPreview = makeFetchPreview()
+    const fetchBackdropPreview = makeFetchPreview()
+    const fetchEpisodePreview = makeFetchPreview()
+    const saveSettings = vi.fn().mockResolvedValue(null)
+    const wrapper = mount(RenderSettingsForm, {
+      props: {
+        settings,
+        loadSettings: vi.fn().mockResolvedValue(settings),
+        saveSettings,
+        fetchPreview,
+        fetchLogoPreview,
+        fetchBackdropPreview,
+        fetchEpisodePreview,
+      },
+      global: {
+        plugins: [createPinia()],
+        stubs: shadcnStubs,
+      },
+    })
     await flushPromises()
+
     expect(lastArg(fetchPreview.mock.calls[0]!)).toBe('m')
+    expect(lastArg(fetchLogoPreview.mock.calls[0]!)).toBe('m')
+    expect(lastArg(fetchBackdropPreview.mock.calls[0]!)).toBe('m')
+    expect(lastArg(fetchEpisodePreview.mock.calls[0]!)).toBe('m')
+
+    // Any edit triggers an auto-save; the saved payload carries 'm' too.
+    await wrapper.find('[data-testid="textless-checkbox"]').setValue(true)
+    await flushPromises()
+    expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
+      poster_font_size: 'm',
+      logo_font_size: 'm',
+      backdrop_font_size: 'm',
+      episode_font_size: 'm',
+    }))
   })
 
   it('changing the font size auto-saves it and refreshes the preview', async () => {
