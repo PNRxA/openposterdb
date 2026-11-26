@@ -47,6 +47,10 @@ function makeDefaults(overrides: Partial<FreeKeyDefaults> = {}): FreeKeyDefaults
     episode_position: 'bc',
     episode_badge_direction: 'd',
     episode_blur: false,
+    poster_font_size: 'm',
+    logo_font_size: 'm',
+    backdrop_font_size: 'm',
+    episode_font_size: 'm',
     ...overrides,
   }
 }
@@ -317,6 +321,7 @@ describe('FreeApiKeyCard', () => {
     await setSelectById(wrapper, 'free-badge-style', 'h')
     await setSelectById(wrapper, 'free-label-style', 't')
     await setSelectById(wrapper, 'free-badge-size', 'l')
+    await setSelectById(wrapper, 'free-font-size', 'xl')
     await setSelectById(wrapper, 'free-ratings-limit', '7')
     // A global control (lang) that should survive the switch.
     await setSelectById(wrapper, 'free-lang', 'en')
@@ -324,6 +329,7 @@ describe('FreeApiKeyCard', () => {
     expect(posterCurl).toContain('badge_style=h')
     expect(posterCurl).toContain('label_style=t')
     expect(posterCurl).toContain('badge_size=l')
+    expect(posterCurl).toContain('font_size=xl')
     expect(posterCurl).toContain('ratings_limit=7')
 
     // Switching type re-applies the new type's defaults: per-type overrides drop,
@@ -333,6 +339,7 @@ describe('FreeApiKeyCard', () => {
     expect(backdropCurl).not.toContain('badge_style=')
     expect(backdropCurl).not.toContain('label_style=')
     expect(backdropCurl).not.toContain('badge_size=')
+    expect(backdropCurl).not.toContain('font_size=')
     expect(backdropCurl).not.toContain('ratings_limit=')
     expect(backdropCurl).toContain('lang=en')
   })
@@ -534,6 +541,23 @@ describe('FreeApiKeyCard', () => {
     expect(text).toContain('Max badges: default (5)')
     expect(text).toContain('Source: default (Fanart.tv)')
     expect(text).toContain('Language: any (de)')
+  })
+
+  it('does not send font_size until one is chosen, then sends it for any image type', async () => {
+    const wrapper = mountCard(true)
+    expect(findCurlCode(wrapper)!.text()).not.toContain('font_size=')
+    for (const type of ['poster', 'logo', 'backdrop', 'episode']) {
+      await setSelectById(wrapper, 'free-image-type', type)
+      await setSelectById(wrapper, 'free-font-size', 'l')
+      expect(findCurlCode(wrapper)!.text()).toContain('font_size=l')
+    }
+  })
+
+  it('annotates the font size default per image type', async () => {
+    const wrapper = mountCard(true, makeDefaults({ poster_font_size: 'xl', logo_font_size: 's' }))
+    expect(wrapper.text()).toContain('Font size: default (Extra Large)')
+    await setSelectById(wrapper, 'free-image-type', 'logo')
+    expect(wrapper.text()).toContain('Font size: default (Small)')
   })
 
   it('reflects per-image-type defaults when switching image type', async () => {

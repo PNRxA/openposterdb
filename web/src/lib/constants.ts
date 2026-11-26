@@ -71,6 +71,7 @@ export const BADGE_STYLE_LABELS: Record<string, string> = { h: 'Horizontal', v: 
 export const BADGE_DIRECTION_LABELS: Record<string, string> = { h: 'Horizontal', v: 'Vertical', d: 'Auto' }
 export const LABEL_STYLE_LABELS: Record<string, string> = { t: 'Text', i: 'Icon', o: 'Official' }
 export const BADGE_SIZE_LABELS: Record<string, string> = { xs: 'Extra Small', s: 'Small', m: 'Medium', l: 'Large', xl: 'Extra Large' }
+export const FONT_SIZE_LABELS: Record<string, string> = { xs: 'Extra Small', s: 'Small', m: 'Medium', l: 'Large', xl: 'Extra Large' }
 export const BADGE_SHAPE_LABELS: Record<string, string> = { r: 'Rounded', p: 'Pill' }
 export const BADGE_BACKGROUND_LABELS: Record<string, string> = { d: 'Default', k: 'Dark', t: 'Transparent', n: 'None' }
 export const IMAGE_SOURCE_LABELS: Record<string, string> = { t: 'TMDB', f: 'Fanart.tv' }

@@ -8,6 +8,7 @@ import {
   BADGE_DIRECTION_LABELS,
   LABEL_STYLE_LABELS,
   BADGE_SIZE_LABELS,
+  FONT_SIZE_LABELS,
   BADGE_SHAPE_LABELS,
   BADGE_BACKGROUND_LABELS,
   IMAGE_SOURCE_LABELS,
@@ -114,6 +115,11 @@ describe('enum code → label maps', () => {
   it('badge size maps every xs–xl code', () => {
     expect(Object.keys(BADGE_SIZE_LABELS).sort()).toEqual(['l', 'm', 's', 'xl', 'xs'])
     expect(BADGE_SIZE_LABELS.m).toBe('Medium')
+  })
+
+  it('font size maps every xs–xl code like badge size', () => {
+    expect(FONT_SIZE_LABELS).toEqual(BADGE_SIZE_LABELS)
+    expect(FONT_SIZE_LABELS.m).toBe('Medium')
   })
 
   it('badge shape maps the r/p codes', () => {

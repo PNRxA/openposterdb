@@ -259,6 +259,28 @@ describe('api', () => {
     expect(url).toContain('ratings_order=imdb%2Crt%2Ctmdb')
   })
 
+  it('adminApi preview fetchers forward font_size only when provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await adminApi.previewPoster(3, 'imdb', 'bc', 'h', 'o', 'd', 'm', '', false, 'r', 'd', 'native', 'xl')
+    await adminApi.previewLogo(3, 'imdb', 'v', 'o', 'm', '', 'r', 'd', 'l')
+    await adminApi.previewBackdrop(3, 'imdb', 'v', 'o', 'm', 'tr', 'd', '', 'r', 'd', 0, 0, 's')
+    await adminApi.previewEpisode(3, 'imdb', 'v', 'o', 'l', 'tr', 'v', false, '', 'r', 'd', 'xs')
+    await adminApi.previewPoster(3, 'imdb')
+
+    const urls = fetchMock.mock.calls.map(c => c[0] as string)
+    expect(urls[0]).toContain('/api/admin/preview/poster')
+    expect(urls[0]).toContain('font_size=xl')
+    expect(urls[1]).toContain('/api/admin/preview/logo')
+    expect(urls[1]).toContain('font_size=l')
+    expect(urls[2]).toContain('/api/admin/preview/backdrop')
+    expect(urls[2]).toContain('font_size=s')
+    expect(urls[3]).toContain('/api/admin/preview/episode')
+    expect(urls[3]).toContain('font_size=xs')
+    expect(urls[4]).not.toContain('font_size')
+  })
+
   it('adminApi.previewPoster includes position when provided', async () => {
     const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
     vi.stubGlobal('fetch', fetchMock)
