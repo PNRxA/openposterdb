@@ -99,6 +99,13 @@ for val in xs s m l xl; do
 done
 end_section
 
+add_section "Poster - font_size"
+for val in xs s m l xl; do
+    path=$(fetch_image "font_size=$val" "poster-default" "font_size=$val" "jpg")
+    add_image "font_size=$val" "$path"
+done
+end_section
+
 add_section "Poster - badge_direction"
 for val in h v d; do
     path=$(fetch_image "badge_direction=$val" "poster-default" "badge_direction=$val" "jpg")
@@ -201,6 +208,13 @@ for val in xs s m l xl; do
 done
 end_section
 
+add_section "Logo - font_size"
+for val in xs s m l xl; do
+    path=$(fetch_image "logo_font_size=$val" "logo-default" "font_size=$val" "png")
+    add_image "font_size=$val" "$path"
+done
+end_section
+
 add_section "Logo - image_source"
 for val in t f; do
     path=$(fetch_image "logo_image_source=$val" "logo-default" "image_source=$val" "png")
@@ -259,6 +273,13 @@ add_section "Backdrop - badge_size"
 for val in xs s m l xl; do
     path=$(fetch_image "backdrop_badge_size=$val" "backdrop-default" "badge_size=$val" "jpg")
     add_image "badge_size=$val" "$path"
+done
+end_section
+
+add_section "Backdrop - font_size"
+for val in xs s m l xl; do
+    path=$(fetch_image "backdrop_font_size=$val" "backdrop-default" "font_size=$val" "jpg")
+    add_image "font_size=$val" "$path"
 done
 end_section
 
@@ -344,6 +365,13 @@ add_section "Episode - badge_size"
 for val in xs s m l xl; do
     path=$(fetch_image "episode_badge_size=$val" "episode-default" "badge_size=$val&ratings_order=imdb,tmdb" "jpg" "imdb" "$EPISODE_ID")
     add_image "badge_size=$val" "$path"
+done
+end_section
+
+add_section "Episode - font_size"
+for val in xs s m l xl; do
+    path=$(fetch_image "episode_font_size=$val" "episode-default" "font_size=$val&ratings_order=imdb,tmdb" "jpg" "imdb" "$EPISODE_ID")
+    add_image "font_size=$val" "$path"
 done
 end_section
 
