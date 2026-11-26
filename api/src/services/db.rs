@@ -284,13 +284,16 @@ impl BadgeBackground {
 
 impl_str_enum!(BadgeBackground);
 
-/// Visual appearance of a badge: its corner shape and background treatment.
-/// Bundled so it can be threaded through the render pipeline as one value.
-/// `BadgeAppearance::default()` reproduces the original badge look.
+/// Visual appearance of a badge: its corner shape, background treatment and
+/// rating-text size. Bundled so it can be threaded through the render pipeline
+/// as one value. `BadgeAppearance::default()` reproduces the original badge look.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BadgeAppearance {
     pub shape: BadgeShape,
     pub background: BadgeBackground,
+    /// Size of the badge text (rating value and text label), independent of the
+    /// badge size so text can grow without enlarging icons/padding.
+    pub font_size: FontSize,
 }
 
 impl Default for BadgeAppearance {
@@ -298,6 +301,7 @@ impl Default for BadgeAppearance {
         Self {
             shape: BadgeShape::Rounded,
             background: BadgeBackground::Default,
+            font_size: FontSize::Medium,
         }
     }
 }
@@ -735,6 +739,80 @@ impl BadgeSize {
 }
 
 impl_str_enum!(BadgeSize);
+
+// --- Font size ---
+
+pub fn default_font_size() -> FontSize {
+    FontSize::Medium
+}
+
+/// Size of the text drawn on a rating badge (the rating value, and the source
+/// label when the label style is text). Scales the text independently of
+/// [`BadgeSize`], which scales the whole badge (icons, padding, text). Uses the
+/// same `xs`..`xl` tokens as `BadgeSize`; `Medium` is the original text size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FontSize {
+    ExtraSmall,
+    Small,
+    Medium,
+    Large,
+    ExtraLarge,
+}
+
+impl FontSize {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::ExtraSmall => "xs",
+            Self::Small => "s",
+            Self::Medium => "m",
+            Self::Large => "l",
+            Self::ExtraLarge => "xl",
+        }
+    }
+
+    pub fn parse(s: &str) -> Result<Self, AppError> {
+        match s {
+            "xs" => Ok(Self::ExtraSmall),
+            "s" => Ok(Self::Small),
+            "m" => Ok(Self::Medium),
+            "l" => Ok(Self::Large),
+            "xl" => Ok(Self::ExtraLarge),
+            _ => Err(AppError::BadRequest(
+                "font_size must be 'xs', 's', 'm', 'l', or 'xl'".into(),
+            )),
+        }
+    }
+
+    /// Multiplier applied to the badge text size, on top of the badge scale.
+    /// Kept in a narrower range than `BadgeSize` so text stays legible at the
+    /// small end and still fits inside the (unchanged) badge height at the
+    /// large end.
+    pub fn scale_factor(self) -> f32 {
+        match self {
+            Self::ExtraSmall => 0.75,
+            Self::Small => 0.875,
+            Self::Medium => 1.0,
+            Self::Large => 1.25,
+            Self::ExtraLarge => 1.5,
+        }
+    }
+
+    /// Cache key suffix. `Medium` (the default) returns an empty string so that
+    /// cache keys written before this setting existed — all rendered at the
+    /// original text size — remain valid with no migration. Other sizes emit a
+    /// `.t{size}` token, producing a distinct cache entry.
+    pub fn cache_suffix(self) -> &'static str {
+        match self {
+            Self::ExtraSmall => ".txs",
+            Self::Small => ".ts",
+            Self::Medium => "",
+            Self::Large => ".tl",
+            Self::ExtraLarge => ".txl",
+        }
+    }
+}
+
+impl_str_enum!(FontSize);
 
 // --- Poster aspect-ratio fit ---
 
@@ -1423,6 +1501,56 @@ mod tests {
     }
 
     #[test]
+    fn font_size_round_trip_and_tokens() {
+        let all = [
+            FontSize::ExtraSmall, FontSize::Small, FontSize::Medium,
+            FontSize::Large, FontSize::ExtraLarge,
+        ];
+        for variant in all {
+            let s = variant.as_str();
+            assert_eq!(FontSize::parse(s).unwrap(), variant, "round-trip failed for {s}");
+            let json = serde_json::to_string(&variant).unwrap();
+            let deser: FontSize = serde_json::from_str(&json).unwrap();
+            assert_eq!(deser, variant);
+        }
+        assert!(FontSize::parse("xxl").is_err());
+        assert!(FontSize::parse("").is_err());
+        assert_eq!(default_font_size(), FontSize::Medium);
+        // Medium must keep an empty token (and 1.0 scale) so pre-feature cache
+        // keys — all rendered at the original text size — stay valid.
+        assert_eq!(FontSize::Medium.cache_suffix(), "");
+        assert_eq!(FontSize::Medium.scale_factor(), 1.0);
+        assert_eq!(FontSize::ExtraSmall.cache_suffix(), ".txs");
+        assert_eq!(FontSize::Small.cache_suffix(), ".ts");
+        assert_eq!(FontSize::Large.cache_suffix(), ".tl");
+        assert_eq!(FontSize::ExtraLarge.cache_suffix(), ".txl");
+        // Scale factors strictly increase.
+        for w in all.windows(2) {
+            assert!(w[0].scale_factor() < w[1].scale_factor());
+        }
+    }
+
+    #[test]
+    fn parse_global_render_settings_reads_font_size() {
+        let mut globals = HashMap::new();
+        globals.insert("poster_font_size".into(), "xl".into());
+        globals.insert("logo_font_size".into(), "l".into());
+        globals.insert("backdrop_font_size".into(), "s".into());
+        globals.insert("episode_font_size".into(), "bogus".into());
+        let settings = parse_global_render_settings(&globals);
+        assert_eq!(settings.poster_font_size, FontSize::ExtraLarge);
+        assert_eq!(settings.logo_font_size, FontSize::Large);
+        assert_eq!(settings.backdrop_font_size, FontSize::Small);
+        // Invalid values fall back to the default.
+        assert_eq!(settings.episode_font_size, FontSize::Medium);
+        // Font size is carried into the per-type badge appearance.
+        assert_eq!(settings.poster_appearance().font_size, FontSize::ExtraLarge);
+        assert_eq!(settings.logo_appearance().font_size, FontSize::Large);
+        assert_eq!(settings.backdrop_appearance().font_size, FontSize::Small);
+        assert_eq!(settings.episode_appearance().font_size, FontSize::Medium);
+    }
+
+    #[test]
     fn badge_style_display_matches_as_str() {
         assert_eq!(format!("{}", BadgeStyle::Horizontal), "h");
         assert_eq!(format!("{}", BadgeStyle::Vertical), "v");
@@ -1594,6 +1722,11 @@ mod tests {
         assert_eq!(defaults.logo_badge_size, BadgeSize::Medium);
         assert_eq!(defaults.backdrop_badge_size, BadgeSize::Medium);
         assert_eq!(defaults.poster_fit, PosterFit::Native);
+        assert_eq!(defaults.poster_font_size, FontSize::Medium);
+        assert_eq!(defaults.logo_font_size, FontSize::Medium);
+        assert_eq!(defaults.backdrop_font_size, FontSize::Medium);
+        assert_eq!(defaults.episode_font_size, FontSize::Medium);
+        assert_eq!(defaults.poster_appearance(), BadgeAppearance::default());
         assert!(defaults.is_default);
     }
 
@@ -2131,6 +2264,10 @@ pub struct UpsertApiKeySettings<'a> {
     pub episode_badge_background: &'a str,
     pub backdrop_edge_inset_x: i32,
     pub backdrop_edge_inset_y: i32,
+    pub poster_font_size: &'a str,
+    pub logo_font_size: &'a str,
+    pub backdrop_font_size: &'a str,
+    pub episode_font_size: &'a str,
 }
 
 pub async fn upsert_api_key_settings(
@@ -2179,6 +2316,10 @@ pub async fn upsert_api_key_settings(
         episode_badge_background: Set(params.episode_badge_background.to_string()),
         backdrop_edge_inset_x: Set(params.backdrop_edge_inset_x),
         backdrop_edge_inset_y: Set(params.backdrop_edge_inset_y),
+        poster_font_size: Set(params.poster_font_size.to_string()),
+        logo_font_size: Set(params.logo_font_size.to_string()),
+        backdrop_font_size: Set(params.backdrop_font_size.to_string()),
+        episode_font_size: Set(params.episode_font_size.to_string()),
     };
     api_key_settings::Entity::insert(model)
         .on_conflict(
@@ -2224,6 +2365,10 @@ pub async fn upsert_api_key_settings(
                     api_key_settings::Column::EpisodeBadgeBackground,
                     api_key_settings::Column::BackdropEdgeInsetX,
                     api_key_settings::Column::BackdropEdgeInsetY,
+                    api_key_settings::Column::PosterFontSize,
+                    api_key_settings::Column::LogoFontSize,
+                    api_key_settings::Column::BackdropFontSize,
+                    api_key_settings::Column::EpisodeFontSize,
                 ])
                 .to_owned(),
         )
@@ -2296,24 +2441,28 @@ pub struct RenderSettings {
     pub logo_badge_background: BadgeBackground,
     pub backdrop_badge_background: BadgeBackground,
     pub episode_badge_background: BadgeBackground,
+    pub poster_font_size: FontSize,
+    pub logo_font_size: FontSize,
+    pub backdrop_font_size: FontSize,
+    pub episode_font_size: FontSize,
 }
 
 impl RenderSettings {
-    /// Badge appearance (shape + background) for posters.
+    /// Badge appearance (shape + background + font size) for posters.
     pub fn poster_appearance(&self) -> BadgeAppearance {
-        BadgeAppearance { shape: self.poster_badge_shape, background: self.poster_badge_background }
+        BadgeAppearance { shape: self.poster_badge_shape, background: self.poster_badge_background, font_size: self.poster_font_size }
     }
-    /// Badge appearance (shape + background) for logos.
+    /// Badge appearance (shape + background + font size) for logos.
     pub fn logo_appearance(&self) -> BadgeAppearance {
-        BadgeAppearance { shape: self.logo_badge_shape, background: self.logo_badge_background }
+        BadgeAppearance { shape: self.logo_badge_shape, background: self.logo_badge_background, font_size: self.logo_font_size }
     }
-    /// Badge appearance (shape + background) for backdrops.
+    /// Badge appearance (shape + background + font size) for backdrops.
     pub fn backdrop_appearance(&self) -> BadgeAppearance {
-        BadgeAppearance { shape: self.backdrop_badge_shape, background: self.backdrop_badge_background }
+        BadgeAppearance { shape: self.backdrop_badge_shape, background: self.backdrop_badge_background, font_size: self.backdrop_font_size }
     }
-    /// Badge appearance (shape + background) for episode stills.
+    /// Badge appearance (shape + background + font size) for episode stills.
     pub fn episode_appearance(&self) -> BadgeAppearance {
-        BadgeAppearance { shape: self.episode_badge_shape, background: self.episode_badge_background }
+        BadgeAppearance { shape: self.episode_badge_shape, background: self.episode_badge_background, font_size: self.episode_font_size }
     }
 }
 
@@ -2361,6 +2510,10 @@ impl Default for RenderSettings {
             logo_badge_background: default_badge_background(),
             backdrop_badge_background: default_badge_background(),
             episode_badge_background: default_badge_background(),
+            poster_font_size: default_font_size(),
+            logo_font_size: default_font_size(),
+            backdrop_font_size: default_font_size(),
+            episode_font_size: default_font_size(),
         }
     }
 }
@@ -2449,6 +2602,10 @@ pub fn parse_global_render_settings(globals: &HashMap<String, String>) -> Render
         logo_badge_background: global_or(globals, "logo_badge_background", BadgeBackground::parse, defaults.logo_badge_background),
         backdrop_badge_background: global_or(globals, "backdrop_badge_background", BadgeBackground::parse, defaults.backdrop_badge_background),
         episode_badge_background: global_or(globals, "episode_badge_background", BadgeBackground::parse, defaults.episode_badge_background),
+        poster_font_size: global_or(globals, "poster_font_size", FontSize::parse, defaults.poster_font_size),
+        logo_font_size: global_or(globals, "logo_font_size", FontSize::parse, defaults.logo_font_size),
+        backdrop_font_size: global_or(globals, "backdrop_font_size", FontSize::parse, defaults.backdrop_font_size),
+        episode_font_size: global_or(globals, "episode_font_size", FontSize::parse, defaults.episode_font_size),
     }
 }
 
@@ -2502,6 +2659,10 @@ pub async fn get_effective_render_settings(
                 logo_badge_background: parse_setting_or_default(&s.logo_badge_background, "logo_badge_background", BadgeBackground::parse, default_badge_background()),
                 backdrop_badge_background: parse_setting_or_default(&s.backdrop_badge_background, "backdrop_badge_background", BadgeBackground::parse, default_badge_background()),
                 episode_badge_background: parse_setting_or_default(&s.episode_badge_background, "episode_badge_background", BadgeBackground::parse, default_badge_background()),
+                poster_font_size: parse_setting_or_default(&s.poster_font_size, "poster_font_size", FontSize::parse, default_font_size()),
+                logo_font_size: parse_setting_or_default(&s.logo_font_size, "logo_font_size", FontSize::parse, default_font_size()),
+                backdrop_font_size: parse_setting_or_default(&s.backdrop_font_size, "backdrop_font_size", FontSize::parse, default_font_size()),
+                episode_font_size: parse_setting_or_default(&s.episode_font_size, "episode_font_size", FontSize::parse, default_font_size()),
             };
         }
         Ok(None) => {} // no per-key override, fall through

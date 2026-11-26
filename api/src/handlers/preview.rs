@@ -123,6 +123,7 @@ fn preview_render_settings(
             s.poster_badge_direction = badge_direction;
             s.poster_badge_shape = appearance.shape;
             s.poster_badge_background = appearance.background;
+            s.poster_font_size = appearance.font_size;
         }
         cache::ImageType::Logo => {
             s.logo_ratings_limit = ratings_limit;
@@ -131,6 +132,7 @@ fn preview_render_settings(
             s.logo_badge_size = badge_size;
             s.logo_badge_shape = appearance.shape;
             s.logo_badge_background = appearance.background;
+            s.logo_font_size = appearance.font_size;
         }
         cache::ImageType::Backdrop => {
             s.backdrop_ratings_limit = ratings_limit;
@@ -141,6 +143,7 @@ fn preview_render_settings(
             s.backdrop_badge_direction = badge_direction;
             s.backdrop_badge_shape = appearance.shape;
             s.backdrop_badge_background = appearance.background;
+            s.backdrop_font_size = appearance.font_size;
         }
         cache::ImageType::Episode => {
             s.episode_ratings_limit = ratings_limit;
@@ -151,17 +154,19 @@ fn preview_render_settings(
             s.episode_badge_direction = badge_direction;
             s.episode_badge_shape = appearance.shape;
             s.episode_badge_background = appearance.background;
+            s.episode_font_size = appearance.font_size;
         }
     }
     s
 }
 
-/// Build the badge appearance (shape + background) from preview query params,
+/// Build the badge appearance (shape + background + font size) from preview query params,
 /// falling back to the server defaults.
 fn preview_badge_appearance(query: &ImageQuery) -> BadgeAppearance {
     BadgeAppearance {
         shape: query.badge_shape.unwrap_or_else(db::default_badge_shape),
         background: query.badge_background.unwrap_or_else(db::default_badge_background),
+        font_size: query.font_size.unwrap_or_else(db::default_font_size),
     }
 }
 

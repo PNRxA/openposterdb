@@ -183,6 +183,10 @@ async fn global_settings_round_trip_all_fields() {
         "poster_badge_size": "xl",
         "logo_badge_size": "xs",
         "backdrop_badge_size": "l",
+        "poster_font_size": "xl",
+        "logo_font_size": "l",
+        "backdrop_font_size": "s",
+        "episode_font_size": "xs",
     });
     let req = authed_request("PUT", "/api/admin/settings", &token, Some(update.clone()));
     let res = app.clone().oneshot(req).await.unwrap();
@@ -213,6 +217,10 @@ async fn global_settings_round_trip_all_fields() {
     assert_eq!(settings["poster_badge_size"], "xl");
     assert_eq!(settings["logo_badge_size"], "xs");
     assert_eq!(settings["backdrop_badge_size"], "l");
+    assert_eq!(settings["poster_font_size"], "xl");
+    assert_eq!(settings["logo_font_size"], "l");
+    assert_eq!(settings["backdrop_font_size"], "s");
+    assert_eq!(settings["episode_font_size"], "xs");
 }
 
 // --- Per-key settings round-trip ---
@@ -230,6 +238,8 @@ async fn per_key_settings_round_trip() {
     let defaults = parse_json(res).await;
     assert_eq!(defaults["is_default"], true);
     assert_eq!(defaults["poster_badge_size"], "m");
+    assert_eq!(defaults["poster_font_size"], "m");
+    assert_eq!(defaults["episode_font_size"], "m");
 
     // Set per-key overrides
     let update = json!({
@@ -250,6 +260,10 @@ async fn per_key_settings_round_trip() {
         "poster_badge_size": "s",
         "logo_badge_size": "l",
         "backdrop_badge_size": "xl",
+        "poster_font_size": "l",
+        "logo_font_size": "xl",
+        "backdrop_font_size": "xs",
+        "episode_font_size": "s",
     });
     let req = authed_request("PUT", &format!("/api/keys/{key_id}/settings"), &token, Some(update));
     let res = app.clone().oneshot(req).await.unwrap();
@@ -272,6 +286,10 @@ async fn per_key_settings_round_trip() {
     assert_eq!(settings["poster_badge_size"], "s");
     assert_eq!(settings["logo_badge_size"], "l");
     assert_eq!(settings["backdrop_badge_size"], "xl");
+    assert_eq!(settings["poster_font_size"], "l");
+    assert_eq!(settings["logo_font_size"], "xl");
+    assert_eq!(settings["backdrop_font_size"], "xs");
+    assert_eq!(settings["episode_font_size"], "s");
     assert_eq!(settings["logo_ratings_limit"], 4);
     assert_eq!(settings["backdrop_ratings_limit"], 6);
 }
@@ -362,6 +380,7 @@ async fn self_service_settings_round_trip() {
         "poster_badge_size": "l",
         "logo_badge_size": "s",
         "backdrop_badge_size": "xs",
+        "poster_font_size": "xl",
     });
     let req = Request::builder()
         .method("PUT")
@@ -391,6 +410,9 @@ async fn self_service_settings_round_trip() {
     assert_eq!(settings["poster_badge_size"], "l");
     assert_eq!(settings["logo_badge_size"], "s");
     assert_eq!(settings["backdrop_badge_size"], "xs");
+    assert_eq!(settings["poster_font_size"], "xl");
+    // Omitted font sizes fall back to the default.
+    assert_eq!(settings["logo_font_size"], "m");
 
     // Reset own settings
     let req = Request::builder()
@@ -592,6 +614,57 @@ async fn preview_badge_size_produces_different_images() {
     assert_eq!(body_s[0], 0xFF);
     assert_eq!(body_xl[0], 0xFF);
     assert_ne!(body_s, body_xl);
+}
+
+#[tokio::test]
+async fn preview_font_size_produces_different_images() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    let fetch = |q: &str| {
+        let app = app.clone();
+        let token = token.clone();
+        let uri = format!("/api/admin/preview/poster?ratings_limit=3{q}");
+        async move {
+            let res = app.oneshot(authed_request("GET", &uri, &token, None)).await.unwrap();
+            assert_eq!(res.status(), StatusCode::OK);
+            res.into_body().collect().await.unwrap().to_bytes()
+        }
+    };
+
+    let default = fetch("").await;
+    // Explicit `m` is the default — same image (and same cache key).
+    assert_eq!(default, fetch("&font_size=m").await);
+    let xl = fetch("&font_size=xl").await;
+    let xs = fetch("&font_size=xs").await;
+    assert_eq!(xl[0], 0xFF);
+    assert_ne!(default, xl);
+    assert_ne!(default, xs);
+    assert_ne!(xs, xl);
+}
+
+#[tokio::test]
+async fn preview_font_size_rejects_invalid() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+    let res = app.clone().oneshot(
+        authed_request("GET", "/api/admin/preview/poster?font_size=huge", &token, None),
+    ).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn preview_font_size_accepted_for_all_kinds() {
+    let (app, _state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+    for kind in ["logo", "backdrop", "episode"] {
+        for q in ["", "?font_size=xl"] {
+            let res = app.clone().oneshot(
+                authed_request("GET", &format!("/api/admin/preview/{kind}{q}"), &token, None),
+            ).await.unwrap();
+            assert_eq!(res.status(), StatusCode::OK, "{kind}{q}");
+        }
+    }
 }
 
 // --- Logo/Backdrop preview endpoints ---

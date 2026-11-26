@@ -511,3 +511,53 @@ async fn v003_skips_filesystem_when_external_cache_only() {
     );
     assert!(!poster_dir.join("tt1@mil.pbc.sh.li.dh.bm.shr.bgd.zm.jpg").exists());
 }
+
+// --- schema migrations ---
+
+/// An `api_key_settings` row created before the font-size columns existed gets
+/// the default (`m`) for every image type once the migrations run, and running
+/// the migrations again (every startup) is a no-op.
+#[tokio::test]
+async fn font_size_columns_backfill_existing_rows_with_default() {
+    let sqlite_opts = sqlx::sqlite::SqliteConnectOptions::new()
+        .filename(":memory:")
+        .create_if_missing(true)
+        .pragma("foreign_keys", "ON");
+    let pool = sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(sqlite_opts)
+        .await
+        .unwrap();
+    let db = SqlxSqliteConnector::from_sqlx_sqlite_pool(pool);
+
+    // Original schema only (no migrations yet) + a pre-existing settings row.
+    for sql in openposterdb_api::SCHEMA_SQL {
+        db.execute_unprepared(sql).await.unwrap();
+    }
+    db.execute_unprepared("INSERT INTO admin_users (username, password_hash) VALUES ('a', 'x')").await.unwrap();
+    db.execute_unprepared("INSERT INTO api_keys (name, key_hash, key_prefix, created_by) VALUES ('k', 'h', 'p', 1)").await.unwrap();
+    db.execute_unprepared("INSERT INTO api_key_settings (api_key_id) VALUES (1)").await.unwrap();
+
+    for _ in 0..2 {
+        for (sql, expected_err) in openposterdb_api::MIGRATIONS {
+            match db.execute_unprepared(sql).await {
+                Ok(_) => {}
+                Err(e) if e.to_string().to_lowercase().contains(expected_err) => {}
+                Err(e) => panic!("migration failed: {e}\n  SQL: {sql}"),
+            }
+        }
+    }
+
+    let row = db
+        .query_one(sea_orm::Statement::from_string(
+            sea_orm::DatabaseBackend::Sqlite,
+            "SELECT poster_font_size, logo_font_size, backdrop_font_size, episode_font_size FROM api_key_settings WHERE api_key_id = 1",
+        ))
+        .await
+        .unwrap()
+        .expect("row should exist");
+    for col in ["poster_font_size", "logo_font_size", "backdrop_font_size", "episode_font_size"] {
+        let v: String = row.try_get("", col).unwrap();
+        assert_eq!(v, "m", "{col} should default to 'm'");
+    }
+}

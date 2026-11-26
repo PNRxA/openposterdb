@@ -46,6 +46,10 @@ export interface FreeKeyDefaults {
   logo_badge_background: string
   backdrop_badge_background: string
   episode_badge_background: string
+  poster_font_size: string
+  logo_font_size: string
+  backdrop_font_size: string
+  episode_font_size: string
 }
 
 export const authApi = {

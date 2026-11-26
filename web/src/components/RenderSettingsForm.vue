@@ -59,6 +59,10 @@ export interface RenderSettings {
   logo_badge_background: string
   backdrop_badge_background: string
   episode_badge_background: string
+  poster_font_size: string
+  logo_font_size: string
+  backdrop_font_size: string
+  episode_font_size: string
 }
 
 const props = defineProps<{
@@ -67,10 +71,10 @@ const props = defineProps<{
   loadSettings: () => Promise<RenderSettings | null>
   saveSettings: (s: SaveSettingsPayload) => Promise<string | null>
   resetSettings?: () => Promise<boolean>
-  fetchPreview: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string, badgeSize?: string, ratingsExclude?: string, posterSplit?: boolean, badgeShape?: string, badgeBackground?: string, posterFit?: string) => Promise<Response>
-  fetchLogoPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, ratingsExclude?: string, badgeShape?: string, badgeBackground?: string) => Promise<Response>
-  fetchBackdropPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, ratingsExclude?: string, badgeShape?: string, badgeBackground?: string, edgeInsetX?: number, edgeInsetY?: number) => Promise<Response>
-  fetchEpisodePreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, blur?: boolean, ratingsExclude?: string, badgeShape?: string, badgeBackground?: string) => Promise<Response>
+  fetchPreview: (ratingsLimit: number, ratingsOrder: string, posterPosition?: string, badgeStyle?: string, labelStyle?: string, badgeDirection?: string, badgeSize?: string, ratingsExclude?: string, posterSplit?: boolean, badgeShape?: string, badgeBackground?: string, posterFit?: string, fontSize?: string) => Promise<Response>
+  fetchLogoPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, ratingsExclude?: string, badgeShape?: string, badgeBackground?: string, fontSize?: string) => Promise<Response>
+  fetchBackdropPreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, ratingsExclude?: string, badgeShape?: string, badgeBackground?: string, edgeInsetX?: number, edgeInsetY?: number, fontSize?: string) => Promise<Response>
+  fetchEpisodePreview?: (ratingsLimit: number, ratingsOrder: string, badgeStyle?: string, labelStyle?: string, badgeSize?: string, position?: string, badgeDirection?: string, blur?: boolean, ratingsExclude?: string, badgeShape?: string, badgeBackground?: string, fontSize?: string) => Promise<Response>
 }>()
 
 const editFanart = ref(props.settings.image_source === 'f')
@@ -116,6 +120,10 @@ const editPosterBadgeBackground = ref(props.settings.poster_badge_background || 
 const editLogoBadgeBackground = ref(props.settings.logo_badge_background || 'd')
 const editBackdropBadgeBackground = ref(props.settings.backdrop_badge_background || 'd')
 const editEpisodeBadgeBackground = ref(props.settings.episode_badge_background || 'd')
+const editPosterFontSize = ref(props.settings.poster_font_size || 'm')
+const editLogoFontSize = ref(props.settings.logo_font_size || 'm')
+const editBackdropFontSize = ref(props.settings.backdrop_font_size || 'm')
+const editEpisodeFontSize = ref(props.settings.episode_font_size || 'm')
 
 // Which edges the current backdrop position anchors to. The horizontal inset
 // only applies to left/right positions and the vertical inset only to top/bottom
@@ -170,6 +178,10 @@ function applySettings(s: RenderSettings) {
   editLogoBadgeBackground.value = s.logo_badge_background || 'd'
   editBackdropBadgeBackground.value = s.backdrop_badge_background || 'd'
   editEpisodeBadgeBackground.value = s.episode_badge_background || 'd'
+  editPosterFontSize.value = s.poster_font_size || 'm'
+  editLogoFontSize.value = s.logo_font_size || 'm'
+  editBackdropFontSize.value = s.backdrop_font_size || 'm'
+  editEpisodeFontSize.value = s.episode_font_size || 'm'
 }
 const currentSettings = ref<RenderSettings>(props.settings)
 const saving = ref(false)
@@ -253,6 +265,10 @@ async function autoSave() {
       logo_badge_background: editLogoBadgeBackground.value,
       backdrop_badge_background: editBackdropBadgeBackground.value,
       episode_badge_background: editEpisodeBadgeBackground.value,
+      poster_font_size: editPosterFontSize.value,
+      logo_font_size: editLogoFontSize.value,
+      backdrop_font_size: editBackdropFontSize.value,
+      episode_font_size: editEpisodeFontSize.value,
     })
     if (err) {
       error.value = err
@@ -279,7 +295,7 @@ async function autoSave() {
 
 // Auto-save on any setting change
 watch(
-  [editSource, editLang, editTextless, editRatingsLimit, editRatingsOrder, editRatingsExclude, editPosterPosition, editLogoRatingsLimit, editBackdropRatingsLimit, editPosterBadgeStyle, editLogoBadgeStyle, editBackdropBadgeStyle, editPosterLabelStyle, editLogoLabelStyle, editBackdropLabelStyle, editPosterBadgeDirection, editPosterBadgeSplit, editPosterFit, editPosterBadgeSize, editLogoBadgeSize, editBackdropBadgeSize, editBackdropPosition, editBackdropBadgeDirection, editBackdropEdgeInsetX, editBackdropEdgeInsetY, editEpisodeRatingsLimit, editEpisodeBadgeStyle, editEpisodeLabelStyle, editEpisodeBadgeSize, editEpisodePosition, editEpisodeBadgeDirection, editEpisodeBlur, editPosterBadgeShape, editLogoBadgeShape, editBackdropBadgeShape, editEpisodeBadgeShape, editPosterBadgeBackground, editLogoBadgeBackground, editBackdropBadgeBackground, editEpisodeBadgeBackground],
+  [editSource, editLang, editTextless, editRatingsLimit, editRatingsOrder, editRatingsExclude, editPosterPosition, editLogoRatingsLimit, editBackdropRatingsLimit, editPosterBadgeStyle, editLogoBadgeStyle, editBackdropBadgeStyle, editPosterLabelStyle, editLogoLabelStyle, editBackdropLabelStyle, editPosterBadgeDirection, editPosterBadgeSplit, editPosterFit, editPosterBadgeSize, editLogoBadgeSize, editBackdropBadgeSize, editBackdropPosition, editBackdropBadgeDirection, editBackdropEdgeInsetX, editBackdropEdgeInsetY, editEpisodeRatingsLimit, editEpisodeBadgeStyle, editEpisodeLabelStyle, editEpisodeBadgeSize, editEpisodePosition, editEpisodeBadgeDirection, editEpisodeBlur, editPosterBadgeShape, editLogoBadgeShape, editBackdropBadgeShape, editEpisodeBadgeShape, editPosterBadgeBackground, editLogoBadgeBackground, editBackdropBadgeBackground, editEpisodeBadgeBackground, editPosterFontSize, editLogoFontSize, editBackdropFontSize, editEpisodeFontSize],
   () => {
     if (syncing) return
     autoSave()
@@ -370,24 +386,24 @@ let backdropPreviewTimer: ReturnType<typeof setTimeout> | null = null
 let episodePreviewTimer: ReturnType<typeof setTimeout> | null = null
 
 function updatePosterPreview() {
-  fetchPreviewImage(posterPreview.value, (_limit, order) => props.fetchPreview(editRatingsLimit.value, order, editPosterPosition.value, editPosterBadgeStyle.value, editPosterLabelStyle.value, editPosterBadgeDirection.value, editPosterBadgeSize.value, editRatingsExclude.value.join(','), editPosterBadgeSplit.value, editPosterBadgeShape.value, editPosterBadgeBackground.value, editPosterFit.value))
+  fetchPreviewImage(posterPreview.value, (_limit, order) => props.fetchPreview(editRatingsLimit.value, order, editPosterPosition.value, editPosterBadgeStyle.value, editPosterLabelStyle.value, editPosterBadgeDirection.value, editPosterBadgeSize.value, editRatingsExclude.value.join(','), editPosterBadgeSplit.value, editPosterBadgeShape.value, editPosterBadgeBackground.value, editPosterFit.value, editPosterFontSize.value))
 }
 
 function updateLogoPreview() {
   if (props.fetchLogoPreview) {
-    fetchPreviewImage(logoPreview.value, (_limit, order) => props.fetchLogoPreview!(editLogoRatingsLimit.value, order, editLogoBadgeStyle.value, editLogoLabelStyle.value, editLogoBadgeSize.value, editRatingsExclude.value.join(','), editLogoBadgeShape.value, editLogoBadgeBackground.value))
+    fetchPreviewImage(logoPreview.value, (_limit, order) => props.fetchLogoPreview!(editLogoRatingsLimit.value, order, editLogoBadgeStyle.value, editLogoLabelStyle.value, editLogoBadgeSize.value, editRatingsExclude.value.join(','), editLogoBadgeShape.value, editLogoBadgeBackground.value, editLogoFontSize.value))
   }
 }
 
 function updateBackdropPreview() {
   if (props.fetchBackdropPreview) {
-    fetchPreviewImage(backdropPreview.value, (_limit, order) => props.fetchBackdropPreview!(editBackdropRatingsLimit.value, order, editBackdropBadgeStyle.value, editBackdropLabelStyle.value, editBackdropBadgeSize.value, editBackdropPosition.value, editBackdropBadgeDirection.value, editRatingsExclude.value.join(','), editBackdropBadgeShape.value, editBackdropBadgeBackground.value, editBackdropEdgeInsetX.value, editBackdropEdgeInsetY.value))
+    fetchPreviewImage(backdropPreview.value, (_limit, order) => props.fetchBackdropPreview!(editBackdropRatingsLimit.value, order, editBackdropBadgeStyle.value, editBackdropLabelStyle.value, editBackdropBadgeSize.value, editBackdropPosition.value, editBackdropBadgeDirection.value, editRatingsExclude.value.join(','), editBackdropBadgeShape.value, editBackdropBadgeBackground.value, editBackdropEdgeInsetX.value, editBackdropEdgeInsetY.value, editBackdropFontSize.value))
   }
 }
 
 function updateEpisodePreview() {
   if (props.fetchEpisodePreview) {
-    fetchPreviewImage(episodePreview.value, (_limit, order) => props.fetchEpisodePreview!(editEpisodeRatingsLimit.value, order, editEpisodeBadgeStyle.value, editEpisodeLabelStyle.value, editEpisodeBadgeSize.value, editEpisodePosition.value, editEpisodeBadgeDirection.value, editEpisodeBlur.value, editRatingsExclude.value.join(','), editEpisodeBadgeShape.value, editEpisodeBadgeBackground.value))
+    fetchPreviewImage(episodePreview.value, (_limit, order) => props.fetchEpisodePreview!(editEpisodeRatingsLimit.value, order, editEpisodeBadgeStyle.value, editEpisodeLabelStyle.value, editEpisodeBadgeSize.value, editEpisodePosition.value, editEpisodeBadgeDirection.value, editEpisodeBlur.value, editRatingsExclude.value.join(','), editEpisodeBadgeShape.value, editEpisodeBadgeBackground.value, editEpisodeFontSize.value))
   }
 }
 
@@ -412,28 +428,28 @@ watch([editRatingsOrder, editRatingsExclude], () => {
 }, { deep: true })
 
 // Poster-only settings
-watch([editRatingsLimit, editPosterPosition, editPosterBadgeStyle, editPosterLabelStyle, editPosterBadgeDirection, editPosterBadgeSplit, editPosterFit, editPosterBadgeSize, editPosterBadgeShape, editPosterBadgeBackground], () => {
+watch([editRatingsLimit, editPosterPosition, editPosterBadgeStyle, editPosterLabelStyle, editPosterBadgeDirection, editPosterBadgeSplit, editPosterFit, editPosterBadgeSize, editPosterBadgeShape, editPosterBadgeBackground, editPosterFontSize], () => {
   if (syncing) return
   if (posterPreviewTimer) clearTimeout(posterPreviewTimer)
   posterPreviewTimer = setTimeout(updatePosterPreview, 500)
 })
 
 // Logo-only settings
-watch([editLogoRatingsLimit, editLogoBadgeStyle, editLogoLabelStyle, editLogoBadgeSize, editLogoBadgeShape, editLogoBadgeBackground], () => {
+watch([editLogoRatingsLimit, editLogoBadgeStyle, editLogoLabelStyle, editLogoBadgeSize, editLogoBadgeShape, editLogoBadgeBackground, editLogoFontSize], () => {
   if (syncing) return
   if (logoPreviewTimer) clearTimeout(logoPreviewTimer)
   logoPreviewTimer = setTimeout(updateLogoPreview, 500)
 })
 
 // Backdrop-only settings
-watch([editBackdropRatingsLimit, editBackdropBadgeStyle, editBackdropLabelStyle, editBackdropBadgeSize, editBackdropPosition, editBackdropBadgeDirection, editBackdropEdgeInsetX, editBackdropEdgeInsetY, editBackdropBadgeShape, editBackdropBadgeBackground], () => {
+watch([editBackdropRatingsLimit, editBackdropBadgeStyle, editBackdropLabelStyle, editBackdropBadgeSize, editBackdropPosition, editBackdropBadgeDirection, editBackdropEdgeInsetX, editBackdropEdgeInsetY, editBackdropBadgeShape, editBackdropBadgeBackground, editBackdropFontSize], () => {
   if (syncing) return
   if (backdropPreviewTimer) clearTimeout(backdropPreviewTimer)
   backdropPreviewTimer = setTimeout(updateBackdropPreview, 500)
 })
 
 // Episode-only settings
-watch([editEpisodeRatingsLimit, editEpisodeBadgeStyle, editEpisodeLabelStyle, editEpisodeBadgeSize, editEpisodePosition, editEpisodeBadgeDirection, editEpisodeBlur, editEpisodeBadgeShape, editEpisodeBadgeBackground], () => {
+watch([editEpisodeRatingsLimit, editEpisodeBadgeStyle, editEpisodeLabelStyle, editEpisodeBadgeSize, editEpisodePosition, editEpisodeBadgeDirection, editEpisodeBlur, editEpisodeBadgeShape, editEpisodeBadgeBackground, editEpisodeFontSize], () => {
   if (syncing) return
   if (episodePreviewTimer) clearTimeout(episodePreviewTimer)
   episodePreviewTimer = setTimeout(updateEpisodePreview, 500)
@@ -656,6 +672,25 @@ function toggleExclude(key: string, checked: boolean) {
             </Select>
           </div>
           <div class="space-y-2">
+            <Label :for="inputId('poster-font-size')">Font size</Label>
+            <Select
+              :model-value="editPosterFontSize"
+              @update:model-value="editPosterFontSize = $event as string"
+            >
+              <SelectTrigger :id="inputId('poster-font-size')" class="max-w-xs" data-testid="poster-font-size-select">
+                <SelectValue placeholder="Select font size" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="xs">Extra Small</SelectItem>
+                <SelectItem value="s">Small</SelectItem>
+                <SelectItem value="m">Medium</SelectItem>
+                <SelectItem value="l">Large</SelectItem>
+                <SelectItem value="xl">Extra Large</SelectItem>
+              </SelectContent>
+            </Select>
+            <p class="text-xs text-muted-foreground">Size of the rating text, independent of the badge size.</p>
+          </div>
+          <div class="space-y-2">
             <Label :for="inputId('poster-badge-shape')">Badge shape</Label>
             <Select
               :model-value="editPosterBadgeShape"
@@ -818,6 +853,25 @@ function toggleExclude(key: string, checked: boolean) {
             </Select>
           </div>
           <div class="space-y-2">
+            <Label :for="inputId('logo-font-size')">Font size</Label>
+            <Select
+              :model-value="editLogoFontSize"
+              @update:model-value="editLogoFontSize = $event as string"
+            >
+              <SelectTrigger :id="inputId('logo-font-size')" class="max-w-xs" data-testid="logo-font-size-select">
+                <SelectValue placeholder="Select font size" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="xs">Extra Small</SelectItem>
+                <SelectItem value="s">Small</SelectItem>
+                <SelectItem value="m">Medium</SelectItem>
+                <SelectItem value="l">Large</SelectItem>
+                <SelectItem value="xl">Extra Large</SelectItem>
+              </SelectContent>
+            </Select>
+            <p class="text-xs text-muted-foreground">Size of the rating text, independent of the badge size.</p>
+          </div>
+          <div class="space-y-2">
             <Label :for="inputId('logo-badge-shape')">Badge shape</Label>
             <Select
               :model-value="editLogoBadgeShape"
@@ -935,6 +989,25 @@ function toggleExclude(key: string, checked: boolean) {
                 <SelectItem value="xl">Extra Large</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div class="space-y-2">
+            <Label :for="inputId('backdrop-font-size')">Font size</Label>
+            <Select
+              :model-value="editBackdropFontSize"
+              @update:model-value="editBackdropFontSize = $event as string"
+            >
+              <SelectTrigger :id="inputId('backdrop-font-size')" class="max-w-xs" data-testid="backdrop-font-size-select">
+                <SelectValue placeholder="Select font size" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="xs">Extra Small</SelectItem>
+                <SelectItem value="s">Small</SelectItem>
+                <SelectItem value="m">Medium</SelectItem>
+                <SelectItem value="l">Large</SelectItem>
+                <SelectItem value="xl">Extra Large</SelectItem>
+              </SelectContent>
+            </Select>
+            <p class="text-xs text-muted-foreground">Size of the rating text, independent of the badge size.</p>
           </div>
           <div class="space-y-2">
             <Label :for="inputId('backdrop-badge-shape')">Badge shape</Label>
@@ -1164,6 +1237,25 @@ function toggleExclude(key: string, checked: boolean) {
                 <SelectItem value="xl">Extra Large</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div class="space-y-2">
+            <Label :for="inputId('episode-font-size')">Font size</Label>
+            <Select
+              :model-value="editEpisodeFontSize"
+              @update:model-value="editEpisodeFontSize = $event as string"
+            >
+              <SelectTrigger :id="inputId('episode-font-size')" class="max-w-xs" data-testid="episode-font-size-select">
+                <SelectValue placeholder="Select font size" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="xs">Extra Small</SelectItem>
+                <SelectItem value="s">Small</SelectItem>
+                <SelectItem value="m">Medium</SelectItem>
+                <SelectItem value="l">Large</SelectItem>
+                <SelectItem value="xl">Extra Large</SelectItem>
+              </SelectContent>
+            </Select>
+            <p class="text-xs text-muted-foreground">Size of the rating text, independent of the badge size.</p>
           </div>
           <div class="space-y-2">
             <Label :for="inputId('episode-badge-shape')">Badge shape</Label>

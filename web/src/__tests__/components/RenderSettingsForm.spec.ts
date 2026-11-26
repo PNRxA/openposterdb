@@ -3,7 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import RenderSettingsForm from '@/components/RenderSettingsForm.vue'
 import type { RenderSettings } from '@/components/RenderSettingsForm.vue'
-import { shadcnStubs } from '@/__tests__/stubs'
+import { shadcnStubs, SelectStub } from '@/__tests__/stubs'
 
 vi.mock('@/lib/api', () => ({}))
 
@@ -49,6 +49,10 @@ const defaultSettings: RenderSettings = {
   logo_badge_background: 'd',
   backdrop_badge_background: 'd',
   episode_badge_background: 'd',
+  poster_font_size: 'm',
+  logo_font_size: 'm',
+  backdrop_font_size: 'm',
+  episode_font_size: 'm',
 }
 
 function makeFetchPreview() {
@@ -56,6 +60,11 @@ function makeFetchPreview() {
     ok: true,
     blob: () => Promise.resolve(new Blob(['fake-jpeg'], { type: 'image/jpeg' })),
   })
+}
+
+/** The last positional argument of a mock call (the font size for preview fetchers). */
+function lastArg(call: unknown[]): unknown {
+  return call[call.length - 1]
 }
 
 function mountForm(overrides: Partial<RenderSettings> = {}, fetchPreview = makeFetchPreview()) {
@@ -95,7 +104,7 @@ describe('RenderSettingsForm', () => {
     mountForm({}, fetchPreview)
     await flushPromises()
 
-    expect(fetchPreview).toHaveBeenCalledWith(3, 'mal,imdb,lb,rt,rta,mc,tmdb,trakt,mdblist,ebert', 'bc', 'h', 'i', 'd', 'm', '', false, 'r', 'd', 'native')
+    expect(fetchPreview).toHaveBeenCalledWith(3, 'mal,imdb,lb,rt,rta,mc,tmdb,trakt,mdblist,ebert', 'bc', 'h', 'i', 'd', 'm', '', false, 'r', 'd', 'native', 'm')
   })
 
   it('calls fetchPreview with correct params for custom settings', async () => {
@@ -103,7 +112,7 @@ describe('RenderSettingsForm', () => {
     mountForm({ ratings_limit: 5, ratings_order: 'imdb,rt,tmdb' }, fetchPreview)
     await flushPromises()
 
-    expect(fetchPreview).toHaveBeenCalledWith(5, expect.stringContaining('imdb'), expect.any(String), expect.any(String), expect.any(String), expect.any(String), expect.any(String), '', false, 'r', 'd', 'native')
+    expect(fetchPreview).toHaveBeenCalledWith(5, expect.stringContaining('imdb'), expect.any(String), expect.any(String), expect.any(String), expect.any(String), expect.any(String), '', false, 'r', 'd', 'native', 'm')
   })
 
   it('sets preview src from blob after fetch', async () => {
@@ -130,7 +139,7 @@ describe('RenderSettingsForm', () => {
     vi.advanceTimersByTime(500)
     await flushPromises()
 
-    expect(fetchPreview).toHaveBeenCalledWith(5, expect.any(String), expect.any(String), expect.any(String), expect.any(String), expect.any(String), expect.any(String), '', false, 'r', 'd', 'native')
+    expect(fetchPreview).toHaveBeenCalledWith(5, expect.any(String), expect.any(String), expect.any(String), expect.any(String), expect.any(String), expect.any(String), '', false, 'r', 'd', 'native', 'm')
   })
 
   it('shows loading state while preview loads', async () => {
@@ -187,7 +196,7 @@ describe('RenderSettingsForm', () => {
     mountForm({ poster_position: 'l' }, fetchPreview)
     await flushPromises()
 
-    expect(fetchPreview).toHaveBeenCalledWith(3, expect.any(String), 'l', 'h', 'i', 'd', 'm', '', false, 'r', 'd', 'native')
+    expect(fetchPreview).toHaveBeenCalledWith(3, expect.any(String), 'l', 'h', 'i', 'd', 'm', '', false, 'r', 'd', 'native', 'm')
   })
 
   it('hides fanart checkbox when fanart_available is false', () => {
@@ -287,7 +296,7 @@ describe('RenderSettingsForm', () => {
     mountForm({ poster_badge_direction: 'v' }, fetchPreview)
     await flushPromises()
 
-    expect(fetchPreview).toHaveBeenCalledWith(3, expect.any(String), 'bc', 'h', 'i', 'v', 'm', '', false, 'r', 'd', 'native')
+    expect(fetchPreview).toHaveBeenCalledWith(3, expect.any(String), 'bc', 'h', 'i', 'v', 'm', '', false, 'r', 'd', 'native', 'm')
   })
 
   // --- Episode preview ---
@@ -347,6 +356,7 @@ describe('RenderSettingsForm', () => {
       '', // ratings_exclude
       'r', // episode_badge_shape
       'd', // episode_badge_background
+      'm', // episode_font_size
     )
   })
 
@@ -435,6 +445,7 @@ describe('RenderSettingsForm', () => {
       'd', // backdrop_badge_background
       12, // backdrop_edge_inset_x
       7, // backdrop_edge_inset_y
+      'm', // backdrop_font_size
     )
   })
 
@@ -448,5 +459,150 @@ describe('RenderSettingsForm', () => {
     expect(saveSettings).toHaveBeenCalledWith(
       expect.objectContaining({ backdrop_edge_inset_y: 15 }),
     )
+  })
+
+  // --- Font size ---
+
+  it('renders a font size control for every image type', () => {
+    const settings = { ...defaultSettings }
+    const wrapper = mount(RenderSettingsForm, {
+      props: {
+        settings,
+        loadSettings: vi.fn().mockResolvedValue(settings),
+        saveSettings: vi.fn().mockResolvedValue(null),
+        fetchPreview: makeFetchPreview(),
+        fetchLogoPreview: makeFetchPreview(),
+        fetchBackdropPreview: makeFetchPreview(),
+        fetchEpisodePreview: makeFetchPreview(),
+      },
+      global: {
+        plugins: [createPinia()],
+        stubs: shadcnStubs,
+      },
+    })
+    for (const kind of ['poster', 'logo', 'backdrop', 'episode']) {
+      expect(wrapper.find(`[data-testid="${kind}-font-size-select"]`).exists()).toBe(true)
+    }
+    expect(wrapper.text()).toContain('Font size')
+  })
+
+  it('passes per-type font sizes to every preview fetcher', async () => {
+    const fetchPreview = makeFetchPreview()
+    const fetchLogoPreview = makeFetchPreview()
+    const fetchBackdropPreview = makeFetchPreview()
+    const fetchEpisodePreview = makeFetchPreview()
+    const settings = {
+      ...defaultSettings,
+      poster_font_size: 'xl',
+      logo_font_size: 'l',
+      backdrop_font_size: 's',
+      episode_font_size: 'xs',
+    }
+    mount(RenderSettingsForm, {
+      props: {
+        settings,
+        loadSettings: vi.fn().mockResolvedValue(settings),
+        saveSettings: vi.fn().mockResolvedValue(null),
+        fetchPreview,
+        fetchLogoPreview,
+        fetchBackdropPreview,
+        fetchEpisodePreview,
+      },
+      global: {
+        plugins: [createPinia()],
+        stubs: shadcnStubs,
+      },
+    })
+    await flushPromises()
+
+    expect(lastArg(fetchPreview.mock.calls[0]!)).toBe('xl')
+    expect(lastArg(fetchLogoPreview.mock.calls[0]!)).toBe('l')
+    expect(lastArg(fetchBackdropPreview.mock.calls[0]!)).toBe('s')
+    expect(lastArg(fetchEpisodePreview.mock.calls[0]!)).toBe('xs')
+  })
+
+  it('defaults a missing font size to medium', async () => {
+    // Settings from a server that predates the font-size fields. Mount directly
+    // (not via mountForm, whose merge with defaultSettings would put 'm' back)
+    // so the form's own fallback is what supplies the value.
+    const {
+      poster_font_size: _p,
+      logo_font_size: _l,
+      backdrop_font_size: _b,
+      episode_font_size: _e,
+      ...legacy
+    } = defaultSettings
+    const settings = legacy as RenderSettings
+    expect('poster_font_size' in settings).toBe(false)
+    const fetchPreview = makeFetchPreview()
+    const fetchLogoPreview = makeFetchPreview()
+    const fetchBackdropPreview = makeFetchPreview()
+    const fetchEpisodePreview = makeFetchPreview()
+    const saveSettings = vi.fn().mockResolvedValue(null)
+    const wrapper = mount(RenderSettingsForm, {
+      props: {
+        settings,
+        loadSettings: vi.fn().mockResolvedValue(settings),
+        saveSettings,
+        fetchPreview,
+        fetchLogoPreview,
+        fetchBackdropPreview,
+        fetchEpisodePreview,
+      },
+      global: {
+        plugins: [createPinia()],
+        stubs: shadcnStubs,
+      },
+    })
+    await flushPromises()
+
+    expect(lastArg(fetchPreview.mock.calls[0]!)).toBe('m')
+    expect(lastArg(fetchLogoPreview.mock.calls[0]!)).toBe('m')
+    expect(lastArg(fetchBackdropPreview.mock.calls[0]!)).toBe('m')
+    expect(lastArg(fetchEpisodePreview.mock.calls[0]!)).toBe('m')
+
+    // Any edit triggers an auto-save; the saved payload carries 'm' too.
+    await wrapper.find('[data-testid="textless-checkbox"]').setValue(true)
+    await flushPromises()
+    expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
+      poster_font_size: 'm',
+      logo_font_size: 'm',
+      backdrop_font_size: 'm',
+      episode_font_size: 'm',
+    }))
+  })
+
+  it('changing the font size auto-saves it and refreshes the preview', async () => {
+    const saveSettings = vi.fn().mockResolvedValue(null)
+    const fetchPreview = makeFetchPreview()
+    const settings = { ...defaultSettings }
+    const wrapper = mount(RenderSettingsForm, {
+      props: {
+        settings,
+        loadSettings: vi.fn().mockResolvedValue(settings),
+        saveSettings,
+        fetchPreview,
+      },
+      global: {
+        plugins: [createPinia()],
+        stubs: shadcnStubs,
+      },
+    })
+    await flushPromises()
+    fetchPreview.mockClear()
+
+    // Emit on the Select stub that wraps the poster font-size trigger.
+    const select = wrapper
+      .findAllComponents(SelectStub)
+      .find(c => c.find('[data-testid="poster-font-size-select"]').exists())
+    expect(select).toBeTruthy()
+    select!.vm.$emit('update:modelValue', 'l')
+    await flushPromises()
+
+    expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ poster_font_size: 'l', logo_font_size: 'm' }))
+    vi.advanceTimersByTime(600)
+    await flushPromises()
+    expect(fetchPreview).toHaveBeenCalled()
+    expect(lastArg(fetchPreview.mock.calls[fetchPreview.mock.calls.length - 1]!)).toBe('l')
   })
 })

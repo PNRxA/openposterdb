@@ -234,6 +234,10 @@ pub fn settings_cache_suffix_with_ratings(
         logo_badge_background: _,
         backdrop_badge_background: _,
         episode_badge_background: _,
+        poster_font_size: _,
+        logo_font_size: _,
+        backdrop_font_size: _,
+        episode_font_size: _,
     } = settings;
 
     let resolved_size = resolve_image_size(image_size);
@@ -258,10 +262,13 @@ pub fn settings_cache_suffix_with_ratings(
             // pre-feature poster cache keys — all native — stay valid and the
             // default reuses them. Opting into cover/pad/blur emits a token.
             let fit = settings.poster_fit.cache_suffix();
+            // Font size. `Medium` (the default) emits no token, so pre-feature
+            // cache keys stay valid; other sizes emit `.t{size}`.
+            let fs = settings.poster_font_size.cache_suffix();
             // Shape/background sit immediately after badge size (before the
             // optional split token) so the v003 cache-key migration can insert
             // their defaults with a single uniform rule across all image types.
-            format!("{rs}{ps}{bs}{ls}{bd}{bsz}{shp}{bgd}{split}{fit}{is_suffix}")
+            format!("{rs}{ps}{bs}{ls}{bd}{bsz}{shp}{bgd}{fs}{split}{fit}{is_suffix}")
         }
         cache::ImageType::Logo => {
             let bs = badge_style_cache_suffix(settings.logo_badge_style.for_shape(settings.logo_badge_shape).as_str());
@@ -269,7 +276,8 @@ pub fn settings_cache_suffix_with_ratings(
             let bsz = settings.logo_badge_size.cache_suffix();
             let shp = badge_shape_cache_suffix(settings.logo_badge_shape.as_str());
             let bgd = badge_background_cache_suffix(settings.logo_badge_background.as_str());
-            format!("{rs}{bs}{ls}{bsz}{shp}{bgd}{is_suffix}")
+            let fs = settings.logo_font_size.cache_suffix();
+            format!("{rs}{bs}{ls}{bsz}{shp}{bgd}{fs}{is_suffix}")
         }
         cache::ImageType::Backdrop => {
             let ps = position_cache_suffix(settings.backdrop_position.as_str());
@@ -282,7 +290,8 @@ pub fn settings_cache_suffix_with_ratings(
             // Edge inset sits after background (before image size) and is only
             // present when non-zero, so default backdrop keys are unchanged.
             let ei = edge_inset_cache_suffix(settings.backdrop_position, settings.backdrop_edge_inset_x, settings.backdrop_edge_inset_y);
-            format!("{rs}{ps}{bs}{ls}{bd}{bsz}{shp}{bgd}{ei}{is_suffix}")
+            let fs = settings.backdrop_font_size.cache_suffix();
+            format!("{rs}{ps}{bs}{ls}{bd}{bsz}{shp}{bgd}{fs}{ei}{is_suffix}")
         }
         cache::ImageType::Episode => {
             let ps = position_cache_suffix(settings.episode_position.as_str());
@@ -293,7 +302,8 @@ pub fn settings_cache_suffix_with_ratings(
             let shp = badge_shape_cache_suffix(settings.episode_badge_shape.as_str());
             let bgd = badge_background_cache_suffix(settings.episode_badge_background.as_str());
             let blur = if settings.episode_blur { ".blur" } else { "" };
-            format!("{rs}{ps}{bs}{ls}{bd}{bsz}{shp}{bgd}{blur}{is_suffix}")
+            let fs = settings.episode_font_size.cache_suffix();
+            format!("{rs}{ps}{bs}{ls}{bd}{bsz}{shp}{bgd}{fs}{blur}{is_suffix}")
         }
     }
 }
@@ -2234,6 +2244,73 @@ mod tests {
         a.poster_fit = PosterFit::Cover;
         let mut b = RenderSettings::default();
         b.poster_fit = PosterFit::Blur;
+        assert_ne!(
+            settings_hash(&a, cache::ImageType::Poster, None),
+            settings_hash(&b, cache::ImageType::Poster, None)
+        );
+    }
+
+    #[test]
+    fn settings_cache_suffix_font_size_default_is_unchanged() {
+        use crate::services::db::FontSize;
+        // The default font size must not add a token, so cache keys written
+        // before the setting existed stay valid (no migration). Pin the exact
+        // default keys for every image type.
+        let s = RenderSettings::default();
+        assert_eq!(
+            settings_cache_suffix_with_ratings(&s, cache::ImageType::Poster, None, "@ir"),
+            "@ir.pbc.sd.lo.dd.bm.shr.bgd.zm"
+        );
+        assert_eq!(
+            settings_cache_suffix_with_ratings(&s, cache::ImageType::Logo, None, "@ir"),
+            "@ir.sv.lo.bm.shr.bgd.zm"
+        );
+        assert_eq!(
+            settings_cache_suffix_with_ratings(&s, cache::ImageType::Backdrop, None, "@ir"),
+            "@ir.ptr.sv.lo.dd.bm.shr.bgd.zm"
+        );
+        assert_eq!(
+            settings_cache_suffix_with_ratings(&s, cache::ImageType::Episode, None, "@ir"),
+            "@ir.ptr.sv.lo.dv.bl.shr.bgd.zm"
+        );
+        assert_eq!(s.poster_font_size, FontSize::Medium);
+    }
+
+    #[test]
+    fn settings_cache_suffix_font_size_token_per_kind() {
+        use crate::services::db::FontSize;
+        for (fs, token) in [
+            (FontSize::ExtraSmall, ".txs"),
+            (FontSize::Small, ".ts"),
+            (FontSize::Large, ".tl"),
+            (FontSize::ExtraLarge, ".txl"),
+        ] {
+            let mut s = RenderSettings::default();
+            s.poster_font_size = fs;
+            s.logo_font_size = fs;
+            s.backdrop_font_size = fs;
+            s.episode_font_size = fs;
+            for kind in [cache::ImageType::Poster, cache::ImageType::Logo, cache::ImageType::Backdrop, cache::ImageType::Episode] {
+                let suffix = settings_cache_suffix(&s, kind, None);
+                assert!(suffix.contains(&format!(".bgd{token}")), "{kind:?}/{fs:?}: font token sits after background: {suffix}");
+                assert_ne!(suffix, settings_cache_suffix(&RenderSettings::default(), kind, None));
+            }
+        }
+        // Each type reads its own font size field.
+        let mut s = RenderSettings::default();
+        s.poster_font_size = FontSize::ExtraLarge;
+        assert!(settings_cache_suffix(&s, cache::ImageType::Poster, None).contains(".txl"));
+        assert!(!settings_cache_suffix(&s, cache::ImageType::Logo, None).contains(".t"));
+        assert!(!settings_cache_suffix(&s, cache::ImageType::Backdrop, None).contains(".t"));
+        assert!(!settings_cache_suffix(&s, cache::ImageType::Episode, None).contains(".t"));
+    }
+
+    #[test]
+    fn settings_hash_differs_by_font_size() {
+        use crate::services::db::FontSize;
+        let a = RenderSettings::default();
+        let mut b = RenderSettings::default();
+        b.poster_font_size = FontSize::Large;
         assert_ne!(
             settings_hash(&a, cache::ImageType::Poster, None),
             settings_hash(&b, cache::ImageType::Poster, None)

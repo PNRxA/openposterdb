@@ -190,6 +190,23 @@ describe('selfApi', () => {
     expect(url).toContain('label_style=i')
   })
 
+  it('preview fetchers forward font_size when provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await selfApi.previewPoster(3, 'imdb', 'bc', 'h', 'o', 'd', 'm', '', false, 'r', 'd', 'native', 'l')
+    await selfApi.previewLogo(3, 'imdb', 'v', 'o', 'm', '', 'r', 'd', 'xl')
+    await selfApi.previewBackdrop(3, 'imdb', 'v', 'o', 'm', 'tr', 'd', '', 'r', 'd', 0, 0, 'xs')
+    await selfApi.previewEpisode(3, 'imdb', 'v', 'o', 'l', 'tr', 'v', false, '', 'r', 'd', 's')
+
+    const urls = fetchMock.mock.calls.map(c => c[0] as string)
+    expect(urls[0]).toContain('/api/key/me/preview/poster')
+    expect(urls[0]).toContain('font_size=l')
+    expect(urls[1]).toContain('font_size=xl')
+    expect(urls[2]).toContain('font_size=xs')
+    expect(urls[3]).toContain('font_size=s')
+  })
+
   it('previewEpisode calls GET with correct URL and params', async () => {
     const fetchMock = vi.fn().mockResolvedValue(makeFetchResponse(200))
     vi.stubGlobal('fetch', fetchMock)

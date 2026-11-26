@@ -11,7 +11,7 @@ use crate::handlers::auth::hash_api_key;
 use crate::image::serve;
 use crate::services::db;
 use crate::services::db::{
-    BadgeBackground, BadgeDirection, BadgeShape, BadgeSize, BadgeStyle, LabelStyle, BadgePosition, ImageSource,
+    BadgeBackground, BadgeDirection, BadgeShape, BadgeSize, BadgeStyle, FontSize, LabelStyle, BadgePosition, ImageSource,
     PosterFit, RenderSettings,
 };
 use crate::AppState;
@@ -94,6 +94,11 @@ pub struct ImageQuery {
     #[serde(default)]
     #[param(value_type = Option<String>)]
     pub badge_background: Option<BadgeBackground>,
+    /// Rating text size, independent of the badge size: `xs`, `s`, `m` (default), `l`, `xl`.
+    /// Enlarges the rating value (and text labels) without growing icons or padding.
+    #[serde(default)]
+    #[param(value_type = Option<String>)]
+    pub font_size: Option<FontSize>,
     /// Badge anchor position: `bc`, `tc`, `l`, `r`, `tl`, `tr`, `bl`, `br`.
     #[serde(default)]
     #[param(value_type = Option<String>)]
@@ -142,6 +147,7 @@ impl ImageQuery {
             || self.badge_direction.is_some()
             || self.badge_shape.is_some()
             || self.badge_background.is_some()
+            || self.font_size.is_some()
             || self.position.is_some()
             || self.image_source.is_some()
             || self.textless.is_some()
@@ -222,6 +228,10 @@ pub struct FreeKeySettingsResponse {
     pub logo_badge_background: BadgeBackground,
     pub backdrop_badge_background: BadgeBackground,
     pub episode_badge_background: BadgeBackground,
+    pub poster_font_size: FontSize,
+    pub logo_font_size: FontSize,
+    pub backdrop_font_size: FontSize,
+    pub episode_font_size: FontSize,
 }
 
 impl From<&RenderSettings> for FreeKeySettingsResponse {
@@ -267,6 +277,10 @@ impl From<&RenderSettings> for FreeKeySettingsResponse {
             logo_badge_background: s.logo_badge_background,
             backdrop_badge_background: s.backdrop_badge_background,
             episode_badge_background: s.episode_badge_background,
+            poster_font_size: s.poster_font_size,
+            logo_font_size: s.logo_font_size,
+            backdrop_font_size: s.backdrop_font_size,
+            episode_font_size: s.episode_font_size,
         }
     }
 }
@@ -442,6 +456,14 @@ fn apply_query_overrides(
             cache::ImageType::Logo => s.logo_badge_background = background,
             cache::ImageType::Backdrop => s.backdrop_badge_background = background,
             cache::ImageType::Episode => s.episode_badge_background = background,
+        }
+    }
+    if let Some(font_size) = query.font_size {
+        match kind {
+            cache::ImageType::Poster => s.poster_font_size = font_size,
+            cache::ImageType::Logo => s.logo_font_size = font_size,
+            cache::ImageType::Backdrop => s.backdrop_font_size = font_size,
+            cache::ImageType::Episode => s.episode_font_size = font_size,
         }
     }
 
@@ -892,6 +914,7 @@ mod tests {
             badge_direction: None,
             badge_shape: None,
             badge_background: None,
+            font_size: None,
             position: None,
             image_source: None,
             textless: None,
@@ -1046,6 +1069,27 @@ mod tests {
             apply_query_overrides(settings, &query, cache::ImageType::Poster).unwrap();
         assert_eq!(result.backdrop_edge_inset_x, 0);
         assert_eq!(result.backdrop_edge_inset_y, 0);
+    }
+
+    #[test]
+    fn apply_query_overrides_font_size_is_per_type() {
+        for kind in [cache::ImageType::Poster, cache::ImageType::Logo, cache::ImageType::Backdrop, cache::ImageType::Episode] {
+            let settings = Arc::new(db::RenderSettings::default());
+            let query = ImageQuery { font_size: Some(FontSize::ExtraLarge), ..empty_query() };
+            let result = apply_query_overrides(settings.clone(), &query, kind).unwrap();
+            assert!(!Arc::ptr_eq(&settings, &result), "font_size counts as an override");
+            let got = [result.poster_font_size, result.logo_font_size, result.backdrop_font_size, result.episode_font_size];
+            let idx = match kind {
+                cache::ImageType::Poster => 0,
+                cache::ImageType::Logo => 1,
+                cache::ImageType::Backdrop => 2,
+                cache::ImageType::Episode => 3,
+            };
+            for (i, fs) in got.iter().enumerate() {
+                let expected = if i == idx { FontSize::ExtraLarge } else { FontSize::Medium };
+                assert_eq!(*fs, expected, "{kind:?}: field {i}");
+            }
+        }
     }
 
     #[test]
