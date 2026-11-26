@@ -130,6 +130,9 @@ async fn _setup_test_app(cors_origin: Option<String>, secure_cookies: bool, enab
             external_cache_only,
             free_key_enabled,
             disable_public_pages: false,
+            image_download_timeout_secs: 15,
+            image_download_read_timeout_secs: 5,
+            image_download_concurrency: 32,
         },
         tmdb: TmdbClient::new("test".into(), http.clone()),
         omdb: None,
@@ -155,6 +158,10 @@ async fn _setup_test_app(cors_origin: Option<String>, secure_cookies: bool, enab
         fanart_negative: moka::future::Cache::builder()
             .max_capacity(100)
             .time_to_live(Duration::from_secs(3600))
+            .build(),
+        fanart_failed: moka::future::Cache::builder()
+            .max_capacity(100)
+            .time_to_live(openposterdb_api::FANART_FAILURE_TTL)
             .build(),
         tmdb_images_cache: moka::future::Cache::builder()
             .max_capacity(100)

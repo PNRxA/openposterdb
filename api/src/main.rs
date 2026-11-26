@@ -12,6 +12,7 @@ use openposterdb_api::config::Config;
 use openposterdb_api::handlers;
 use openposterdb_api::services::db;
 use openposterdb_api::services::fanart::FanartClient;
+use openposterdb_api::services::image_download::ImageDownloadLimits;
 use openposterdb_api::services::mdblist::MdblistClient;
 use openposterdb_api::services::omdb::OmdbClient;
 use openposterdb_api::services::tmdb::TmdbClient;
@@ -62,7 +63,10 @@ async fn main() {
     let fanart = config
         .fanart_api_key
         .as_ref()
-        .map(|key| FanartClient::new(key.clone(), http.clone()));
+        .map(|key| {
+            FanartClient::new(key.clone(), http.clone())
+                .with_image_limits(ImageDownloadLimits::from_config(&config))
+        });
 
     let trakt = config
         .trakt_client_id
@@ -93,6 +97,12 @@ async fn main() {
         external_cache_only = config.external_cache_only,
         free_key_enabled = ?config.free_key_enabled,
         "server configuration"
+    );
+    tracing::info!(
+        timeout_secs = config.image_download_timeout_secs,
+        read_timeout_secs = config.image_download_read_timeout_secs,
+        concurrency_per_host = config.image_download_concurrency,
+        "image download limits"
     );
 
     if config.external_cache_only && !config.enable_cdn_redirects {
@@ -252,6 +262,11 @@ async fn main() {
         .time_to_live(Duration::from_secs(3600))
         .build();
 
+    let fanart_failed = moka::future::Cache::builder()
+        .max_capacity(10_000)
+        .time_to_live(openposterdb_api::FANART_FAILURE_TTL)
+        .build();
+
     let tmdb_images_cache = moka::future::Cache::builder()
         .max_capacity(10_000)
         .time_to_live(Duration::from_secs(1800))
@@ -309,7 +324,8 @@ async fn main() {
     let pending_last_used: Arc<DashMap<i32, ()>> = Arc::new(DashMap::new());
 
     let state = Arc::new(AppState {
-        tmdb: TmdbClient::new(config.tmdb_api_key.clone(), http),
+        tmdb: TmdbClient::new(config.tmdb_api_key.clone(), http)
+            .with_image_limits(ImageDownloadLimits::from_config(&config)),
         omdb,
         mdblist,
 
@@ -328,6 +344,7 @@ async fn main() {
         trakt,
         fanart_cache,
         fanart_negative,
+        fanart_failed,
         tmdb_images_cache,
         settings_cache,
         global_settings_cache,

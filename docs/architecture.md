@@ -92,10 +92,12 @@ Logos and backdrops include a source marker (`_t` for TMDB, `_f` for Fanart.tv) 
 | Poster | TMDB textless | `_t_tl` | Textless TMDB poster |
 | Poster | Fanart textless | `_f_tl` | Fanart image with no text overlay |
 | Poster | Fanart language | `_f_{lang}` | Fanart image matching language (e.g. `_f_en`) |
+| Poster | Fanart fallback | `_f_fallback` + TMDB variant (e.g. `_f_fallback_t_de`) | Fanart preferred, but TMDB art was used (fanart had no match or was unreachable). Served from cache without contacting fanart; fanart is retried in the background |
 | Logo/Backdrop | TMDB | `_t` or `_t_{lang}` | Image sourced from TMDB |
 | Logo/Backdrop | Fanart | `_f` or `_f_{lang}` | Image sourced from Fanart.tv |
-| *(negative)* | Textless miss | `_f_tl_neg` | No textless fanart image available |
-| *(negative)* | Language miss | `_f_{lang}_neg` | No fanart image for this language |
+| *(negative)* | Textless miss | `_f_tl_neg` | No textless fanart image available (in memory, 1 h) |
+| *(negative)* | Language miss | `_f_{lang}_neg` | No fanart image for this language (in memory, 1 h) |
+| *(negative)* | Fanart failure | `_f_err` | Fanart unreachable / download failed or timed out (in memory, 5 min) |
 
 ### Database values
 

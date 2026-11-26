@@ -151,7 +151,7 @@ where
 }
 
 /// Parse `Retry-After` header as seconds, falling back to exponential backoff.
-fn retry_after_delay(resp: &Response, config: &RetryConfig, attempt: u32) -> Duration {
+pub(crate) fn retry_after_delay(resp: &Response, config: &RetryConfig, attempt: u32) -> Duration {
     if let Some(val) = resp.headers().get(reqwest::header::RETRY_AFTER) {
         if let Ok(s) = val.to_str() {
             if let Ok(secs) = s.trim().parse::<u64>() {
@@ -164,7 +164,7 @@ fn retry_after_delay(resp: &Response, config: &RetryConfig, attempt: u32) -> Dur
 }
 
 /// Exponential backoff: `min(base_delay * 2^attempt, max_delay)` + jitter.
-fn backoff_delay(config: &RetryConfig, attempt: u32) -> Duration {
+pub(crate) fn backoff_delay(config: &RetryConfig, attempt: u32) -> Duration {
     let delay = config
         .base_delay
         .saturating_mul(1 << attempt)
