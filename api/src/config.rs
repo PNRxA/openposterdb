@@ -21,6 +21,13 @@ pub struct Config {
     pub external_cache_only: bool,
     pub free_key_enabled: Option<bool>,
     pub disable_public_pages: bool,
+    /// Total budget (seconds) for one upstream image download, retries included.
+    pub image_download_timeout_secs: u64,
+    /// Max seconds an image download attempt may go without progress before it
+    /// is abandoned and retried.
+    pub image_download_read_timeout_secs: u64,
+    /// Max concurrent image downloads per upstream image host (TMDB, fanart).
+    pub image_download_concurrency: usize,
 }
 
 impl std::fmt::Debug for Config {
@@ -45,6 +52,9 @@ impl std::fmt::Debug for Config {
             .field("external_cache_only", &self.external_cache_only)
             .field("free_key_enabled", &self.free_key_enabled)
             .field("disable_public_pages", &self.disable_public_pages)
+            .field("image_download_timeout_secs", &self.image_download_timeout_secs)
+            .field("image_download_read_timeout_secs", &self.image_download_read_timeout_secs)
+            .field("image_download_concurrency", &self.image_download_concurrency)
             .finish()
     }
 }
@@ -64,8 +74,51 @@ fn optional_secret(key: &str) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
+/// Read a numeric env var that must fall within `min..=max`.
+///
+/// Missing → `default` silently. Unparsable or out-of-range → `default` with a
+/// warning, so a typo can't silently disable a timeout (e.g. `0`) or wedge the
+/// download queue.
+fn bounded_env<T>(key: &str, default: T, min: T, max: T) -> T
+where
+    T: std::str::FromStr + PartialOrd + Copy + std::fmt::Display,
+{
+    let Ok(raw) = env::var(key) else { return default };
+    match raw.trim().parse::<T>() {
+        Ok(v) if v >= min && v <= max => v,
+        _ => {
+            tracing::warn!(
+                "{key}={raw:?} is invalid (expected an integer in {min}..={max}); using default {default}"
+            );
+            default
+        }
+    }
+}
+
 impl Config {
     pub fn from_env() -> Self {
+        use crate::services::image_download::{
+            DEFAULT_IMAGE_DOWNLOAD_CONCURRENCY, DEFAULT_IMAGE_DOWNLOAD_READ_TIMEOUT_SECS,
+            DEFAULT_IMAGE_DOWNLOAD_TIMEOUT_SECS,
+        };
+        let image_download_timeout_secs =
+            bounded_env("IMAGE_DOWNLOAD_TIMEOUT_SECS", DEFAULT_IMAGE_DOWNLOAD_TIMEOUT_SECS, 1, 300);
+        let mut image_download_read_timeout_secs = bounded_env(
+            "IMAGE_DOWNLOAD_READ_TIMEOUT_SECS",
+            DEFAULT_IMAGE_DOWNLOAD_READ_TIMEOUT_SECS,
+            1,
+            300,
+        );
+        if image_download_read_timeout_secs > image_download_timeout_secs {
+            tracing::warn!(
+                "IMAGE_DOWNLOAD_READ_TIMEOUT_SECS ({image_download_read_timeout_secs}) exceeds \
+                 IMAGE_DOWNLOAD_TIMEOUT_SECS ({image_download_timeout_secs}); clamping it"
+            );
+            image_download_read_timeout_secs = image_download_timeout_secs;
+        }
+        let image_download_concurrency =
+            bounded_env("IMAGE_DOWNLOAD_CONCURRENCY", DEFAULT_IMAGE_DOWNLOAD_CONCURRENCY, 1, 1024);
+
         let config = Self {
             tmdb_api_key: env::var("TMDB_API_KEY").expect("TMDB_API_KEY must be set"),
             omdb_api_key: optional_secret("OMDB_API_KEY"),
@@ -109,6 +162,9 @@ impl Config {
             disable_public_pages: env::var("DISABLE_PUBLIC_PAGES")
                 .map(|v| v == "true" || v == "1")
                 .unwrap_or(false),
+            image_download_timeout_secs,
+            image_download_read_timeout_secs,
+            image_download_concurrency,
         };
 
         if config.omdb_api_key.is_none()
@@ -155,6 +211,9 @@ mod tests {
             "EXTERNAL_CACHE_ONLY",
             "FREE_KEY_ENABLED",
             "DISABLE_PUBLIC_PAGES",
+            "IMAGE_DOWNLOAD_TIMEOUT_SECS",
+            "IMAGE_DOWNLOAD_READ_TIMEOUT_SECS",
+            "IMAGE_DOWNLOAD_CONCURRENCY",
         ] {
             unsafe { env::remove_var(key) };
         }
@@ -317,5 +376,73 @@ mod tests {
 
         let cfg = Config::from_env();
         assert!(cfg.free_key_enabled.is_none());
+    }
+
+    #[test]
+    #[serial]
+    fn test_image_download_defaults() {
+        unsafe { clear_config_env() };
+        unsafe { env::set_var("TMDB_API_KEY", "tmdb_test") };
+        unsafe { env::set_var("OMDB_API_KEY", "omdb_test") };
+
+        let cfg = Config::from_env();
+        assert_eq!(cfg.image_download_timeout_secs, 15);
+        assert_eq!(cfg.image_download_read_timeout_secs, 5);
+        assert_eq!(cfg.image_download_concurrency, 32);
+    }
+
+    #[test]
+    #[serial]
+    fn test_image_download_overrides() {
+        unsafe { clear_config_env() };
+        unsafe { env::set_var("TMDB_API_KEY", "tmdb_test") };
+        unsafe { env::set_var("OMDB_API_KEY", "omdb_test") };
+        unsafe { env::set_var("IMAGE_DOWNLOAD_TIMEOUT_SECS", "8") };
+        unsafe { env::set_var("IMAGE_DOWNLOAD_READ_TIMEOUT_SECS", " 3 ") };
+        unsafe { env::set_var("IMAGE_DOWNLOAD_CONCURRENCY", "4") };
+
+        let cfg = Config::from_env();
+        assert_eq!(cfg.image_download_timeout_secs, 8);
+        assert_eq!(cfg.image_download_read_timeout_secs, 3);
+        assert_eq!(cfg.image_download_concurrency, 4);
+    }
+
+    #[test]
+    #[serial]
+    fn test_image_download_invalid_values_fall_back_to_defaults() {
+        unsafe { clear_config_env() };
+        unsafe { env::set_var("TMDB_API_KEY", "tmdb_test") };
+        unsafe { env::set_var("OMDB_API_KEY", "omdb_test") };
+        // 0 would disable the timeout / deadlock the download queue; reject it.
+        unsafe { env::set_var("IMAGE_DOWNLOAD_TIMEOUT_SECS", "0") };
+        unsafe { env::set_var("IMAGE_DOWNLOAD_READ_TIMEOUT_SECS", "-1") };
+        unsafe { env::set_var("IMAGE_DOWNLOAD_CONCURRENCY", "0") };
+
+        let cfg = Config::from_env();
+        assert_eq!(cfg.image_download_timeout_secs, 15);
+        assert_eq!(cfg.image_download_read_timeout_secs, 5);
+        assert_eq!(cfg.image_download_concurrency, 32);
+
+        unsafe { env::set_var("IMAGE_DOWNLOAD_TIMEOUT_SECS", "301") };
+        unsafe { env::set_var("IMAGE_DOWNLOAD_READ_TIMEOUT_SECS", "abc") };
+        unsafe { env::set_var("IMAGE_DOWNLOAD_CONCURRENCY", "5000") };
+        let cfg = Config::from_env();
+        assert_eq!(cfg.image_download_timeout_secs, 15);
+        assert_eq!(cfg.image_download_read_timeout_secs, 5);
+        assert_eq!(cfg.image_download_concurrency, 32);
+    }
+
+    #[test]
+    #[serial]
+    fn test_image_download_read_timeout_clamped_to_total() {
+        unsafe { clear_config_env() };
+        unsafe { env::set_var("TMDB_API_KEY", "tmdb_test") };
+        unsafe { env::set_var("OMDB_API_KEY", "omdb_test") };
+        unsafe { env::set_var("IMAGE_DOWNLOAD_TIMEOUT_SECS", "4") };
+        unsafe { env::set_var("IMAGE_DOWNLOAD_READ_TIMEOUT_SECS", "10") };
+
+        let cfg = Config::from_env();
+        assert_eq!(cfg.image_download_timeout_secs, 4);
+        assert_eq!(cfg.image_download_read_timeout_secs, 4);
     }
 }

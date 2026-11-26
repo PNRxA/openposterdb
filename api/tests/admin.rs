@@ -816,6 +816,8 @@ async fn purge_all_clears_disk_db_and_memory() {
         .insert("imdb/tt1@i".to_string(), MemCacheEntry { bytes: vec![0u8; 4].into(), last_checked: Instant::now() })
         .await;
     state.image_mem_cache.run_pending_tasks().await;
+    state.fanart_negative.insert("imdb/tt1_f_en_neg".to_string(), ()).await;
+    state.fanart_failed.insert("imdb/tt1_f_err".to_string(), ()).await;
 
     let req = Request::builder()
         .method("POST")
@@ -825,6 +827,9 @@ async fn purge_all_clears_disk_db_and_memory() {
         .unwrap();
     let res = app.clone().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
+    // Both fanart negative caches go too, so fanart is re-attempted right away.
+    assert!(state.fanart_negative.get("imdb/tt1_f_en_neg").await.is_none());
+    assert!(state.fanart_failed.get("imdb/tt1_f_err").await.is_none());
     let body = res.into_body().collect().await.unwrap().to_bytes();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(json["meta_deleted"], 2);

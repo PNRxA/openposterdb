@@ -1,5 +1,6 @@
 pub mod db;
 pub mod fanart;
+pub mod image_download;
 pub mod lang;
 pub mod mdblist;
 pub mod omdb;

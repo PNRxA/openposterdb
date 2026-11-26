@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::error::AppError;
+use crate::services::image_download::{self, Downloaded, ImageDownloadLimits};
 use crate::services::retry::{self, FANART_RETRY};
 use serde::Deserialize;
 use zeroize::Zeroizing;
@@ -9,6 +10,8 @@ use zeroize::Zeroizing;
 pub struct FanartClient {
     api_key: Arc<Zeroizing<String>>,
     http: reqwest::Client,
+    /// Timeouts / concurrency for asset downloads (separate from API calls).
+    images: ImageDownloadLimits,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -56,7 +59,13 @@ pub enum PosterMatch {
 
 impl FanartClient {
     pub fn new(api_key: String, http: reqwest::Client) -> Self {
-        Self { api_key: Arc::new(Zeroizing::new(api_key)), http }
+        Self { api_key: Arc::new(Zeroizing::new(api_key)), http, images: ImageDownloadLimits::default() }
+    }
+
+    /// Override the image-download limits (timeouts, concurrency).
+    pub fn with_image_limits(mut self, images: ImageDownloadLimits) -> Self {
+        self.images = images;
+        self
     }
 
     pub async fn get_movie_images(&self, tmdb_id: u64) -> Result<FanartImages, AppError> {
@@ -136,12 +145,14 @@ impl FanartClient {
         None
     }
 
+    /// Download an image asset (any kind, despite the name). Retries stalled or
+    /// truncated bodies as well as connect errors / 5xx, within the configured
+    /// image-download time budget.
     pub async fn fetch_poster_bytes(&self, url: &str) -> Result<Vec<u8>, AppError> {
-        let url = url.to_owned();
-        let resp = retry::send_with_retry(&FANART_RETRY, || self.http.get(&url).send())
-            .await?
-            .error_for_status()?;
-        Ok(resp.bytes().await?.to_vec())
+        match image_download::download(&FANART_RETRY, &self.images, || self.http.get(url)).await? {
+            Downloaded::Body(bytes) => Ok(bytes),
+            Downloaded::NotModified => Err(AppError::Other("fanart returned 304 to an unconditional request".into())),
+        }
     }
 }
 

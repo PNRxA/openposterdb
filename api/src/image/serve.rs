@@ -710,7 +710,9 @@ pub async fn handle_inner(
     settings.poster_badge_direction = settings.poster_badge_direction.resolve(settings.poster_position);
     settings.poster_badge_style = settings.poster_badge_style.resolve(settings.poster_badge_direction);
 
-    let use_fanart = settings.image_source.is_fanart();
+    // Without a fanart client the fanart path can only ever fall back to TMDB,
+    // so treat it as a TMDB request (same cache key) and keep the fast path.
+    let use_fanart = settings.image_source.is_fanart() && state.fanart.is_some();
     let id_key = format!("{id_type_str}/{id_value}");
     let variant = tmdb_poster_variant(&settings.lang, settings.textless);
 
@@ -792,15 +794,32 @@ pub async fn handle_inner(
         upsert_available_ratings_cached(state, &id_key, &sources, cross_ids.release_date.as_deref()).await;
     }
 
-    // Fanart → TMDB fallback strategy:
-    //
-    // 1. If the user's image_source is fanart, try fanart first. On hit, return.
-    //
-    // 2. On fanart miss, fall through to TMDB. The user's badge/position settings
-    //    are preserved — only the image source changes.
+    // Fanart-preferred requests are served entirely by `try_fanart_path`: a
+    // cached fanart render, else a cached fallback render (with fanart retried in
+    // the background), else a fresh render — fanart when available, TMDB
+    // otherwise. The user's badge/position settings are preserved either way;
+    // only the image source changes. A generation error falls through to the
+    // TMDB path below, which may still have a cached render — but it does not
+    // re-render, since that would repeat the same TMDB download that just failed.
+    let mut fanart_gen_error: Option<AppError> = None;
     if use_fanart {
-        if let Some(bytes) = try_fanart_path(state, id_type_str, id_value, id_type, &resolved, &ratings_result, &cross_ids, &settings, image_size).await? {
-            return Ok((bytes, cross_ids.release_date));
+        let fanart_start = Instant::now();
+        match try_fanart_path(state, id_type_str, id_value, id_type, &resolved, &ratings_result, &cross_ids, &settings, image_size).await? {
+            FanartPath::Served(bytes, outcome) => {
+                let total_ms = request_start.elapsed().as_millis() as u64;
+                if total_ms > SLOW_REQUEST_MS {
+                    tracing::warn!(
+                        id = %id_key,
+                        total_ms,
+                        resolve_ms,
+                        fanart_ms = fanart_start.elapsed().as_millis() as u64,
+                        outcome = outcome.as_str(),
+                        "slow poster request (fanart path)"
+                    );
+                }
+                return Ok((bytes, cross_ids.release_date));
+            }
+            FanartPath::GenerationFailed(e) => fanart_gen_error = Some(e),
         }
     }
 
@@ -841,6 +860,10 @@ pub async fn handle_inner(
         }
     }
 
+    if let Some(e) = fanart_gen_error {
+        return Err(e);
+    }
+
     // Request coalescing — concurrent requests for the same poster share one generation
     let generate_start = Instant::now();
     let state2 = state.clone();
@@ -851,7 +874,7 @@ pub async fn handle_inner(
         .image_inflight
         .try_get_with(cache_key.clone(), async move {
             let (rendered, rd, _used_fanart, gen_cross_ids) =
-                generate_poster_with_source(&state2, &resolved, badges, &cross_ids, &settings2, image_size, use_fanart).await?;
+                generate_poster_with_source(&state2, &resolved, badges, &cross_ids, &settings2, image_size, if use_fanart { FanartInput::Skip } else { FanartInput::Try }).await?;
             let bytes = post_render_cache(&state2, rendered, &cache_path2, &cache_key2, rd.as_deref(), cache::ImageType::Poster, gen_cross_ids, id_type, cache_suffix.to_string()).await;
             Ok::<_, AppError>(bytes)
         })
@@ -884,26 +907,6 @@ pub async fn handle_inner(
     Ok((bytes, release_date))
 }
 
-/// Check a single fanart cache variant (memory → filesystem).
-/// Returns `Ok(Some(bytes))` on cache hit, `Ok(None)` on miss.
-async fn check_fanart_cache_variant(
-    state: &AppState,
-    cache_key: &str,
-    cache_path: &std::path::Path,
-    id_type: IdType,
-    id_value: &str,
-    cache_suffix: &str,
-    settings: &RenderSettings,
-    image_size: Option<ImageSize>,
-) -> Result<Option<Bytes>, AppError> {
-    let id_value = id_value.to_string();
-    let cache_suffix = cache_suffix.to_string();
-    let settings = settings.clone();
-    check_caches(state, cache_key, cache_path, |s, k, p| {
-        trigger_background_refresh(s, k, p, id_type, &id_value, &cache_suffix, &settings, image_size);
-    }).await
-}
-
 /// Build a fanart cache key and filesystem path from a variant suffix (e.g. "_f_tl").
 fn fanart_variant_paths(
     cache_dir: &str,
@@ -918,8 +921,234 @@ fn fanart_variant_paths(
     Ok((cache_key, cache_path))
 }
 
-/// Try to serve a poster from the fanart cache (memory → filesystem → fresh generation).
-/// Returns `Ok(Some(bytes))` on hit, `Ok(None)` to fall through to TMDB, or `Err` on hard failure.
+/// Variant token for a fanart-preferred poster that had to fall back to TMDB art
+/// (fanart had no match, or was unreachable). Longer than any valid `lang`
+/// (max 5 chars), so it can never collide with a `_f_{lang}` variant.
+const FANART_FALLBACK_VARIANT: &str = "_f_fallback";
+
+/// Negative-cache key recording a recent fanart failure for a title + image kind.
+fn fanart_failure_key(id_type_str: &str, id_value: &str, kind_prefix: &str) -> String {
+    format!("{id_type_str}/{id_value}{kind_prefix}_f_err")
+}
+
+/// How a fanart-preferred poster request was satisfied (for slow-request logs).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FanartServed {
+    /// A cached fanart render.
+    CacheHit,
+    /// A cached TMDB-fallback render (fanart retried in the background if due).
+    FallbackCacheHit,
+    /// Rendered on this request.
+    Generated,
+}
+
+impl FanartServed {
+    fn as_str(self) -> &'static str {
+        match self {
+            FanartServed::CacheHit => "cache_hit",
+            FanartServed::FallbackCacheHit => "fallback_cache_hit",
+            FanartServed::Generated => "generated",
+        }
+    }
+}
+
+/// Everything needed to (re)generate a fanart-preferred poster, owned so it
+/// can move into a coalesced or background task.
+#[derive(Clone)]
+struct FanartPosterCtx {
+    id_type: IdType,
+    id_type_str: String,
+    id_value: String,
+    resolved: id::ResolvedId,
+    badges: Vec<ratings::RatingBadge>,
+    cross_ids: CrossIdInfo,
+    settings: RenderSettings,
+    image_size: Option<ImageSize>,
+    /// Settings + ratings cache suffix shared by every fanart variant.
+    suffix: String,
+}
+
+impl FanartPosterCtx {
+    fn id_key(&self) -> String {
+        format!("{}/{}", self.id_type_str, self.id_value)
+    }
+    fn textless_neg_key(&self) -> String {
+        format!("{}_f_tl_neg", self.id_key())
+    }
+    fn lang_neg_key(&self) -> String {
+        format!("{}_f_{}_neg", self.id_key(), self.settings.lang)
+    }
+    fn failure_key(&self) -> String {
+        fanart_failure_key(&self.id_type_str, &self.id_value, "")
+    }
+    /// The fallback render depends on lang/textless (TMDB(lang) → TMDB(default)).
+    fn fallback_variant(&self) -> String {
+        format!("{FANART_FALLBACK_VARIANT}{}", tmdb_poster_variant(&self.settings.lang, self.settings.textless))
+    }
+    fn paths(&self, cache_dir: &str, variant: &str) -> Result<(String, std::path::PathBuf), AppError> {
+        fanart_variant_paths(cache_dir, &self.id_type_str, &self.id_value, variant, &self.suffix)
+    }
+}
+
+/// Record a fanart poster attempt in the negative caches — "no art" in the
+/// long-lived `fanart_negative`, a failure in the short-lived `fanart_failed`.
+async fn record_fanart_poster_outcome(state: &AppState, ctx: &FanartPosterCtx, fetch: &FanartFetch) {
+    let textless = ctx.settings.textless;
+    match fetch {
+        FanartFetch::Found(r) => {
+            if textless && r.match_tier == PosterMatch::Language {
+                state.fanart_negative.insert(ctx.textless_neg_key(), ()).await;
+            }
+        }
+        FanartFetch::NoArt => {
+            if textless {
+                state.fanart_negative.insert(ctx.textless_neg_key(), ()).await;
+            }
+            state.fanart_negative.insert(ctx.lang_neg_key(), ()).await;
+        }
+        FanartFetch::Failed => {
+            state.fanart_failed.insert(ctx.failure_key(), ()).await;
+        }
+    }
+}
+
+/// Contact fanart for this poster and record the outcome *before* any TMDB
+/// work, so a fanart failure is remembered even if the TMDB fallback then
+/// fails too. `None` when no fanart client is configured.
+async fn attempt_fanart_poster(state: &AppState, ctx: &FanartPosterCtx) -> Option<FanartFetch> {
+    let fetch = fetch_fanart_poster(state, &ctx.resolved, &ctx.settings).await?;
+    record_fanart_poster_outcome(state, ctx, &fetch).await;
+    Some(fetch)
+}
+
+/// Render a fanart-preferred poster and cache it under the key matching what was
+/// actually used: `_f_tl` / `_f_{lang}` for fanart art, the fallback variant for
+/// TMDB art.
+async fn render_fanart_poster(
+    state: &AppState,
+    ctx: &FanartPosterCtx,
+    fanart: FanartInput,
+) -> Result<Bytes, AppError> {
+    let (rendered, rd, outcome, gen_cross_ids) = generate_poster_with_source(
+        state, &ctx.resolved, ctx.badges.clone(), &ctx.cross_ids, &ctx.settings, ctx.image_size, fanart,
+    )
+    .await?;
+
+    let variant = match outcome {
+        FanartOutcome::Found(PosterMatch::Textless) => "_f_tl".to_string(),
+        FanartOutcome::Found(PosterMatch::Language) => format!("_f_{}", ctx.settings.lang),
+        FanartOutcome::NoArt | FanartOutcome::Failed | FanartOutcome::NotAttempted => ctx.fallback_variant(),
+    };
+
+    let (cache_key, cache_path) = ctx.paths(&state.config.cache_dir, &variant)?;
+    let cache_suffix = format!("{variant}{}", ctx.suffix);
+    let bytes = post_render_cache(state, rendered, &cache_path, &cache_key, rd.as_deref(), cache::ImageType::Poster, gen_cross_ids, ctx.id_type, cache_suffix).await;
+    state
+        .image_mem_cache
+        .insert(cache_key, MemCacheEntry { bytes: bytes.clone(), last_checked: Instant::now() })
+        .await;
+    Ok(bytes)
+}
+
+/// Render a fanart-preferred poster (fanart art if available, else the TMDB
+/// fallback), recording the fanart outcome in the negative caches.
+///
+/// With `try_fanart = false` (fanart known missing / recently failed) only the
+/// fallback is rendered, without contacting fanart.
+async fn regenerate_fanart_poster(
+    state: &AppState,
+    ctx: &FanartPosterCtx,
+    try_fanart: bool,
+) -> Result<Bytes, AppError> {
+    // Titles without a TMDB poster_path fail generation regardless — don't
+    // contact fanart for them (same as before fanart was prefetched here).
+    let input = if try_fanart && ctx.resolved.poster_path.is_some() {
+        match attempt_fanart_poster(state, ctx).await {
+            Some(fetch) => FanartInput::Prefetched(fetch),
+            None => FanartInput::Skip,
+        }
+    } else {
+        FanartInput::Skip
+    };
+    render_fanart_poster(state, ctx, input).await
+}
+
+/// Take a `refresh_locks` slot for `lock_key` and run `job` in the background,
+/// releasing the slot when it finishes. No-op if a job already holds the slot.
+fn spawn_locked<F>(state: &AppState, lock_key: String, job: F)
+where
+    F: std::future::Future<Output = ()> + Send + 'static,
+{
+    if state.refresh_locks.contains_key(&lock_key) {
+        return;
+    }
+    state.refresh_locks.insert(lock_key.clone(), ());
+    let state = state.clone();
+    tokio::spawn(async move {
+        job.await;
+        state.refresh_locks.invalidate(&lock_key);
+    });
+}
+
+/// Regenerate a fanart-preferred poster off the request path (deduplicated per
+/// fallback key via `refresh_locks`). Used when a fallback render is served
+/// from cache: fanart is retried — or the stale fallback refreshed — without
+/// making the request wait on fanart.
+fn spawn_fanart_poster_regen(state: &AppState, ctx: FanartPosterCtx, try_fanart: bool) {
+    let Ok((lock_key, _)) = ctx.paths(&state.config.cache_dir, &ctx.fallback_variant()) else { return };
+    let st = state.clone();
+    let key = lock_key.clone();
+    spawn_locked(state, lock_key, async move {
+        tracing::debug!(key = %key, try_fanart, "background fanart poster regeneration started");
+        if let Err(e) = regenerate_fanart_poster(&st, &ctx, try_fanart).await {
+            tracing::warn!(key = %key, error = %e, "background fanart poster regeneration failed");
+        }
+    });
+}
+
+/// Background refresh of a *stale* cached fanart render (`_f_tl` / `_f_{lang}`).
+///
+/// - fanart failed recently → nothing to do; keep serving the existing render.
+/// - fanart fails now → the failure is recorded; the existing render is kept.
+/// - fanart art found → re-rendered under its fanart key.
+/// - fanart has no art any more → the TMDB fallback is rendered under the
+///   fallback key and "no art" negative-cached, exactly like the foreground path
+///   (later requests then skip the stale fanart variant).
+fn spawn_fanart_variant_refresh(state: &AppState, ctx: FanartPosterCtx, cache_key: String) {
+    let st = state.clone();
+    let key = cache_key.clone();
+    spawn_locked(state, cache_key, async move {
+        if st.fanart_failed.get(&ctx.failure_key()).await.is_some() {
+            return;
+        }
+        tracing::info!(key = %key, "background refresh started");
+        let fetch = match attempt_fanart_poster(&st, &ctx).await {
+            None | Some(FanartFetch::Failed) => return,
+            Some(fetch) => fetch,
+        };
+        if let Err(e) = render_fanart_poster(&st, &ctx, FanartInput::Prefetched(fetch)).await {
+            tracing::error!(key = %key, error = %e, "background refresh failed");
+        }
+    });
+}
+
+/// Result of [`try_fanart_path`].
+enum FanartPath {
+    Served(Bytes, FanartServed),
+    /// Nothing cached and rendering failed; the caller may still serve another
+    /// cached render but should not re-render (the same downloads just failed).
+    GenerationFailed(AppError),
+}
+
+/// Serve a fanart-preferred poster: cached fanart render → cached fallback
+/// render → fresh generation.
+///
+/// A cached fallback render is served *without* contacting fanart. Whether to
+/// retry fanart used to be decided only by the in-memory negative cache, and the
+/// fallback render lived under the plain TMDB key that this path never checked,
+/// so after a restart or TTL expiry every request blocked on a fresh fanart
+/// attempt even though a servable render sat on disk. Now that attempt runs in
+/// the background and upgrades the cache to a fanart render when it succeeds.
 ///
 /// Accepts pre-resolved data from the caller to avoid duplicate resolve+fetch work.
 async fn try_fanart_path(
@@ -932,89 +1161,89 @@ async fn try_fanart_path(
     cross_ids: &CrossIdInfo,
     settings: &RenderSettings,
     image_size: Option<ImageSize>,
-) -> Result<Option<Bytes>, AppError> {
-    // Build the list of cache variants to check.
-    // When textless is requested but we know it's unavailable (negative cache),
-    // skip the textless key and go straight to language.
-    let neg_key = format!("{id_type_str}/{id_value}_f_tl_neg");
-    let textless_known_missing = settings.textless
-        && state.fanart_negative.get(&neg_key).await.is_some();
-
-    let lang_variant = format!("_f_{}", settings.lang);
-    let lang_neg_key = format!("{id_type_str}/{id_value}_f_{}_neg", settings.lang);
-    let lang_known_missing = state.fanart_negative.get(&lang_neg_key).await.is_some();
-
-    // All fanart variants are known-missing — skip generation and fall through to TMDB
-    if lang_known_missing && (!settings.textless || textless_known_missing) {
-        return Ok(None);
-    }
-
+) -> Result<FanartPath, AppError> {
     let badges = ratings::apply_rating_preferences(ratings_result.badges.clone(), &settings.ratings_order, &settings.ratings_exclude, settings.ratings_limit);
     let ratings_suffix = ratings::badges_cache_suffix(&badges);
-
     // Compute settings suffix once for all fanart variants
     let suffix = settings_cache_suffix_with_ratings(settings, cache::ImageType::Poster, image_size, &ratings_suffix);
+    let ctx = FanartPosterCtx {
+        id_type,
+        id_type_str: id_type_str.to_string(),
+        id_value: id_value.to_string(),
+        resolved: resolved.clone(),
+        badges,
+        cross_ids: cross_ids.clone(),
+        settings: settings.clone(),
+        image_size,
+        suffix,
+    };
 
-    // Check cached variants (textless first if requested, then language)
+    // When textless is requested but we know it's unavailable (negative cache),
+    // skip the textless key and go straight to language.
+    let textless_known_missing = settings.textless
+        && state.fanart_negative.get(&ctx.textless_neg_key()).await.is_some();
+    let lang_known_missing = state.fanart_negative.get(&ctx.lang_neg_key()).await.is_some();
+    let all_known_missing = lang_known_missing && (!settings.textless || textless_known_missing);
+    let recently_failed = state.fanart_failed.get(&ctx.failure_key()).await.is_some();
+    // Don't contact fanart when the answer is already known.
+    let fanart_blocked = all_known_missing || recently_failed;
+
+    // 1. Cached fanart renders (textless first if requested, then language).
+    //    A stale one is refreshed through the fanart-aware path, so a fanart
+    //    outage never overwrites it with TMDB art.
     let mut variants_to_check: Vec<String> = Vec::new();
     if settings.textless && !textless_known_missing {
         variants_to_check.push("_f_tl".to_string());
     }
     if !lang_known_missing {
-        variants_to_check.push(lang_variant.clone());
+        variants_to_check.push(format!("_f_{}", settings.lang));
     }
-
     for variant in &variants_to_check {
-        let (cache_key, cache_path) =
-            fanart_variant_paths(&state.config.cache_dir, id_type_str, id_value, variant, &suffix)?;
-        let variant_cache_suffix = format!("{variant}{suffix}");
-        if let Some(bytes) =
-            check_fanart_cache_variant(state, &cache_key, &cache_path, id_type, id_value, &variant_cache_suffix, settings, image_size).await?
+        let (cache_key, cache_path) = ctx.paths(&state.config.cache_dir, variant)?;
+        if let Some(bytes) = check_caches(state, &cache_key, &cache_path, |s, k, _p| {
+            spawn_fanart_variant_refresh(s, ctx.clone(), k.to_string());
+        })
+        .await?
         {
-            return Ok(Some(bytes));
+            return Ok(FanartPath::Served(bytes, FanartServed::CacheHit));
         }
     }
 
-    // No cache hit — generate with fanart. Cache under the key matching the actual
-    // tier used (textless vs language). If no fanart match, fall through to TMDB.
-    let result = generate_poster_with_source(state, resolved, badges, cross_ids, settings, image_size, false).await;
+    // 2. Cached fallback render — serve it now; retry fanart (or refresh a
+    //    stale fallback) in the background.
+    let (fb_key, fb_path) = ctx.paths(&state.config.cache_dir, &ctx.fallback_variant())?;
+    let fb_hit = check_caches(state, &fb_key, &fb_path, |s, _k, _p| {
+        spawn_fanart_poster_regen(s, ctx.clone(), !fanart_blocked);
+    })
+    .await?;
+    if let Some(bytes) = fb_hit {
+        if !fanart_blocked {
+            spawn_fanart_poster_regen(state, ctx, true);
+        }
+        return Ok(FanartPath::Served(bytes, FanartServed::FallbackCacheHit));
+    }
 
+    // 3. Nothing cached — render now. Coalesced so a burst of requests for the
+    //    same poster shares one fanart attempt and one render.
+    let inflight_key = format!("{fb_key}#gen");
+    let state2 = state.clone();
+    let result = state
+        .image_inflight
+        .try_get_with(inflight_key.clone(), async move {
+            regenerate_fanart_poster(&state2, &ctx, !fanart_blocked).await
+        })
+        .await
+        .map_err(AppError::from_cached);
+    // The render is already cached (memory + disk) under its real key, which is
+    // what purges target. Don't let this coalescing entry outlive the request,
+    // or a single-variant purge within image_inflight's TTL would be undone by
+    // re-serving the purged bytes from here.
+    state.image_inflight.invalidate(&inflight_key).await;
     match result {
-        Ok((bytes, rd, Some(tier), cross_ids)) => {
-            if settings.textless && tier == PosterMatch::Language {
-                state.fanart_negative.insert(neg_key, ()).await;
-            }
-
-            let actual_variant = match tier {
-                PosterMatch::Textless => "_f_tl".to_string(),
-                PosterMatch::Language => format!("_f_{}", settings.lang),
-            };
-            let (cache_key, cache_path) =
-                fanart_variant_paths(&state.config.cache_dir, id_type_str, id_value, &actual_variant, &suffix)?;
-            let fanart_cache_suffix = format!("{actual_variant}{suffix}");
-            let bytes = post_render_cache(state, bytes, &cache_path, &cache_key, rd.as_deref(), cache::ImageType::Poster, cross_ids, id_type, fanart_cache_suffix).await;
-            state
-                .image_mem_cache
-                .insert(
-                    cache_key,
-                    MemCacheEntry {
-                        bytes: bytes.clone(),
-                        last_checked: Instant::now(),
-                    },
-                )
-                .await;
-            Ok(Some(bytes))
-        }
-        Ok((_bytes, _rd, None, _cross_ids)) => {
-            if settings.textless {
-                state.fanart_negative.insert(neg_key, ()).await;
-            }
-            state.fanart_negative.insert(lang_neg_key, ()).await;
-            Ok(None)
-        }
+        Ok(bytes) => Ok(FanartPath::Served(bytes, FanartServed::Generated)),
         Err(e) => {
-            tracing::warn!(error = %e, "fanart generation failed, falling through to TMDB");
-            Ok(None)
+            tracing::warn!(error = %e, "fanart poster generation failed");
+            Ok(FanartPath::GenerationFailed(e))
         }
     }
 }
@@ -1103,7 +1332,7 @@ fn trigger_background_refresh(
         }
         let badges = ratings::apply_rating_preferences(ratings_result.badges, &settings.ratings_order, &settings.ratings_exclude, settings.ratings_limit);
         let (bytes, rd, _tier, cross_ids) =
-            generate_poster_with_source(&state2, &resolved, badges, &cross_ids, &settings, image_size, false).await?;
+            generate_poster_with_source(&state2, &resolved, badges, &cross_ids, &settings, image_size, FanartInput::Try).await?;
         Ok((bytes, rd, cache::ImageType::Poster, cross_ids))
     });
 }
@@ -1156,7 +1385,7 @@ fn trigger_logo_backdrop_refresh(
         let image_bytes = if fanart_is_primary {
             // Fanart primary → TMDB fallback
             let primary = if let Some(fc) = fanart {
-                fetch_fanart_image(fc, &state2.tmdb, &state2.fanart_cache, &resolved, lang, textless, kind, &state2.config.cache_dir, state2.config.external_cache_only).await.map(|r| r.bytes)
+                fetch_fanart_image(fc, &state2.tmdb, &state2.fanart_cache, &resolved, lang, textless, kind, &state2.config.cache_dir, state2.config.external_cache_only).await.found().map(|r| r.bytes)
             } else {
                 None
             };
@@ -1175,6 +1404,7 @@ fn trigger_logo_backdrop_refresh(
                     if let Some(fc) = fanart {
                         fetch_fanart_image(fc, &state2.tmdb, &state2.fanart_cache, &resolved, lang, textless, kind, &state2.config.cache_dir, state2.config.external_cache_only)
                             .await
+                            .found()
                             .map(|r| r.bytes)
                             .ok_or_else(not_found)?
                     } else {
@@ -1301,7 +1531,70 @@ fn trigger_episode_refresh(
     });
 }
 
-/// Returns (poster_bytes, release_date, fanart_match_tier, cross_id_info)
+/// What happened to the fanart.tv attempt during a poster generation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FanartOutcome {
+    /// Fanart wasn't tried (already tried by the caller, no client, or another
+    /// source won first).
+    NotAttempted,
+    /// Fanart art was used, from this tier.
+    Found(PosterMatch),
+    /// Fanart answered but has no matching art.
+    NoArt,
+    /// Fanart was unreachable, or the asset download failed / timed out.
+    Failed,
+}
+
+/// How [`generate_poster_with_source`] should source fanart art.
+enum FanartInput {
+    /// Fetch from fanart.tv when the fallback chain reaches it.
+    Try,
+    /// Don't contact fanart (already tried, known missing, or recently failed).
+    Skip,
+    /// The caller already fetched it (so it could record the outcome first).
+    Prefetched(FanartFetch),
+}
+
+impl FanartInput {
+    /// The fanart fetch result for this generation; `None` = not attempted.
+    async fn resolve(
+        self,
+        state: &AppState,
+        resolved: &id::ResolvedId,
+        settings: &RenderSettings,
+    ) -> Option<FanartFetch> {
+        match self {
+            FanartInput::Skip => None,
+            FanartInput::Prefetched(f) => Some(f),
+            FanartInput::Try => Some(fetch_fanart_poster(state, resolved, settings).await?),
+        }
+    }
+}
+
+/// Fetch the fanart poster for these settings; `None` when no fanart client.
+async fn fetch_fanart_poster(
+    state: &AppState,
+    resolved: &id::ResolvedId,
+    settings: &RenderSettings,
+) -> Option<FanartFetch> {
+    let fanart = state.fanart.as_ref()?;
+    Some(
+        fetch_fanart_image(
+            fanart,
+            &state.tmdb,
+            &state.fanart_cache,
+            resolved,
+            &settings.lang,
+            settings.textless,
+            cache::ImageType::Poster,
+            &state.config.cache_dir,
+            state.config.external_cache_only,
+        )
+        .await,
+    )
+}
+
+/// Returns (poster_bytes, release_date, fanart_outcome, cross_id_info)
 ///
 /// Accepts pre-fetched `ResolvedId`, badges, and `CrossIdInfo` so that callers
 /// who already resolved/fetched ratings (for cache key construction) don't
@@ -1313,8 +1606,8 @@ async fn generate_poster_with_source(
     cross_ids: &CrossIdInfo,
     settings: &RenderSettings,
     image_size: Option<ImageSize>,
-    fanart_already_tried: bool,
-) -> Result<(Vec<u8>, Option<String>, Option<PosterMatch>, CrossIdInfo), AppError> {
+    fanart: FanartInput,
+) -> Result<(Vec<u8>, Option<String>, FanartOutcome, CrossIdInfo), AppError> {
     let default_poster_path = resolved
         .poster_path
         .as_deref()
@@ -1331,32 +1624,11 @@ async fn generate_poster_with_source(
     // entirely — `resolved.poster_path` is already the TMDB(default).
     let is_default = &*settings.lang == "en" && !settings.textless;
 
-    let try_fanart = || async {
-        if fanart_already_tried {
-            return None;
-        }
-        if let Some(ref fanart) = state.fanart {
-            fetch_fanart_image(
-                fanart,
-                &state.tmdb,
-                &state.fanart_cache,
-                resolved,
-                &settings.lang,
-                settings.textless,
-                cache::ImageType::Poster,
-                &state.config.cache_dir,
-                state.config.external_cache_only,
-            )
-            .await
-        } else {
-            None
-        }
-    };
-
-    let (lang_poster_path, fanart_result) = if settings.image_source.is_fanart() {
+    let (lang_poster_path, fanart_fetch) = if settings.image_source.is_fanart() {
         // Fanart(lang) → TMDB(lang) → TMDB(default)
-        let fr = try_fanart().await;
-        let tp = if fr.is_none() && !is_default {
+        let fr = fanart.resolve(state, resolved, settings).await;
+        let fanart_found = matches!(fr, Some(FanartFetch::Found(_)));
+        let tp = if !fanart_found && !is_default {
             resolve_tmdb_poster_path(state, resolved, &settings.lang, settings.textless).await
         } else {
             None
@@ -1370,7 +1642,7 @@ async fn generate_poster_with_source(
             None
         };
         let fr = if tp.is_none() && !is_default {
-            try_fanart().await
+            fanart.resolve(state, resolved, settings).await
         } else {
             None
         };
@@ -1378,8 +1650,12 @@ async fn generate_poster_with_source(
     };
     // When both None → poster_path = default_poster_path → generate_poster fetches TMDB(default)
     let poster_path = lang_poster_path.as_deref().unwrap_or(default_poster_path);
-    let match_tier = fanart_result.as_ref().map(|r| r.match_tier);
-    let fanart_bytes = fanart_result.map(|r| r.bytes);
+    let (fanart_outcome, fanart_bytes) = match fanart_fetch {
+        None => (FanartOutcome::NotAttempted, None),
+        Some(FanartFetch::Found(r)) => (FanartOutcome::Found(r.match_tier), Some(r.bytes)),
+        Some(FanartFetch::NoArt) => (FanartOutcome::NoArt, None),
+        Some(FanartFetch::Failed) => (FanartOutcome::Failed, None),
+    };
 
     let resolved_size = resolve_image_size(image_size);
     let target_width = resolved_size.poster_target_width();
@@ -1411,13 +1687,32 @@ async fn generate_poster_with_source(
     })
     .await?;
 
-    Ok((bytes, cross_ids.release_date.clone(), match_tier, cross_ids.clone()))
+    Ok((bytes, cross_ids.release_date.clone(), fanart_outcome, cross_ids.clone()))
 }
 
 /// Result of a fanart poster fetch, indicating what tier matched.
 struct FanartResult {
     bytes: Vec<u8>,
     match_tier: PosterMatch,
+}
+
+/// Outcome of [`fetch_fanart_image`]. "No art" and "failed" are distinct so a
+/// transient outage isn't negative-cached as if the title had no fanart.
+enum FanartFetch {
+    Found(FanartResult),
+    /// Fanart answered, but has nothing matching this kind/lang/textless.
+    NoArt,
+    /// Metadata request or asset download failed (error / timeout).
+    Failed,
+}
+
+impl FanartFetch {
+    fn found(self) -> Option<FanartResult> {
+        match self {
+            FanartFetch::Found(r) => Some(r),
+            FanartFetch::NoArt | FanartFetch::Failed => None,
+        }
+    }
 }
 
 async fn resolve_tvdb_id(
@@ -1508,37 +1803,61 @@ async fn fetch_fanart_image(
     kind: cache::ImageType,
     cache_dir: &str,
     external_cache_only: bool,
-) -> Option<FanartResult> {
-    let images = fetch_fanart_images(fanart, tmdb, cache, resolved).await?;
+) -> FanartFetch {
+    let Some(images) = fetch_fanart_images(fanart, tmdb, cache, resolved).await else {
+        return FanartFetch::Failed;
+    };
     let candidates = select_images_for_kind(&images, kind);
 
-    let (selected, match_tier) = FanartClient::select_image(candidates, lang, textless)?;
+    let Some((selected, match_tier)) = FanartClient::select_image(candidates, lang, textless) else {
+        return FanartFetch::NoArt;
+    };
     let url = selected.url.clone();
     let fanart_id = selected.id.clone();
 
     // Try to serve from base fanart cache
     let ext = kind.ext();
-    let base_path = cache::base_fanart_path(cache_dir, &fanart_id, ext).ok()?;
+    let Ok(base_path) = cache::base_fanart_path(cache_dir, &fanart_id, ext) else {
+        // Unusable asset id — treat like no art rather than retrying it.
+        return FanartFetch::NoArt;
+    };
 
     let bytes = match cache::read(&base_path, 0).await {
         Some(entry) => entry.bytes,
         None => {
+            let start = Instant::now();
             match fanart.fetch_poster_bytes(&url).await {
                 Ok(fresh) => {
+                    tracing::debug!(
+                        url = %url,
+                        bytes = fresh.len(),
+                        download_ms = start.elapsed().as_millis() as u64,
+                        "downloaded fanart image"
+                    );
                     if !external_cache_only {
                         let _ = cache::write(&base_path, &fresh).await;
                     }
                     fresh
                 }
                 Err(e) => {
-                    tracing::warn!(error = %e, url = %url, "failed to download fanart image");
-                    return None;
+                    let permanent = crate::services::image_download::is_permanent_error(&e);
+                    tracing::warn!(
+                        error = %e,
+                        url = %url,
+                        permanent,
+                        download_ms = start.elapsed().as_millis() as u64,
+                        "failed to download fanart image"
+                    );
+                    // A dead asset URL (404/410/403…) won't come back in minutes:
+                    // treat it as "no art" (long negative) rather than a transient
+                    // failure (short negative).
+                    return if permanent { FanartFetch::NoArt } else { FanartFetch::Failed };
                 }
             }
         }
     };
 
-    Some(FanartResult { bytes, match_tier })
+    FanartFetch::Found(FanartResult { bytes, match_tier })
 }
 
 pub fn image_response(bytes: Bytes, content_type: &'static str) -> Response {
@@ -1641,7 +1960,9 @@ async fn try_tmdb_logo_backdrop(
 }
 
 /// Try to fetch an image from fanart.tv, updating negative caches on miss.
-/// Returns `Some(bytes)` on hit, `None` on miss.
+/// Returns `Some(bytes)` on hit, `None` on miss. "No art" is recorded in the
+/// long-lived `fanart_negative`; a failure (outage, stalled download) only in the
+/// short-lived `fanart_failed`, so it isn't mistaken for missing art.
 async fn try_fanart_with_negative_cache(
     fanart_client: &FanartClient,
     state: &AppState,
@@ -1651,6 +1972,7 @@ async fn try_fanart_with_negative_cache(
     kind: cache::ImageType,
     neg_textless_key: &str,
     neg_lang_key: &str,
+    failure_key: &str,
 ) -> Option<Vec<u8>> {
     let result = fetch_fanart_image(
         fanart_client,
@@ -1664,17 +1986,21 @@ async fn try_fanart_with_negative_cache(
         state.config.external_cache_only,
     ).await;
     match result {
-        Some(r) => {
+        FanartFetch::Found(r) => {
             if textless && r.match_tier == PosterMatch::Language {
                 state.fanart_negative.insert(neg_textless_key.to_string(), ()).await;
             }
             Some(r.bytes)
         }
-        None => {
+        FanartFetch::NoArt => {
             if textless {
                 state.fanart_negative.insert(neg_textless_key.to_string(), ()).await;
             }
             state.fanart_negative.insert(neg_lang_key.to_string(), ()).await;
+            None
+        }
+        FanartFetch::Failed => {
+            state.fanart_failed.insert(failure_key.to_string(), ()).await;
             None
         }
     }
@@ -1802,6 +2128,7 @@ pub async fn handle_logo_backdrop_inner(
     lb_kind: LogoBackdropKind,
     image_size: Option<ImageSize>,
 ) -> Result<(Bytes, Option<String>), AppError> {
+    let request_start = Instant::now();
     let fanart = state.fanart.as_ref();
 
     let kind: cache::ImageType = lb_kind.into();
@@ -1836,10 +2163,13 @@ pub async fn handle_logo_backdrop_inner(
     let neg_lang_key = format!("{id_type_str}/{id_value}{kind_prefix}_f_{}_neg", fanart_lang);
     let lang_known_missing = state.fanart_negative.get(&neg_lang_key).await.is_some();
 
-    // When all fanart variants are known-missing, skip the fanart API call in
-    // the generation path. We still try TMDB as a fallback rather than
-    // returning 404 immediately.
-    let skip_fanart = lang_known_missing && (!fanart_textless || textless_known_missing);
+    let failure_key = fanart_failure_key(id_type_str, id_value, kind_prefix);
+    let recently_failed = state.fanart_failed.get(&failure_key).await.is_some();
+
+    // When all fanart variants are known-missing, or fanart failed for this
+    // title moments ago, skip the fanart call in the generation path. We still
+    // try TMDB as a fallback rather than returning 404 immediately.
+    let skip_fanart = recently_failed || (lang_known_missing && (!fanart_textless || textless_known_missing));
 
     let source_prefix = if settings.image_source.is_fanart() { "_f" } else { "_t" };
     let variant = match kind {
@@ -1883,8 +2213,10 @@ pub async fn handle_logo_backdrop_inner(
     // Slow path: resolve ID and fetch ratings. Episodes are uplifted to
     // their parent series — logos/backdrops don't apply to episodes.
     let skip_ratings = type_ratings_limit == 0;
+    let resolve_start = Instant::now();
     let (resolved, ratings_result, cross_ids) =
         resolve_with_ratings(state, id_type, id_value, true, skip_ratings).await?;
+    let resolve_ms = resolve_start.elapsed().as_millis() as u64;
 
     // Persist available sources for future fast-path lookups (always write,
     // even with external_cache_only — this is an optimization index, not a
@@ -1918,6 +2250,7 @@ pub async fn handle_logo_backdrop_inner(
     }
 
     // Request coalescing — concurrent requests for the same logo/backdrop share one generation
+    let generate_start = Instant::now();
     struct LbGenCtx {
         state: AppState,
         cache_key: String,
@@ -1928,6 +2261,7 @@ pub async fn handle_logo_backdrop_inner(
         skip_fanart: bool,
         neg_textless_key: String,
         neg_lang_key: String,
+        failure_key: String,
         type_badge_style: BadgeStyle,
         type_label_style: LabelStyle,
         type_appearance: BadgeAppearance,
@@ -1952,6 +2286,7 @@ pub async fn handle_logo_backdrop_inner(
         skip_fanart,
         neg_textless_key,
         neg_lang_key,
+        failure_key,
         type_badge_style,
         type_label_style,
         type_appearance: params.appearance,
@@ -1986,7 +2321,7 @@ pub async fn handle_logo_backdrop_inner(
                         try_fanart_with_negative_cache(
                             fc, &ctx.state, &ctx.resolved,
                             fanart_lang, fanart_textless, kind,
-                            &ctx.neg_textless_key, &ctx.neg_lang_key,
+                            &ctx.neg_textless_key, &ctx.neg_lang_key, &ctx.failure_key,
                         ).await
                     } else {
                         None
@@ -2008,7 +2343,7 @@ pub async fn handle_logo_backdrop_inner(
                         try_fanart_with_negative_cache(
                             fc, &ctx.state, &ctx.resolved,
                             fanart_lang, fanart_textless, kind,
-                            &ctx.neg_textless_key, &ctx.neg_lang_key,
+                            &ctx.neg_textless_key, &ctx.neg_lang_key, &ctx.failure_key,
                         ).await
                     } else {
                         None
@@ -2052,6 +2387,18 @@ pub async fn handle_logo_backdrop_inner(
         })
         .await
         .map_err(AppError::from_cached)?;
+
+    let total_ms = request_start.elapsed().as_millis() as u64;
+    if total_ms > SLOW_REQUEST_MS {
+        tracing::warn!(
+            id = %id_key,
+            kind = label,
+            total_ms,
+            resolve_ms,
+            generate_ms = generate_start.elapsed().as_millis() as u64,
+            "slow logo/backdrop request (generated)"
+        );
+    }
 
     state
         .image_mem_cache

@@ -27,6 +27,18 @@ At minimum you need a **TMDB key** (for artwork), a **JWT secret** (for auth), a
 | `RENDER_CONCURRENCY` | `CPUs × 2` | Max concurrent image render tasks |
 | `CROSS_ID_CONCURRENCY` | `CPUs` | Max concurrent cross-ID cache write tasks |
 
+## Upstream image downloads
+
+These apply to downloading source artwork from the TMDB image CDN and fanart.tv (`assets.fanart.tv`). Metadata/API calls are unaffected.
+
+| Variable | Default | Description |
+|---|---|---|
+| `IMAGE_DOWNLOAD_TIMEOUT_SECS` | `15` | Total time budget for one image download, including retries, backoff, and waiting for a concurrency slot (1-300). When it runs out the poster falls back to another source (e.g. fanart → TMDB) instead of hanging |
+| `IMAGE_DOWNLOAD_READ_TIMEOUT_SECS` | `5` | Max seconds an attempt may go without progress (no response headers, or no further body data) before it is abandoned and retried (1-300, capped at `IMAGE_DOWNLOAD_TIMEOUT_SECS`) |
+| `IMAGE_DOWNLOAD_CONCURRENCY` | `32` | Max concurrent downloads per image host (TMDB and fanart.tv each get their own limit, so a stalled fanart.tv can't starve TMDB fallbacks) (1-1024) |
+
+Invalid or out-of-range values are logged and replaced by the default. A fanart.tv failure (unreachable, timed out, truncated download, 5xx) suppresses further fanart attempts for that title for 5 minutes; a cached fallback poster is served immediately and fanart is retried in the background. A permanent error for an asset (e.g. 404) is treated like missing art and rechecked hourly.
+
 ## Auth & access
 
 | Variable | Default | Description |

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::error::AppError;
+use crate::services::image_download::{self, Downloaded, ImageDownloadLimits};
 use crate::services::retry::{self, TMDB_API_RETRY, TMDB_CDN_RETRY};
 use serde::de::DeserializeOwned;
 use zeroize::Zeroizing;
@@ -18,11 +19,19 @@ const POSTER_RATIO_TOL: f64 = 0.05;
 pub struct TmdbClient {
     api_key: Arc<Zeroizing<String>>,
     http: reqwest::Client,
+    /// Timeouts / concurrency for image CDN downloads (separate from API calls).
+    images: ImageDownloadLimits,
 }
 
 impl TmdbClient {
     pub fn new(api_key: String, http: reqwest::Client) -> Self {
-        Self { api_key: Arc::new(Zeroizing::new(api_key)), http }
+        Self { api_key: Arc::new(Zeroizing::new(api_key)), http, images: ImageDownloadLimits::default() }
+    }
+
+    /// Override the image-download limits (timeouts, concurrency).
+    pub fn with_image_limits(mut self, images: ImageDownloadLimits) -> Self {
+        self.images = images;
+        self
     }
 
     pub async fn get<T: DeserializeOwned>(
@@ -59,19 +68,18 @@ impl TmdbClient {
             let dt: chrono::DateTime<chrono::Utc> = t.into();
             dt.format("%a, %d %b %Y %H:%M:%S GMT").to_string()
         });
-        let resp = retry::send_with_retry(&TMDB_CDN_RETRY, || {
+        let downloaded = image_download::download(&TMDB_CDN_RETRY, &self.images, || {
             let mut r = self.http.get(&url);
             if let Some(ref h) = since_header {
                 r = r.header(reqwest::header::IF_MODIFIED_SINCE, h.as_str());
             }
-            r.send()
+            r
         })
         .await?;
-        if resp.status() == reqwest::StatusCode::NOT_MODIFIED {
-            return Ok(None);
+        match downloaded {
+            Downloaded::Body(bytes) => Ok(Some(bytes)),
+            Downloaded::NotModified => Ok(None),
         }
-        let resp = resp.error_for_status()?;
-        Ok(Some(resp.bytes().await?.to_vec()))
     }
 
     pub async fn get_images(&self, media_type: &str, tmdb_id: u64, lang: &str) -> Result<TmdbImagesResponse, AppError> {
@@ -178,10 +186,11 @@ impl TmdbClient {
     /// Fetch image bytes from the TMDB CDN for any image type (poster, logo, backdrop).
     pub async fn fetch_image_bytes(&self, file_path: &str, size: &str) -> Result<Vec<u8>, AppError> {
         let url = format!("https://image.tmdb.org/t/p/{size}{file_path}");
-        let resp = retry::send_with_retry(&TMDB_CDN_RETRY, || self.http.get(&url).send())
-            .await?
-            .error_for_status()?;
-        Ok(resp.bytes().await?.to_vec())
+        match image_download::download(&TMDB_CDN_RETRY, &self.images, || self.http.get(&url)).await? {
+            Downloaded::Body(bytes) => Ok(bytes),
+            // Unconditional GET — a 304 here would be an upstream bug.
+            Downloaded::NotModified => Err(AppError::Other("tmdb-cdn returned 304 to an unconditional request".into())),
+        }
     }
 }
 

@@ -52,6 +52,13 @@ pub struct AppState {
     /// Tracks negative fanart results — e.g. "movie:123:textless" means no textless poster exists.
     /// Entries expire after the same TTL as fanart_cache so we recheck periodically.
     pub fanart_negative: moka::future::Cache<String, ()>,
+    /// Short-lived record of fanart *failures* — the metadata call or the asset
+    /// download errored or timed out — e.g. "imdb/tt123_f_err". Kept separate
+    /// from `fanart_negative` (a genuine "no art" answer, rechecked hourly) so a
+    /// transient outage only suppresses fanart for [`FANART_FAILURE_TTL`] instead
+    /// of being mistaken for missing art, while still stopping every request
+    /// from re-paying the failed download.
+    pub fanart_failed: moka::future::Cache<String, ()>,
     pub tmdb_images_cache: moka::future::Cache<String, Arc<services::tmdb::TmdbImagesResponse>>,
     pub settings_cache: moka::future::Cache<i32, Arc<RenderSettings>>,
     pub global_settings_cache: moka::future::Cache<(), Arc<RenderSettings>>,
@@ -83,6 +90,9 @@ impl AppState {
             .unwrap_or(false)
     }
 }
+
+/// How long a fanart failure suppresses further fanart attempts for a title.
+pub const FANART_FAILURE_TTL: std::time::Duration = std::time::Duration::from_secs(300);
 
 pub static FONT_BYTES: &[u8] = include_bytes!("../assets/fonts/Inter-Bold.ttf");
 

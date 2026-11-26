@@ -843,6 +843,7 @@ pub async fn purge_all(
     state.available_ratings_cache.invalidate_all();
     state.fanart_cache.invalidate_all();
     state.fanart_negative.invalidate_all();
+    state.fanart_failed.invalidate_all();
     state.tmdb_images_cache.invalidate_all();
     state.preview_cache.invalidate_all();
 
