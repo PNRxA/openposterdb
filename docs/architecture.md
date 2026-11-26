@@ -97,7 +97,7 @@ Logos and backdrops include a source marker (`_t` for TMDB, `_f` for Fanart.tv) 
 | Logo/Backdrop | Fanart | `_f` or `_f_{lang}` | Image sourced from Fanart.tv |
 | *(negative)* | Textless miss | `_f_tl_neg` | No textless fanart image available (in memory, 1 h) |
 | *(negative)* | Language miss | `_f_{lang}_neg` | No fanart image for this language (in memory, 1 h) |
-| *(negative)* | Fanart failure | `_f_err` | Fanart unreachable / download failed or timed out (in memory, 5 min) |
+| *(negative)* | Fanart failure | `_f_err` | Fanart unreachable / download failed or timed out (in memory, 5 min). A permanent 4xx on the asset (e.g. 404) counts as a language miss instead. While set, stale fanart renders are kept rather than refreshed |
 
 ### Database values
 

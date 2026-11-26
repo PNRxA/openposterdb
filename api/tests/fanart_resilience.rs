@@ -30,6 +30,8 @@ enum Upstream {
     StallMidBody,
     /// Serve this JPEG.
     Jpeg(&'static [u8]),
+    /// Respond with this status and an empty body.
+    Status(u16),
 }
 
 /// Raw HTTP server standing in for assets.fanart.tv. Returns its URL and a
@@ -59,6 +61,11 @@ async fn fanart_asset_server(mode: Upstream) -> (String, Arc<AtomicU32>) {
                         let _ = sock.write_all(&[0xFF, 0xD8, 0xFF]).await;
                         let _ = sock.flush().await;
                         tokio::time::sleep(Duration::from_secs(120)).await;
+                    }
+                    Upstream::Status(code) => {
+                        let resp = format!("HTTP/1.1 {code} X\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                        let _ = sock.write_all(resp.as_bytes()).await;
+                        let _ = sock.flush().await;
                     }
                     Upstream::Jpeg(body) => {
                         let head = format!(
@@ -319,4 +326,201 @@ async fn logo_download_failure_is_not_cached_as_missing_art() {
     )
     .await;
     assert_eq!(hits.load(Ordering::SeqCst), attempts);
+}
+
+// --- review follow-ups ---------------------------------------------------
+
+fn leak_jpeg(r: u8, g: u8, b: u8) -> &'static [u8] {
+    Box::leak(jpeg(r, g, b).into_boxed_slice())
+}
+
+/// The settings/ratings cache suffix, learned from the fallback file name.
+fn fallback_suffix(state: &AppState) -> String {
+    let files = poster_files(state, &format!("{ID}_f_fallback"));
+    assert_eq!(files.len(), 1, "expected one fallback render: {files:?}");
+    files[0]
+        .strip_prefix(&format!("{ID}_f_fallback"))
+        .unwrap()
+        .strip_suffix(".jpg")
+        .unwrap()
+        .to_string()
+}
+
+fn poster_file_path(state: &AppState, name: &str) -> std::path::PathBuf {
+    std::path::Path::new(&state.config.cache_dir).join("posters").join("imdb").join(name)
+}
+
+/// Produce the fallback render without contacting fanart (failure pre-recorded),
+/// then clear in-memory state so later requests start from disk.
+async fn seed_fallback(state: &AppState) {
+    state.fanart_failed.insert(format!("imdb/{ID}_f_err"), ()).await;
+    let _ = poster_request(state).await;
+    state.fanart_failed.invalidate_all();
+    state.image_mem_cache.invalidate_all();
+    state.image_inflight.invalidate_all();
+    state.refresh_locks.invalidate_all();
+}
+
+/// Write a cached `_f_en` render with known bytes and an mtime old enough to
+/// be stale (no image_meta row → default 1-day staleness).
+fn write_stale_fanart_render(state: &AppState, suffix: &str, bytes: &[u8]) -> std::path::PathBuf {
+    let path = poster_file_path(state, &format!("{ID}_f_en{suffix}.jpg"));
+    std::fs::write(&path, bytes).unwrap();
+    let old = std::time::SystemTime::now() - Duration::from_secs(3 * 86400);
+    std::fs::File::options().write(true).open(&path).unwrap().set_modified(old).unwrap();
+    path
+}
+
+#[tokio::test]
+async fn variant_purge_within_inflight_ttl_rerenders() {
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use tower::ServiceExt;
+
+    let (url, _hits) = fanart_asset_server(Upstream::Jpeg(leak_jpeg(30, 30, 200))).await;
+    let (state, _dir) = setup(&url, Duration::from_secs(5), Duration::from_secs(2)).await;
+    let app = openposterdb_api::build_app(state.clone());
+    let token = common::setup_admin(&app).await;
+
+    // Cold request renders the fanart poster (step 3, coalesced via image_inflight).
+    let _ = poster_request(&state).await;
+    let files = poster_files(&state, &format!("{ID}_f_en"));
+    assert_eq!(files.len(), 1);
+    let cache_value = files[0].strip_suffix(".jpg").unwrap().to_string();
+
+    // Purge just that variant, well inside image_inflight's 30s TTL.
+    let req = Request::builder()
+        .method("DELETE")
+        .uri(format!("/api/admin/posters/imdb/{}?scope=variant", cache_value.replace('@', "%40")))
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert!(poster_files(&state, &format!("{ID}_f_en")).is_empty());
+
+    // The next request must re-render and re-cache, not replay the purged bytes.
+    let _ = poster_request(&state).await;
+    assert_eq!(
+        poster_files(&state, &format!("{ID}_f_en")).len(),
+        1,
+        "purged variant should be re-rendered and re-cached"
+    );
+    assert!(state.image_mem_cache.get(&format!("imdb/{cache_value}")).await.is_some());
+}
+
+#[tokio::test]
+async fn permanent_asset_error_is_cached_as_no_art() {
+    let (url, hits) = fanart_asset_server(Upstream::Status(404)).await;
+    let (state, _dir) = setup(&url, Duration::from_secs(2), Duration::from_secs(1)).await;
+
+    let _ = poster_request(&state).await;
+    assert_eq!(hits.load(Ordering::SeqCst), 1, "404 is not retried");
+    state.fanart_negative.run_pending_tasks().await;
+    assert!(
+        state.fanart_negative.get(&format!("imdb/{ID}_f_en_neg")).await.is_some(),
+        "a dead asset URL is long-negative-cached as no art"
+    );
+    assert!(state.fanart_failed.get(&format!("imdb/{ID}_f_err")).await.is_none());
+}
+
+#[tokio::test]
+async fn fanart_failure_recorded_when_tmdb_fallback_also_fails() {
+    let (url, hits) = fanart_asset_server(Upstream::StallMidBody).await;
+    let (state, _dir) = setup(&url, Duration::from_millis(600), Duration::from_millis(200)).await;
+    // TMDB CDN fails too: no base poster on disk, and downloads cut off fast.
+    let mut st = (*state).clone();
+    st.tmdb = openposterdb_api::services::tmdb::TmdbClient::new("test".into(), reqwest::Client::new())
+        .with_image_limits(ImageDownloadLimits::new(Duration::from_millis(300), Duration::from_millis(300), 4));
+    let state = Arc::new(st);
+    let other = "tt7777778";
+    state
+        .id_cache
+        .insert(
+            format!("imdb/{other}"),
+            ResolvedId {
+                imdb_id: Some(other.into()),
+                tmdb_id: TMDB_ID,
+                tvdb_id: None,
+                media_type: MediaType::Movie,
+                poster_path: Some("/opdb-test-does-not-exist-91c3.jpg".into()),
+                release_date: Some("2000-01-01".into()),
+                episode: None,
+            },
+        )
+        .await;
+
+    let other_jpg = format!("{other}.jpg");
+    let req = || serve::handle_inner(&state, "imdb", &other_jpg, fanart_settings(), None);
+    assert!(req().await.is_err(), "both sources failed");
+    assert!(hits.load(Ordering::SeqCst) >= 1);
+    state.fanart_failed.run_pending_tasks().await;
+    assert!(
+        state.fanart_failed.get(&format!("imdb/{other}_f_err")).await.is_some(),
+        "fanart failure must be recorded even though the TMDB fallback failed"
+    );
+
+    let attempts = hits.load(Ordering::SeqCst);
+    assert!(req().await.is_err());
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(hits.load(Ordering::SeqCst), attempts, "second request must not contact fanart");
+}
+
+#[tokio::test]
+async fn stale_fanart_render_kept_when_fanart_fails() {
+    let (url, hits) = fanart_asset_server(Upstream::StallMidBody).await;
+    let (state, _dir) = setup(&url, Duration::from_millis(600), Duration::from_millis(200)).await;
+    seed_fallback(&state).await;
+    let suffix = fallback_suffix(&state);
+    let cached = jpeg(10, 200, 10);
+    let path = write_stale_fanart_render(&state, &suffix, &cached);
+
+    // Stale fanart render is served; the refresh runs in the background.
+    let (served, elapsed) = poster_request(&state).await;
+    assert_eq!(&served[..], &cached[..]);
+    assert!(elapsed < Duration::from_millis(500), "stale hit waited: {elapsed:?}");
+
+    let key = format!("imdb/{ID}_f_err");
+    let mut recorded = false;
+    for _ in 0..120 {
+        if state.fanart_failed.get(&key).await.is_some() {
+            recorded = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    assert!(recorded, "refresh should record the fanart failure");
+    assert!(hits.load(Ordering::SeqCst) >= 1);
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(std::fs::read(&path).unwrap(), cached, "fanart render must not be overwritten with TMDB art");
+
+    // While the failure is recorded, a stale hit doesn't contact fanart again.
+    let attempts = hits.load(Ordering::SeqCst);
+    state.image_mem_cache.invalidate_all();
+    let (served, _) = poster_request(&state).await;
+    assert_eq!(&served[..], &cached[..]);
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(hits.load(Ordering::SeqCst), attempts);
+    assert_eq!(std::fs::read(&path).unwrap(), cached);
+}
+
+#[tokio::test]
+async fn stale_fanart_render_refreshed_when_fanart_found() {
+    let (url, hits) = fanart_asset_server(Upstream::Jpeg(leak_jpeg(30, 30, 200))).await;
+    let (state, _dir) = setup(&url, Duration::from_secs(5), Duration::from_secs(2)).await;
+    seed_fallback(&state).await;
+    let suffix = fallback_suffix(&state);
+    let cached = jpeg(10, 200, 10);
+    let path = write_stale_fanart_render(&state, &suffix, &cached);
+
+    let (served, _) = poster_request(&state).await;
+    assert_eq!(&served[..], &cached[..]);
+
+    let refreshed = wait_until(Duration::from_secs(10), || {
+        std::fs::read(&path).map(|b| b != cached).unwrap_or(false)
+    })
+    .await;
+    assert!(refreshed, "stale fanart render should be re-rendered from fanart");
+    assert_eq!(hits.load(Ordering::SeqCst), 1);
+    assert!(state.fanart_failed.get(&format!("imdb/{ID}_f_err")).await.is_none());
 }

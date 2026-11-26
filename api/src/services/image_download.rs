@@ -183,6 +183,20 @@ where
     }
 }
 
+/// True when a [`download`] error is a permanent answer for that URL — a 4xx
+/// other than 408/429 (e.g. 404 Not Found, 410 Gone, 403 Forbidden) — rather
+/// than a transient failure (timeouts, connect/body errors, 5xx, 429).
+pub fn is_permanent_error(err: &AppError) -> bool {
+    match err {
+        AppError::Api(e) => e.status().is_some_and(|s| {
+            s.is_client_error()
+                && s != StatusCode::REQUEST_TIMEOUT
+                && s != StatusCode::TOO_MANY_REQUESTS
+        }),
+        _ => false,
+    }
+}
+
 /// Read the full body chunk by chunk, failing if the stream stalls for longer
 /// than `read_timeout` between chunks or ends early (truncated body).
 async fn read_body(mut resp: Response, read_timeout: Duration) -> Result<Vec<u8>, AppError> {
@@ -386,6 +400,32 @@ mod tests {
         let res = download(&FAST, &limits(5000, 1000, 4), || client.get(&url)).await;
         assert!(res.is_err());
         assert_eq!(counter.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn error_classification_permanent_vs_transient() {
+        let client = reqwest::Client::new();
+        let l = limits(2000, 300, 4);
+        for code in [404u16, 410, 403] {
+            let (url, _) = raw_server(vec![Behaviour::Status(code)]).await;
+            let err = download(&FAST, &l, || client.get(&url)).await.unwrap_err();
+            assert!(is_permanent_error(&err), "{code} should be permanent: {err}");
+        }
+        for b in [
+            Behaviour::Status(503),
+            Behaviour::Status(429),
+            Behaviour::Status(408),
+            Behaviour::Truncated(BODY, 3),
+            Behaviour::StallMidBody(BODY, 3),
+        ] {
+            let (url, _) = raw_server(vec![b]).await;
+            let err = download(&FAST, &l, || client.get(&url)).await.unwrap_err();
+            assert!(!is_permanent_error(&err), "should be transient: {err}");
+        }
+        // Budget overrun is transient too.
+        let (url, _) = raw_server(vec![Behaviour::StallHeaders]).await;
+        let err = download(&FAST, &limits(200, 200, 4), || client.get(&url)).await.unwrap_err();
+        assert!(!is_permanent_error(&err));
     }
 
     #[tokio::test]

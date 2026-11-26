@@ -37,7 +37,7 @@ These apply to downloading source artwork from the TMDB image CDN and fanart.tv 
 | `IMAGE_DOWNLOAD_READ_TIMEOUT_SECS` | `5` | Max seconds an attempt may go without progress (no response headers, or no further body data) before it is abandoned and retried (1-300, capped at `IMAGE_DOWNLOAD_TIMEOUT_SECS`) |
 | `IMAGE_DOWNLOAD_CONCURRENCY` | `32` | Max concurrent downloads per image host (TMDB and fanart.tv each get their own limit, so a stalled fanart.tv can't starve TMDB fallbacks) (1-1024) |
 
-Invalid or out-of-range values are logged and replaced by the default. A fanart.tv failure (unreachable, timed out, truncated download) suppresses further fanart attempts for that title for 5 minutes; a cached fallback poster is served immediately and fanart is retried in the background.
+Invalid or out-of-range values are logged and replaced by the default. A fanart.tv failure (unreachable, timed out, truncated download, 5xx) suppresses further fanart attempts for that title for 5 minutes; a cached fallback poster is served immediately and fanart is retried in the background. A permanent error for an asset (e.g. 404) is treated like missing art and rechecked hourly.
 
 ## Auth & access
 
