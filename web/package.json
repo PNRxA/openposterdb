@@ -33,7 +33,7 @@
     "vue-router": "^5.0.3"
   },
   "devDependencies": {
-    "@playwright/test": "^1.60.0",
+    "@playwright/test": "^1.65.1",
     "@tsconfig/node24": "^24.0.4",
     "@types/jsdom": "^28.0.0",
     "@types/node": "^24.12.0",
