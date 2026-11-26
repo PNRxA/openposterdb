@@ -47,6 +47,10 @@ fn test_upsert(key_id: i32) -> UpsertApiKeySettings<'static> {
         episode_badge_background: "d",
         backdrop_edge_inset_x: 0,
         backdrop_edge_inset_y: 0,
+        poster_font_size: "m",
+        logo_font_size: "m",
+        backdrop_font_size: "m",
+        episode_font_size: "m",
     }
 }
 
@@ -899,4 +903,55 @@ async fn effective_settings_episode_per_key_overrides() {
     assert_eq!(s.episode_position, db::BadgePosition::TopLeft);
     assert_eq!(s.episode_badge_direction, db::BadgeDirection::Horizontal);
     assert!(s.episode_blur);
+}
+
+// --- Font size settings ---
+
+#[tokio::test]
+async fn font_size_per_key_round_trip_and_invalid_fallback() {
+    let (app, state) = common::setup_test_app().await;
+    let token = common::setup_admin(&app).await;
+
+    use axum::body::Body;
+    use axum::http::Request;
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/keys")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::from(serde_json::json!({"name": "font-test"}).to_string()))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let key_id = json["id"].as_i64().unwrap() as i32;
+
+    // Defaults when nothing is configured.
+    let s = db::get_effective_render_settings(&state.db, key_id, None).await;
+    assert_eq!(s.poster_font_size, db::FontSize::Medium);
+    assert_eq!(s.episode_font_size, db::FontSize::Medium);
+
+    db::upsert_api_key_settings(&state.db, UpsertApiKeySettings {
+        poster_font_size: "xl",
+        logo_font_size: "l",
+        backdrop_font_size: "s",
+        episode_font_size: "bogus",
+        ..test_upsert(key_id)
+    }).await.unwrap();
+
+    let raw = db::get_api_key_settings(&state.db, key_id).await.unwrap().unwrap();
+    assert_eq!(raw.poster_font_size, "xl");
+    assert_eq!(raw.logo_font_size, "l");
+    assert_eq!(raw.backdrop_font_size, "s");
+
+    let s = db::get_effective_render_settings(&state.db, key_id, None).await;
+    assert_eq!(s.poster_font_size, db::FontSize::ExtraLarge);
+    assert_eq!(s.logo_font_size, db::FontSize::Large);
+    assert_eq!(s.backdrop_font_size, db::FontSize::Small);
+    // An invalid stored value falls back to the default instead of failing.
+    assert_eq!(s.episode_font_size, db::FontSize::Medium);
+    assert_eq!(s.poster_appearance().font_size, db::FontSize::ExtraLarge);
 }

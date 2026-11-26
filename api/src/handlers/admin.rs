@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::cache;
 use crate::error::AppError;
 use crate::image::serve::{self, LogoBackdropKind};
-use crate::services::db::{self, default_ratings_limit, default_logo_backdrop_ratings_limit, default_ratings_order, BadgeBackground, BadgeDirection, BadgeShape, BadgeSize, BadgeStyle, LabelStyle, BadgePosition, ImageSource, PosterFit};
+use crate::services::db::{self, default_ratings_limit, default_logo_backdrop_ratings_limit, default_ratings_order, BadgeBackground, BadgeDirection, BadgeShape, BadgeSize, BadgeStyle, FontSize, LabelStyle, BadgePosition, ImageSource, PosterFit};
 use crate::AppState;
 
 #[derive(Serialize)]
@@ -153,6 +153,10 @@ pub struct GlobalSettingsResponse {
     pub logo_badge_background: BadgeBackground,
     pub backdrop_badge_background: BadgeBackground,
     pub episode_badge_background: BadgeBackground,
+    pub poster_font_size: FontSize,
+    pub logo_font_size: FontSize,
+    pub backdrop_font_size: FontSize,
+    pub episode_font_size: FontSize,
 }
 
 pub async fn get_settings(
@@ -213,6 +217,10 @@ pub async fn get_settings(
         logo_badge_background: settings.logo_badge_background,
         backdrop_badge_background: settings.backdrop_badge_background,
         episode_badge_background: settings.episode_badge_background,
+        poster_font_size: settings.poster_font_size,
+        logo_font_size: settings.logo_font_size,
+        backdrop_font_size: settings.backdrop_font_size,
+        episode_font_size: settings.episode_font_size,
     }))
 }
 
@@ -299,6 +307,14 @@ pub struct UpdateGlobalSettingsRequest {
     pub backdrop_badge_background: BadgeBackground,
     #[serde(default = "db::default_badge_background")]
     pub episode_badge_background: BadgeBackground,
+    #[serde(default = "db::default_font_size")]
+    pub poster_font_size: FontSize,
+    #[serde(default = "db::default_font_size")]
+    pub logo_font_size: FontSize,
+    #[serde(default = "db::default_font_size")]
+    pub backdrop_font_size: FontSize,
+    #[serde(default = "db::default_font_size")]
+    pub episode_font_size: FontSize,
 }
 
 pub async fn update_settings(
@@ -356,6 +372,10 @@ pub async fn update_settings(
         ("logo_badge_background", req.logo_badge_background.as_str()),
         ("backdrop_badge_background", req.backdrop_badge_background.as_str()),
         ("episode_badge_background", req.episode_badge_background.as_str()),
+        ("poster_font_size", req.poster_font_size.as_str()),
+        ("logo_font_size", req.logo_font_size.as_str()),
+        ("backdrop_font_size", req.backdrop_font_size.as_str()),
+        ("episode_font_size", req.episode_font_size.as_str()),
     ];
     let free_key_str;
     if state.config.free_key_enabled.is_none() {

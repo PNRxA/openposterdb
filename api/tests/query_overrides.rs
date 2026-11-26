@@ -444,6 +444,38 @@ async fn backdrop_edge_inset_accepted() {
 }
 
 #[tokio::test]
+async fn font_size_accepted_for_all_kinds() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    for path in ["poster-default", "logo-default", "backdrop-default"] {
+        for size in ["xs", "s", "m", "l", "xl"] {
+            let req = Request::builder()
+                .uri(format!("/{api_key}/imdb/{path}/tt0000001.jpg?font_size={size}"))
+                .body(Body::empty())
+                .unwrap();
+            let res = app.clone().oneshot(req).await.unwrap();
+            assert_ne!(res.status(), StatusCode::BAD_REQUEST, "{path} font_size={size}");
+        }
+    }
+}
+
+#[tokio::test]
+async fn invalid_font_size_rejected() {
+    let (app, _) = common::setup_test_app().await;
+    let api_key = create_api_key(&app).await;
+
+    for bad in ["xxl", "large", "M", "1.5"] {
+        let req = Request::builder()
+            .uri(format!("/{api_key}/imdb/poster-default/tt0000001.jpg?font_size={bad}"))
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST, "font_size={bad}");
+    }
+}
+
+#[tokio::test]
 async fn poster_invalid_badge_shape_rejected() {
     let (app, _) = common::setup_test_app().await;
     let api_key = create_api_key(&app).await;

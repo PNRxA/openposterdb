@@ -203,7 +203,26 @@ fn overlay_vertical_stack(canvas: &mut RgbaImage, badge_images: &[RgbaImage], po
     }
 }
 
+/// How many badges fit side by side in `available` pixels with `spacing`
+/// between them, capped at `max_per_row` and never less than one. Badges are
+/// assumed to be as wide as the widest one (horizontal badges are rendered at a
+/// uniform width, vertical ones at a scale-derived fixed width).
+fn badges_fitting_in_row(badge_images: &[RgbaImage], max_per_row: usize, available: u32, spacing: u32) -> usize {
+    let max_w = badge_images.iter().map(|b| b.width()).max().unwrap_or(0);
+    let fit = if max_w == 0 {
+        max_per_row
+    } else {
+        ((available + spacing) / (max_w + spacing)) as usize
+    };
+    fit.min(max_per_row).max(1)
+}
+
 /// Overlay badges in horizontal rows, positioned according to `position`.
+///
+/// `max_per_row` is the preferred row length; rows are shortened further when
+/// that many badges would run off the canvas (e.g. when an enlarged font makes
+/// the badges wider), so badges wrap onto another row instead of being clipped.
+/// Any layout that fits on the canvas is left exactly as before.
 ///
 /// `extra_x` / `extra_y` behave as in [`overlay_vertical_stack`]: edge insets in
 /// resolved pixels that only apply to the anchored edge (centered axes ignore
@@ -214,6 +233,17 @@ fn overlay_horizontal_rows(canvas: &mut RgbaImage, badge_images: &[RgbaImage], p
     let top_margin = (BADGE_TOP_MARGIN as f32 * badge_scale).round() as u32;
     let bottom_margin = (BADGE_BOTTOM_MARGIN as f32 * badge_scale).round() as u32;
     let side_margin = (side_margin_base as f32 * badge_scale).round() as u32;
+
+    // Widest row that still lands fully on the canvas. Left-anchored rows start
+    // after the side margin + inset; centered and right-anchored rows can use
+    // the whole width (their start clamps at 0), so a row only wraps when it
+    // would otherwise be clipped.
+    let available = if position.is_left() {
+        canvas.width().saturating_sub(side_margin + extra_x)
+    } else {
+        canvas.width()
+    };
+    let max_per_row = badges_fitting_in_row(badge_images, max_per_row, available, spacing);
 
     let rows: Vec<&[RgbaImage]> = badge_images.chunks(max_per_row).collect();
     let badge_height = badge_images.iter().map(|b| b.height()).max().unwrap_or(0);
@@ -785,6 +815,72 @@ mod tests {
     use super::*;
 
     #[test]
+    fn badges_fitting_in_row_caps_by_width() {
+        let imgs = vec![RgbaImage::new(100, 10); 5];
+        // 5 * 100 + 4 * 10 = 540 fits in 550 → keep the preferred 5.
+        assert_eq!(badges_fitting_in_row(&imgs, 5, 550, 10), 5);
+        // Only 4 fit in 500 (4 * 100 + 3 * 10 = 430; 5 would need 540).
+        assert_eq!(badges_fitting_in_row(&imgs, 5, 500, 10), 4);
+        // Never exceeds the preferred row length.
+        assert_eq!(badges_fitting_in_row(&imgs, 3, 10_000, 10), 3);
+        // Always at least one per row, even if a single badge overflows.
+        assert_eq!(badges_fitting_in_row(&imgs, 3, 50, 10), 1);
+    }
+
+    #[test]
+    fn horizontal_rows_wrap_instead_of_overflowing() {
+        // Three 250px-wide badges can't share one row on a 580px canvas (two
+        // 15px side margins): they must wrap rather than run off the edge.
+        let badge = RgbaImage::from_pixel(250, 40, image::Rgba([255, 0, 0, 255]));
+        let badges = vec![badge; 3];
+        for position in [BadgePosition::BottomCenter, BadgePosition::TopLeft, BadgePosition::BottomRight] {
+            let mut canvas = RgbaImage::new(580, 870);
+            overlay_horizontal_rows(&mut canvas, &badges, position, 3, 1.0, BADGE_SIDE_MARGIN, 0, 0);
+            let drawn = canvas.pixels().filter(|p| p[3] > 0).count() as u32;
+            assert_eq!(drawn, 3 * 250 * 40, "{position:?}: every badge pixel should be on the canvas");
+            let rows_used = canvas.enumerate_pixels().filter(|(_, _, p)| p[3] > 0).map(|(_, y, _)| y).collect::<std::collections::BTreeSet<_>>().len();
+            assert_eq!(rows_used, 80, "{position:?}: should wrap onto two 40px rows");
+        }
+
+        // Rows that fit on the canvas keep the preferred row length (one row),
+        // even when they eat into the side margins — the layout is unchanged.
+        for w in [150, 180] {
+            let fits = vec![RgbaImage::from_pixel(w, 40, image::Rgba([255, 0, 0, 255])); 3];
+            for position in [BadgePosition::BottomCenter, BadgePosition::BottomLeft, BadgePosition::BottomRight] {
+                let mut canvas = RgbaImage::new(580, 870);
+                overlay_horizontal_rows(&mut canvas, &fits, position, 3, 1.0, BADGE_SIDE_MARGIN, 0, 0);
+                let rows_used = canvas.enumerate_pixels().filter(|(_, _, p)| p[3] > 0).map(|(_, y, _)| y).collect::<std::collections::BTreeSet<_>>().len();
+                assert_eq!(rows_used, 40, "{position:?}: three {w}px badges should stay in a single row");
+            }
+        }
+    }
+
+    #[test]
+    fn poster_font_size_changes_output_and_default_matches_medium() {
+        use crate::services::db::FontSize;
+        use crate::services::ratings::{RatingBadge, RatingSource};
+
+        let font = FontArc::try_from_slice(crate::FONT_BYTES).unwrap();
+        let png = test_png(580, 870);
+        let badges = vec![
+            RatingBadge { source: RatingSource::Imdb, value: "8.5".to_string() },
+            RatingBadge { source: RatingSource::Rt, value: "100%".to_string() },
+            RatingBadge { source: RatingSource::Metacritic, value: "78".to_string() },
+        ];
+        let render = |fs: FontSize, style: BadgeStyle, dir: BadgeDirection| {
+            let appearance = BadgeAppearance { font_size: fs, ..Default::default() };
+            render_poster_sync(&png, &badges, &font, 85, BadgePosition::BottomCenter, style, LabelStyle::Official, appearance, dir, 580, 1.0, BadgeSize::Medium, false, PosterFit::Native).unwrap()
+        };
+        for (style, dir) in [(BadgeStyle::Horizontal, BadgeDirection::Horizontal), (BadgeStyle::Vertical, BadgeDirection::Horizontal), (BadgeStyle::Vertical, BadgeDirection::Vertical)] {
+            let m = render(FontSize::Medium, style, dir);
+            let default = render_poster_sync(&png, &badges, &font, 85, BadgePosition::BottomCenter, style, LabelStyle::Official, BadgeAppearance::default(), dir, 580, 1.0, BadgeSize::Medium, false, PosterFit::Native).unwrap();
+            assert_eq!(m, default);
+            assert_ne!(m, render(FontSize::ExtraLarge, style, dir), "{style:?}/{dir:?}");
+            assert_ne!(m, render(FontSize::ExtraSmall, style, dir), "{style:?}/{dir:?}");
+        }
+    }
+
+    #[test]
     fn render_poster_no_badges() {
         let font = FontArc::try_from_slice(crate::FONT_BYTES).unwrap();
         // Create a minimal valid PNG in memory
@@ -907,7 +1003,7 @@ mod tests {
             RatingBadge { source: RatingSource::Imdb, value: "8.5".to_string() },
             RatingBadge { source: RatingSource::Tmdb, value: "85%".to_string() },
         ];
-        let pill = BadgeAppearance { shape: BadgeShape::Pill, background: BadgeBackground::Default };
+        let pill = BadgeAppearance { shape: BadgeShape::Pill, background: BadgeBackground::Default, ..Default::default() };
         let rounded = BadgeAppearance::default();
 
         // A pill ignores the vertical style and always renders horizontally, so

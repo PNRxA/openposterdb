@@ -49,6 +49,12 @@ pub struct Model {
     /// Distance (percent of height, 0–50) to inset backdrop ratings from the
     /// anchored vertical edge (top or bottom). Ignored for centered positions.
     pub backdrop_edge_inset_y: i32,
+    /// Badge text (rating value / text label) size per image type:
+    /// `xs`, `s`, `m` (default), `l`, `xl`. Independent of the badge size.
+    pub poster_font_size: String,
+    pub logo_font_size: String,
+    pub backdrop_font_size: String,
+    pub episode_font_size: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

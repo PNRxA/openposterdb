@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 use super::auth::AuthUser;
 use super::middleware::ApiKeyUser;
 use crate::error::AppError;
-use crate::services::db::{self, default_ratings_limit, default_logo_backdrop_ratings_limit, default_ratings_order, BadgeBackground, BadgeDirection, BadgeShape, BadgeSize, BadgeStyle, LabelStyle, BadgePosition, ImageSource, PosterFit};
+use crate::services::db::{self, default_ratings_limit, default_logo_backdrop_ratings_limit, default_ratings_order, BadgeBackground, BadgeDirection, BadgeShape, BadgeSize, BadgeStyle, FontSize, LabelStyle, BadgePosition, ImageSource, PosterFit};
 use crate::services::validation;
 use crate::AppState;
 
@@ -135,6 +135,10 @@ pub struct RenderSettingsResponse {
     pub logo_badge_background: BadgeBackground,
     pub backdrop_badge_background: BadgeBackground,
     pub episode_badge_background: BadgeBackground,
+    pub poster_font_size: FontSize,
+    pub logo_font_size: FontSize,
+    pub backdrop_font_size: FontSize,
+    pub episode_font_size: FontSize,
 }
 
 pub async fn get_settings(
@@ -192,6 +196,10 @@ fn settings_to_response(settings: &db::RenderSettings, fanart_available: bool) -
         logo_badge_background: settings.logo_badge_background,
         backdrop_badge_background: settings.backdrop_badge_background,
         episode_badge_background: settings.episode_badge_background,
+        poster_font_size: settings.poster_font_size,
+        logo_font_size: settings.logo_font_size,
+        backdrop_font_size: settings.backdrop_font_size,
+        episode_font_size: settings.episode_font_size,
     }
 }
 
@@ -277,6 +285,14 @@ pub struct UpdateSettingsRequest {
     pub backdrop_badge_background: BadgeBackground,
     #[serde(default = "db::default_badge_background")]
     pub episode_badge_background: BadgeBackground,
+    #[serde(default = "db::default_font_size")]
+    pub poster_font_size: FontSize,
+    #[serde(default = "db::default_font_size")]
+    pub logo_font_size: FontSize,
+    #[serde(default = "db::default_font_size")]
+    pub backdrop_font_size: FontSize,
+    #[serde(default = "db::default_font_size")]
+    pub episode_font_size: FontSize,
 }
 
 fn build_upsert(id: i32, req: &UpdateSettingsRequest) -> db::UpsertApiKeySettings<'_> {
@@ -322,6 +338,10 @@ fn build_upsert(id: i32, req: &UpdateSettingsRequest) -> db::UpsertApiKeySetting
         episode_badge_background: req.episode_badge_background.as_str(),
         backdrop_edge_inset_x: db::clamp_edge_inset(req.backdrop_edge_inset_x),
         backdrop_edge_inset_y: db::clamp_edge_inset(req.backdrop_edge_inset_y),
+        poster_font_size: req.poster_font_size.as_str(),
+        logo_font_size: req.logo_font_size.as_str(),
+        backdrop_font_size: req.backdrop_font_size.as_str(),
+        episode_font_size: req.episode_font_size.as_str(),
     }
 }
 

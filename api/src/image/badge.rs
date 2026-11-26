@@ -111,6 +111,18 @@ const BASE_PILL_PADDING_V: u32 = 6;
 const BASE_FONT_SIZE: f32 = 34.0;
 const BASE_LABEL_FONT_SIZE: f32 = 26.0;
 const BASE_ICON_HEIGHT: u32 = 48;
+/// Minimum clearance (at 1x badge scale) kept between the text's full line box
+/// (ascent + descent) and the top/bottom edge of a horizontal badge. Only
+/// matters for enlarged font sizes: if the text would come closer than this,
+/// the badge grows taller to fit it. At the default font size the badge height
+/// is always the base height.
+const BASE_TEXT_MIN_PAD_V: f32 = 3.0;
+
+/// Height a horizontal badge needs so text with a line height of `font_px`
+/// keeps at least `BASE_TEXT_MIN_PAD_V` clearance above and below.
+fn text_fit_height(font_px: f32, badge_scale: f32) -> u32 {
+    (font_px + 2.0 * BASE_TEXT_MIN_PAD_V * badge_scale).ceil() as u32
+}
 
 /// Compute the width of an icon when scaled to the given target height, preserving aspect ratio.
 fn icon_scaled_width(icon: &RgbaImage, target_height: u32) -> u32 {
@@ -161,6 +173,7 @@ pub fn render_badge_appearance(badge: &RatingBadge, font: &FontArc, label_style:
 
 /// Scaled badge dimensions for a given badge_scale factor.
 struct ScaledDims {
+    badge_scale: f32,
     badge_height: u32,
     badge_padding_h: u32,
     text_label_padding_h: u32,
@@ -174,6 +187,7 @@ struct ScaledDims {
 impl ScaledDims {
     fn new(badge_scale: f32) -> Self {
         Self {
+            badge_scale,
             badge_height: (BASE_BADGE_HEIGHT as f32 * badge_scale).round() as u32,
             badge_padding_h: (BASE_BADGE_PADDING_H as f32 * badge_scale).round() as u32,
             text_label_padding_h: (BASE_TEXT_LABEL_PADDING_H as f32 * badge_scale).round() as u32,
@@ -187,6 +201,8 @@ impl ScaledDims {
 }
 
 /// Pre-compute scaled fonts for badge rendering (avoids redundant work).
+/// `text_scale` is the combined badge scale × font-size factor; the icon and
+/// paddings use the badge scale alone (see [`ScaledDims`]).
 struct BadgeFonts<'a> {
     font: &'a FontArc,
     scale: PxScale,
@@ -196,9 +212,9 @@ struct BadgeFonts<'a> {
 }
 
 impl<'a> BadgeFonts<'a> {
-    fn new(font: &'a FontArc, badge_scale: f32) -> Self {
-        let font_size = BASE_FONT_SIZE * badge_scale;
-        let label_font_size = BASE_LABEL_FONT_SIZE * badge_scale;
+    fn new(font: &'a FontArc, text_scale: f32) -> Self {
+        let font_size = BASE_FONT_SIZE * text_scale;
+        let label_font_size = BASE_LABEL_FONT_SIZE * text_scale;
         let scale = PxScale::from(font_size);
         let label_scale = PxScale::from(label_font_size);
         Self {
@@ -217,7 +233,7 @@ pub fn render_badges_uniform(badges: &[RatingBadge], font: &FontArc, label_style
         return vec![];
     }
 
-    let fonts = BadgeFonts::new(font, badge_scale);
+    let fonts = BadgeFonts::new(font, badge_scale * appearance.font_size.scale_factor());
     let dims = ScaledDims::new(badge_scale);
 
     let max_label_width = match label_style {
@@ -259,7 +275,7 @@ fn render_badge_with_widths(
     appearance: BadgeAppearance,
     badge_scale: f32,
 ) -> RgbaImage {
-    let fonts = BadgeFonts::new(font, badge_scale);
+    let fonts = BadgeFonts::new(font, badge_scale * appearance.font_size.scale_factor());
     let dims = ScaledDims::new(badge_scale);
     render_badge_inner(badge, &fonts, &dims, uniform_label_width, uniform_value_width, label_style, appearance)
 }
@@ -300,7 +316,10 @@ fn render_badge_inner(
         BadgeShape::Pill => (dims.pill_padding, dims.pill_padding_v),
         BadgeShape::Rounded => (0, 0),
     };
-    let badge_h = dims.badge_height + pill_pad_v;
+    // The badge keeps its base height unless an enlarged font needs more room
+    // (the value text is always the taller of the two text runs).
+    let text_h = text_fit_height(fonts.scale.y.max(fonts.label_scale.y), dims.badge_scale);
+    let badge_h = dims.badge_height.max(text_h) + pill_pad_v;
 
     let value_x = pill_pad + label_width + label_pad * 2;
     let total_width = value_x + value_width + dims.badge_value_padding_h + dims.badge_value_padding_h / 2 + 2 + pill_pad;
@@ -369,13 +388,21 @@ const BASE_VERT_VALUE_FONT_SIZE: f32 = 34.0;
 
 /// Render a vertical badge: source label on top, rating value below.
 /// Used for left/right poster positions.
+///
+/// The text scales with `badge_scale × font_size`; the icon and paddings with
+/// `badge_scale` alone. The badge's height follows its content, and its width
+/// grows in proportion to an enlarged font (never shrinks for a smaller one) so
+/// wider text still fits. Width depends only on the scales — not the text — so
+/// every badge in a row/column stays the same width.
 pub fn render_vertical_badge(badge: &RatingBadge, font: &FontArc, label_style: LabelStyle, appearance: BadgeAppearance, badge_scale: f32) -> RgbaImage {
     let use_icon = label_style.uses_icon();
-    let vert_label_font_size = BASE_VERT_LABEL_FONT_SIZE * badge_scale;
-    let vert_value_font_size = BASE_VERT_VALUE_FONT_SIZE * badge_scale;
+    let font_factor = appearance.font_size.scale_factor();
+    let text_scale = badge_scale * font_factor;
+    let vert_label_font_size = BASE_VERT_LABEL_FONT_SIZE * text_scale;
+    let vert_value_font_size = BASE_VERT_VALUE_FONT_SIZE * text_scale;
     let label_scale = PxScale::from(vert_label_font_size);
     let value_scale = PxScale::from(vert_value_font_size);
-    let vert_badge_width = (BASE_VERT_BADGE_WIDTH as f32 * badge_scale).round() as u32;
+    let vert_badge_width = (BASE_VERT_BADGE_WIDTH as f32 * badge_scale * font_factor.max(1.0)).round() as u32;
     // Pills get extra top/bottom padding so the stacked label/value clear the
     // fully-rounded caps; rounded badges keep the base padding.
     let pill_pad = match appearance.shape {
@@ -693,7 +720,7 @@ mod tests {
         let badge = RatingBadge { source: RatingSource::Imdb, value: "8.5".to_string() };
         for shape in ALL_SHAPES {
             for background in ALL_BACKGROUNDS {
-                let appearance = BadgeAppearance { shape, background };
+                let appearance = BadgeAppearance { shape, background, ..Default::default() };
                 // Horizontal badge height: base, plus the pill's extra vertical padding.
                 let expected_h = match shape {
                     BadgeShape::Pill => BASE_BADGE_HEIGHT + BASE_PILL_PADDING_V,
@@ -718,7 +745,7 @@ mod tests {
         let font = test_font();
         let badge = RatingBadge { source: RatingSource::Imdb, value: "8.5".to_string() };
         let none = render_badge_appearance(&badge, &font, LabelStyle::Text,
-            BadgeAppearance { shape: BadgeShape::Rounded, background: BadgeBackground::None });
+            BadgeAppearance { shape: BadgeShape::Rounded, background: BadgeBackground::None, ..Default::default() });
         // A background pixel left of the label text is fully transparent.
         assert_eq!(none.get_pixel(2, BASE_BADGE_HEIGHT / 2)[3], 0);
         // But the badge still draws something (the label/value text).
@@ -731,9 +758,9 @@ mod tests {
         let badge = RatingBadge { source: RatingSource::Imdb, value: "8.5".to_string() };
         let probe = (2, BASE_BADGE_HEIGHT / 2); // label-section background, left of text
         let default = render_badge_appearance(&badge, &font, LabelStyle::Text,
-            BadgeAppearance { shape: BadgeShape::Rounded, background: BadgeBackground::Default });
+            BadgeAppearance { shape: BadgeShape::Rounded, background: BadgeBackground::Default, ..Default::default() });
         let transparent = render_badge_appearance(&badge, &font, LabelStyle::Text,
-            BadgeAppearance { shape: BadgeShape::Rounded, background: BadgeBackground::Transparent });
+            BadgeAppearance { shape: BadgeShape::Rounded, background: BadgeBackground::Transparent, ..Default::default() });
         // Default keeps the opaque source colour; transparent is semi-opaque.
         assert!(default.get_pixel(probe.0, probe.1)[3] >= 200);
         assert_eq!(transparent.get_pixel(probe.0, probe.1)[3], TRANSPARENT_ALPHA);
@@ -744,9 +771,9 @@ mod tests {
         let font = test_font();
         let badge = RatingBadge { source: RatingSource::Imdb, value: "8.5".to_string() };
         let rounded = render_badge_appearance(&badge, &font, LabelStyle::Text,
-            BadgeAppearance { shape: BadgeShape::Rounded, background: BadgeBackground::Default });
+            BadgeAppearance { shape: BadgeShape::Rounded, background: BadgeBackground::Default, ..Default::default() });
         let pill = render_badge_appearance(&badge, &font, LabelStyle::Text,
-            BadgeAppearance { shape: BadgeShape::Pill, background: BadgeBackground::Default });
+            BadgeAppearance { shape: BadgeShape::Pill, background: BadgeBackground::Default, ..Default::default() });
         assert!(rounded.width() > 30);
         // A point near the top edge, beyond the small rounded radius, is filled
         // for `rounded` but cleared by the pill's much larger corner arc.
@@ -763,16 +790,146 @@ mod tests {
         let badge = RatingBadge { source: RatingSource::Imdb, value: "8.5".to_string() };
         // Horizontal pills add padding at the left/right caps → wider than rounded.
         let rounded = render_badge_appearance(&badge, &font, LabelStyle::Text,
-            BadgeAppearance { shape: BadgeShape::Rounded, background: BadgeBackground::Default });
+            BadgeAppearance { shape: BadgeShape::Rounded, background: BadgeBackground::Default, ..Default::default() });
         let pill = render_badge_appearance(&badge, &font, LabelStyle::Text,
-            BadgeAppearance { shape: BadgeShape::Pill, background: BadgeBackground::Default });
+            BadgeAppearance { shape: BadgeShape::Pill, background: BadgeBackground::Default, ..Default::default() });
         assert!(pill.width() > rounded.width(), "pill should pad its rounded left/right ends");
         // Vertical pills add padding at the top/bottom caps → taller than rounded.
         let rounded_v = render_vertical_badge(&badge, &font, LabelStyle::Text,
-            BadgeAppearance { shape: BadgeShape::Rounded, background: BadgeBackground::Default }, 1.0);
+            BadgeAppearance { shape: BadgeShape::Rounded, background: BadgeBackground::Default, ..Default::default() }, 1.0);
         let pill_v = render_vertical_badge(&badge, &font, LabelStyle::Text,
-            BadgeAppearance { shape: BadgeShape::Pill, background: BadgeBackground::Default }, 1.0);
+            BadgeAppearance { shape: BadgeShape::Pill, background: BadgeBackground::Default, ..Default::default() }, 1.0);
         assert!(pill_v.height() > rounded_v.height(), "vertical pill should pad its rounded top/bottom ends");
+    }
+
+    use crate::services::db::FontSize;
+
+    const ALL_FONT_SIZES: [FontSize; 5] = [
+        FontSize::ExtraSmall,
+        FontSize::Small,
+        FontSize::Medium,
+        FontSize::Large,
+        FontSize::ExtraLarge,
+    ];
+
+    fn with_font(font_size: FontSize) -> BadgeAppearance {
+        BadgeAppearance { font_size, ..Default::default() }
+    }
+
+    /// Bounding box (min_x, min_y, max_x, max_y) of near-white pixels (the
+    /// rating text) at or right of `from_x`, or `None` if there are none.
+    fn white_bbox(img: &RgbaImage, from_x: u32) -> Option<(u32, u32, u32, u32)> {
+        let mut bb: Option<(u32, u32, u32, u32)> = None;
+        for (x, y, p) in img.enumerate_pixels() {
+            if x < from_x || p[3] < 200 || p[0] < 230 || p[1] < 230 || p[2] < 230 {
+                continue;
+            }
+            bb = Some(match bb {
+                None => (x, y, x, y),
+                Some((x0, y0, x1, y1)) => (x0.min(x), y0.min(y), x1.max(x), y1.max(y)),
+            });
+        }
+        bb
+    }
+
+    #[test]
+    fn default_font_size_is_byte_identical_to_original() {
+        // `FontSize::Medium` multiplies every text scale by exactly 1.0, so the
+        // default appearance renders the same pixels as before the setting.
+        let font = test_font();
+        let badges = vec![
+            RatingBadge { source: RatingSource::Imdb, value: "8.5".to_string() },
+            RatingBadge { source: RatingSource::Mal, value: "10.00".to_string() },
+        ];
+        assert_eq!(BadgeAppearance::default().font_size, FontSize::Medium);
+        for scale in [0.5, 1.0, 1.25, 2.2] {
+            let a = render_badges_uniform(&badges, &font, LabelStyle::Text, BadgeAppearance::default(), scale);
+            assert_eq!(a[0].height(), (BASE_BADGE_HEIGHT as f32 * scale).round() as u32);
+            let v = render_vertical_badge(&badges[0], &font, LabelStyle::Text, BadgeAppearance::default(), scale);
+            assert_eq!(v.width(), (BASE_VERT_BADGE_WIDTH as f32 * scale).round() as u32);
+        }
+    }
+
+    #[test]
+    fn font_size_scales_text_not_badge_height() {
+        let font = test_font();
+        let badge = RatingBadge { source: RatingSource::Imdb, value: "100%".to_string() };
+        for label_style in [LabelStyle::Text, LabelStyle::Icon, LabelStyle::Official] {
+            let widths: Vec<u32> = ALL_FONT_SIZES.iter().map(|&fs| {
+                let img = render_badge_appearance(&badge, &font, label_style, with_font(fs));
+                // The base badge height already fits every font size, so the
+                // badge (and therefore the row) keeps its height.
+                assert_eq!(img.height(), BASE_BADGE_HEIGHT, "{label_style:?}/{fs:?}");
+                img.width()
+            }).collect();
+            // Bigger text → wider badge, strictly increasing.
+            for w in widths.windows(2) {
+                assert!(w[0] < w[1], "{label_style:?}: widths should grow with font size: {widths:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn font_size_text_stays_vertically_centered_and_unclipped() {
+        let font = test_font();
+        let badge = RatingBadge { source: RatingSource::Imdb, value: "8.5".to_string() };
+        for shape in ALL_SHAPES {
+            for scale in [0.5, 1.0, 1.5] {
+                for fs in ALL_FONT_SIZES {
+                    let appearance = BadgeAppearance { shape, font_size: fs, ..Default::default() };
+                    let img = render_badge_with_widths(&badge, &font, None, None, LabelStyle::Official, appearance, scale);
+                    // Value text sits right of the icon label area.
+                    let (_, y0, x1, y1) = white_bbox(&img, img.width() / 2)
+                        .unwrap_or_else(|| panic!("no value text for {shape:?}/{scale}/{fs:?}"));
+                    let top_gap = y0 as i32;
+                    let bottom_gap = img.height() as i32 - 1 - y1 as i32;
+                    assert!(top_gap > 0 && bottom_gap > 0, "text clipped vertically: {shape:?}/{scale}/{fs:?}");
+                    assert!(x1 < img.width() - 1, "text clipped horizontally: {shape:?}/{scale}/{fs:?}");
+                    assert!((top_gap - bottom_gap).abs() <= 2,
+                        "text not vertically centered ({top_gap} vs {bottom_gap}): {shape:?}/{scale}/{fs:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn font_size_grows_vertical_badges_and_keeps_text_inside() {
+        let font = test_font();
+        let badge = RatingBadge { source: RatingSource::Mal, value: "10.00".to_string() };
+        let mut prev_h = 0;
+        for fs in ALL_FONT_SIZES {
+            let img = render_vertical_badge(&badge, &font, LabelStyle::Official, with_font(fs), 1.0);
+            // Width grows only for enlarged fonts and depends on the scale alone,
+            // so every badge in a row/column shares it.
+            let expected_w = (BASE_VERT_BADGE_WIDTH as f32 * fs.scale_factor().max(1.0)).round() as u32;
+            assert_eq!(img.width(), expected_w, "{fs:?}");
+            // Height follows the (taller) text.
+            assert!(img.height() > prev_h, "{fs:?}: vertical badge should grow with font size");
+            prev_h = img.height();
+            if fs.scale_factor() >= 1.0 {
+                // Larger fonts never push the text closer to the edges than the default.
+                let (x0, _, x1, y1) = white_bbox(&img, 0).expect("value text drawn");
+                assert!(x0 > 0 && x1 < img.width() - 1, "{fs:?}: value text clipped horizontally");
+                assert!(y1 < img.height() - 1, "{fs:?}: value text clipped vertically");
+            }
+        }
+        // Text labels scale too.
+        let text_m = render_vertical_badge(&badge, &font, LabelStyle::Text, with_font(FontSize::Medium), 1.0);
+        let text_xl = render_vertical_badge(&badge, &font, LabelStyle::Text, with_font(FontSize::ExtraLarge), 1.0);
+        assert!(text_xl.height() > text_m.height());
+    }
+
+    #[test]
+    fn text_fit_height_never_exceeds_base_height_for_supported_sizes() {
+        // The largest font size still fits in the base badge height, so enlarging
+        // text never changes row heights or vertical anchoring.
+        for scale in [0.5, 1.0, 1.25, 1.5, 3.4] {
+            let base_h = (BASE_BADGE_HEIGHT as f32 * scale).round() as u32;
+            let font_px = BASE_FONT_SIZE * scale * FontSize::ExtraLarge.scale_factor();
+            assert!(text_fit_height(font_px, scale) <= base_h + 1, "scale {scale}");
+        }
+        // But an even larger font would grow the badge instead of clipping.
+        assert!(text_fit_height(BASE_FONT_SIZE * 2.0, 1.0) > BASE_BADGE_HEIGHT);
     }
 
     #[test]
